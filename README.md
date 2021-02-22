@@ -7,7 +7,7 @@ btferret/btlib Bluetooth Interface
 - [1 Introduction](#1-introduction)
 - [2 File list and compile](#2-file-list-and-compile)
 - [3 Interface](#3-interface)
-    - [3.1 Networks](#3.1-networks)
+    - [3.1 Networks](#3\.1-networks)
     - [3.2 btferret](#3.2-btferret)
     - [3.3 Windows/Android/HC-05 Classic devices](#3.3-windows/android/hc-05-classic-devices)   
     - [3.4 LE devices](#3.4-le-devices) 
