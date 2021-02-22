@@ -2443,7 +2443,7 @@ does not include the final error check FCS.
 These procedure setions are largely as produced by the verbose print mode
 with added explanations.
 
-## 5-3-1 HCI socket - read-write packets
+## 5-3-1 HCI socket read-write packets
 
 Bluetooth packets are sent and received through an HCI socket opened
 as follows.
