@@ -9,74 +9,74 @@ btferret/btlib Bluetooth Interface
 - [3 Interface](#3-interface)
     - [3.1 Networks](#3-1-networks)
     - [3.2 btferret](#3-2-btferret)
-    - [3.3 Windows/Android/HC-05 Classic devices](#3.3-windows/android/hc-05-classic-devices)   
-    - [3.4 LE devices](#3.4-le-devices) 
-    - [3.5 Node client/server connection](#3.5-node-client/server-connection) 
-    - [3.6 Broadcast to all mesh servers](#3.6-broadcast-to-all-mesh-servers) 
-    - [3.7 sample.c](#3.7-sample.c)
+    - [3.3 Windows/Android/HC-05 Classic devices](#3-3-windows/android/hc-05-classic-devices)   
+    - [3.4 LE devices](#3-4-le-devices) 
+    - [3.5 Node client/server connection](#3-5-node-client/server-connection) 
+    - [3.6 Broadcast to all mesh servers](#3-6-broadcast-to-all-mesh-servers) 
+    - [3.7 sample.c](#3-7-sample.c)
 - [4 btlib Library](#4-btlib-library) 
-    - [4.1 Function list](#4.1-function-list)
-    - [4.2 Functions](#4.2-functions)    
+    - [4.1 Function list](#4-1-function-list)
+    - [4.2 Functions](#4-2-functions)    
         - [4.2.1 classic\_scan](#4-2-1-classic\_scan)
-        - [4.2.2 close\_all](#4.2.2-close\_all)
-        - [4.2.3 connect\_node](#4.2.3-connect\_node)
-        - [4.2.4 ctic\_name](#4.2.4-ctic\_name)
-        - [4.2.5 ctic\_ok](#4.2.5-ctic\_ok)
-        - [4.2.6 device\_connected](#4.2.6-device\_connected)
-        - [4.2.7 device\_info](#4.2.7-device\_info)
-        - [4.2.8 device\_name](#4.2.8-device\_name)
-        - [4.2.9 device\_type](#4.2.9-device\_type)
-        - [4.2.10 disconnect\_node](#4.2.10-disconnect\_node)
-        - [4.2.11 find\_channel](#4.2.11-find\_channel)
-        - [4.2.12 find\_ctics](#4.2.12-find\_ctics)
-        - [4.2.13 find\_ctic\_index](#4.2.13-find\_ctic\_index)
-        - [4.2.14 init\_blue](#4.2.14-init\_blue)
-        - [4.2.15 le\_scan](#4.2.15-le\_scan)
-        - [4.2.16 list\_channels](#4.2.16-list\_channels)
-        - [4.2.17 list\_ctics](#4.2.17-list\_ctics)
-        - [4.2.18 list\_uuid](#4.2.18-list\_uuid)       
-        - [4.2.19 localnode](#4.2.19-localnode)
-        - [4.2.20 mesh\_on](#4.2.20-mesh\_on)
-        - [4.2.21 mesh\_off](#4.2.21-mesh\_off)
-        - [4.2.22 mesh\_server](#4.2.22-mesh\_server)
-        - [4.2.23 node\_server](#4.2.23-node\_server)
-        - [4.2.24 output\_file](#4.2.24-output\_file)
-        - [4.2.25 read\_ctic](#4.2.25-read\_ctic)
-        - [4.2.26 read\_error](#4.2.26-read\_error)
-        - [4.2.27 read\_mesh](#4.2.27-read\_mesh)
-        - [4.2.28 read\_node\_count](#4.2.28-read\_node\_count)
-        - [4.2.29 read\_node/all\_endchar](#4.2.29-read\_node/all\_endchar)
-        - [4.2.30 read\_node/all\_clear](#4.2.30-read\_node/all\_clear)
-        - [4.2.31 scroll\_back/forward](#4.2.31-scroll\_back/forward)
-        - [4.2.32 set\_print\_flag](#4.2.32-set\_print\_flag)
-        - [4.2.33 strtohex](#4.2.33-strtohex)
-        - [4.2.34 wait\_for\_disconnect](#4.2.34-wait\_for\_disconnect)
-        - [4.2.35 write\_ctic](#4.2.35-write\_ctic)
-        - [4.2.36 write\_mesh](#4.2.36-write\_mesh)
-        - [4.2.37 write\_node](#4.2.37-write\_node) 
+        - [4.2.2 close\_all](#4-2-2-close\_all)
+        - [4.2.3 connect\_node](#4-2-3-connect\_node)
+        - [4.2.4 ctic\_name](#4-2-4-ctic\_name)
+        - [4.2.5 ctic\_ok](#4-2-5-ctic\_ok)
+        - [4.2.6 device\_connected](#4-2-6-device\_connected)
+        - [4.2.7 device\_info](#4-2-7-device\_info)
+        - [4.2.8 device\_name](#4-2-8-device\_name)
+        - [4.2.9 device\_type](#4-2-9-device\_type)
+        - [4.2.10 disconnect\_node](#4-2-10-disconnect\_node)
+        - [4.2.11 find\_channel](#4-2-11-find\_channel)
+        - [4.2.12 find\_ctics](#4-2-12-find\_ctics)
+        - [4.2.13 find\_ctic\_index](#4-2-13-find\_ctic\_index)
+        - [4.2.14 init\_blue](#4-2-14-init\_blue)
+        - [4.2.15 le\_scan](#4-2-15-le\_scan)
+        - [4.2.16 list\_channels](#4-2-16-list\_channels)
+        - [4.2.17 list\_ctics](#4-2-17-list\_ctics)
+        - [4.2.18 list\_uuid](#4-2-18-list\_uuid)       
+        - [4.2.19 localnode](#4-2-19-localnode)
+        - [4.2.20 mesh\_on](#4-2-20-mesh\_on)
+        - [4.2.21 mesh\_off](#4-2-21-mesh\_off)
+        - [4.2.22 mesh\_server](#4-2-22-mesh\_server)
+        - [4.2.23 node\_server](#4-2-23-node\_server)
+        - [4.2.24 output\_file](#4-2-24-output\_file)
+        - [4.2.25 read\_ctic](#4-2-25-read\_ctic)
+        - [4.2.26 read\_error](#4-2-26-read\_error)
+        - [4.2.27 read\_mesh](#4-2-27-read\_mesh)
+        - [4.2.28 read\_node\_count](#4-2-28-read\_node\_count)
+        - [4.2.29 read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar)
+        - [4.2.30 read\_node/all\_clear](#4-2-30-read\_node/all\_clear)
+        - [4.2.31 scroll\_back/forward](#4-2-31-scroll\_back/forward)
+        - [4.2.32 set\_print\_flag](#4-2-32-set\_print\_flag)
+        - [4.2.33 strtohex](#4-2-33-strtohex)
+        - [4.2.34 wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
+        - [4.2.35 write\_ctic](#4-2-35-write\_ctic)
+        - [4.2.36 write\_mesh](#4-2-36-write\_mesh)
+        - [4.2.37 write\_node](#4-2-37-write\_node) 
 - [5 Reference](#5-reference)
-    - [5.1 What gives with UUIDs?](#5.1-what-gives-with-uuids?)
-    - [5.2 Packet formats](#5.2-packet-formats)
-        - [5.2.1 Starting 01 HCI Commands](#5.2.1-starting-01-hci-commands)
-        - [5.2.2 Starting 04 HCI Events](#5.2.2-starting-04-hci-events)
-        - [5.2.3 Starting 02 Channel 0001](#5.2.3-starting-02-channel-0001)
-        - [5.2.4 Starting 02 Channel 0004](#5.2.4-starting-02-channel-0004)
-        - [5.2.5 Starting 02 Channel 0040+](#5.2.5-starting-02-channel-0040+)
-    - [5.3 Procedures](#5.3-procedures)
-        - [5.3.1 HCI socket read/write packets](#5.3.1-hci-socket-read/write-packets)
-        - [5.3.2 Classic procedures](#5.3.2-classic-procedures) 
-        - [5.3.3 Classic connect with PIN code](#5.3.3-classic-connect-with-pin-code)
-        - [5.3.4 Classic disconnect initiated by server](#5.3.4-classic-disconnect-initiated-by-server)
-        - [5.3.5 Classic scan](#5.3.5-classic-scan)
-        - [5.3.6 SDP database operations](#5.3.6-sdp-database-operations)
-        - [5.3.7 LE Procedures](#5.3.7-le-procedures)
-        - [5.3.8 Read LE services](#5.3.8-read-le-services)
-        - [5.3.9 LE scan](#5.3.9-le-scan)
-    - [5.4 Server Code](#5.4-server-code)
-        - [5.4.1 Raspberry Pi bluez server](#5.4.1-raspberry-pi-bluez-server)
-        - [5.4.2 Windows COM port](#5.4.2-windows-com-port)
-        - [5.4.3 Windows Sockets](#5.4.3-windows-sockets)
-        - [5.4.4 Android](#5.4.4-android)
+    - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids?)
+    - [5.2 Packet formats](#5-2-packet-formats)
+        - [5.2.1 Starting 01 HCI Commands](#5-2-1-starting-01-hci-commands)
+        - [5.2.2 Starting 04 HCI Events](#5-2-2-starting-04-hci-events)
+        - [5.2.3 Starting 02 Channel 0001](#5-2-3-starting-02-channel-0001)
+        - [5.2.4 Starting 02 Channel 0004](#5-2-4-starting-02-channel-0004)
+        - [5.2.5 Starting 02 Channel 0040+](#5-2-5-starting-02-channel-0040+)
+    - [5.3 Procedures](#5-3-procedures)
+        - [5.3.1 HCI socket read/write packets](#5-3-1-hci-socket-read/write-packets)
+        - [5.3.2 Classic procedures](#5-3-2-classic-procedures) 
+        - [5.3.3 Classic connect with PIN code](#5-3-3-classic-connect-with-pin-code)
+        - [5.3.4 Classic disconnect initiated by server](#5-3-4-classic-disconnect-initiated-by-server)
+        - [5.3.5 Classic scan](#5-3-5-classic-scan)
+        - [5.3.6 SDP database operations](#5-3-6-sdp-database-operations)
+        - [5.3.7 LE Procedures](#5-3-7-le-procedures)
+        - [5.3.8 Read LE services](#5-3-8-read-le-services)
+        - [5.3.9 LE scan](#5-3-9-le-scan)
+    - [5.4 Server Code](#5-4-server-code)
+        - [5.4.1 Raspberry Pi bluez server](#5-4-1-raspberry-pi-bluez-server)
+        - [5.4.2 Windows COM port](#5-4-2-windows-com-port)
+        - [5.4.3 Windows Sockets](#5-4-3-windows-sockets)
+        - [5.4.4 Android](#5-4-4-android)
 - [6 Documentation References](#6-documentation-references)
 
 ## 1 Introduction
@@ -87,14 +87,14 @@ A Pi running this interface can connect simultaneously to multiple Classic and L
 and also to a mesh network of other Pis running the same software.
 
 There is a library of functions ([btlib](#4-btlib-library)) and a sample program
-([btferret](#3.2-btferret)) that implements most of
+([btferret](#3-2-btferret)) that implements most of
 the interface features such as connecting to other devices, operating as a client or server,
 exchanging data (including a file
 transfer routine) and display of information - it is a bit like a super bluetoothctl that won't drive
 you mad. It has a verbose print mode that displays the HCI Bluetooth traffic with details of
 the packets that are exchanged.
 
-Also included is the code for a simple [mesh network example](#3.7-sample.c).
+Also included is the code for a simple [mesh network example](#3-7-sample.c).
 
 In the [reference](#5-reference) section there is a detailed description
 of the HCI Bluetooth interface, the packet formats and how they are constructed,
@@ -102,7 +102,7 @@ and the sequence of instructions
 needed to establish connections and exchange data. This information
 is difficult to extract in a coherent form from the Bluetooth specification documents.
 
-There is a [server code](#5.4-server-code) section that is a brief guide to writing code
+There is a [server code](#5-4-server-code) section that is a brief guide to writing code
 for other machines to act as servers for btferret/btlib.
 
 This interface is programmed at the HCI level and bypasses higher-level bluez functions,
@@ -143,7 +143,7 @@ service bluetooth status
 
 To customise btferret.c for your devices, an essential first step is to
 edit the devices.txt file to list all the devices in the
-network (see the [init_blue](#4.2.2-init\_blue) documentation).
+network (see the [init_blue](#4-2-2-init\_blue) documentation).
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify the btferret.c or sample.c examples.
@@ -220,17 +220,17 @@ The following sections describe how to use these commands to
 establish connections and exchange data.
 
 
-## 3.3 Windows/Android/HC-05 Classic devices
+## 3-3 Windows/Android/HC-05 Classic devices
 
 The btferret/btlib code can connect to a Windows/Android/HC-05 Classic server. This might be a
 Bluetooth terminal program set up as a server (via a "Make discoverable" option for example). It
 is not possible to connect from a Bluetooth terminal program as a client to btferret/btlib as a server,
 so commands in the terminal program such as "connect" will not work. Guidance on writing server
-code for other machines is in the [server code](#5.4-server-code) section.
+code for other machines is in the [server code](#5-4-server-code) section.
 
 With the server waiting
 for a connection, btferret must first find
-the [RFCOMM channel](#5.1-what-gives-with-uuids?) on which
+the [RFCOMM channel](#5-1-what-gives-with-uuids?) on which
 the server is listening.
 
 ```
@@ -300,7 +300,7 @@ disconnect_node(4);
     // see the discussion in disconnect_node() section 4.2.10 
 ```
 
-## 3.4 LE devices
+## 3-4 LE devices
 
 Connect to an LE device and read/write characteristics as follows:
 
@@ -354,7 +354,7 @@ disconnect_node(7);
 
 ```
 
-## 3.5 Node client/server connection
+## 3-5 Node client/server connection
 
 Two Pis connected as a client/server pair. There must be two Pis
 listed as MESH type in devices.txt.
@@ -453,7 +453,7 @@ wait_for_disconnect();
 ```
 
 
-## 3.6 Broadcast to all mesh servers
+## 3-6 Broadcast to all mesh servers
 
 There must be at least two Pis listed as MESH type in devices.txt. 
 
@@ -522,7 +522,7 @@ write_mesh(buf,2);
 write_mesh('D',1);
 ```
 
-## 3.7 sample.c
+## 3-7 sample.c
 
 The sample.c code is an illustration of a procedure using mesh, node and
 Classic connections on the following mesh network.
@@ -530,7 +530,7 @@ Classic connections on the following mesh network.
 ![picture](image2.png)
 
 The Classic server might be a Windows PC with Bluetooth set up as an
-incoming [COM port](#5.4.2-windows-com-port) that presents as a UUID=1101 channel.
+incoming [COM port](#5-4-2-windows-com-port) that presents as a UUID=1101 channel.
 All three mesh Pis run the same sample.c code that executes the following sequence:
 
 ```
@@ -585,62 +585,62 @@ Run with sampledev.txt in the same directory
 
 These library functions are in btlib.c/btlib.h.       
 
-## 4.1 Function List
+## 4-1 Function List
 
 
-[init\_blue](#4.2.14-init\_blue) - Initialize must be called on program start<br/>
-[close\_all](#4.2.2-close\_all) - Close all connections on program end<br/>
-[device\_info](#4.2.7-device\_info) - Print device information<br/>
-[classic\_scan](#4.2.1-classic\_scan) - Scan for classic devices<br/>
-[le\_scan](#4.2.15-le\_scan) - Scan for LE devices<br/>
-[localnode](#4.2.19-localnode) - Return node number of local device<br/>
-[list\_channels](#4.2.16-list\_channels) - List serial data channels of a Classic device<br/>
-[list\_ctics](#4.2.17-list\_ctics) - List characteristics of an LE device<br/>
-[list\_uuid](#4.2.18-list\_uuid) - List node services that contain a specified UUID<br/>
-[connect\_node](#4.2.3-connect\_node) - Connect to a server node as a client<br/>
-[node\_server](#4.2.23-node\_server) - Become a node server. Listen for connection<br/>
-[mesh\_server](#4.2.22-mesh\_server) - Listen for broadcast mesh packets<br/>
-[find\_channel](#4.2.11-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
-[find\_ctics](#4.2.12-find\_ctics) - Read all characteristic info from LE device<br/>
-[find\_ctic\_index](#4.2.13-find\_ctic\_index) - Find characteristic index of UUID<br/>
-[write\_ctic](#4.2.35-write\_ctic) - Write characteristic to an LE device<br/>
-[read\_ctic](#4.2.25-read\_ctic) - Read characteristic from an LE device<br/>
-[write\_node](#4.2.37-write\_node) - Write serial data to connected node device<br/>
-[write\_mesh](#4.2.36-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
-[read\_mesh](#4.2.27-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
-[read\_node\_count](#4.2.28-read\_node\_count) - Read a specified byte count from specified node<br/>
-[read\_node/all\_endchar](#4.2.29-read\_node/all\_endchar) - Read from specified or all nodes until end char received<br/>
-[read\_node/all\_clear](#4.2.30-read\_node/all\_clear) - Clear data in input buffer<br/>
-[read\_error](#4.2.-read\_error) - Return error code of last read<br/>
-[device\_type](#4.2.9-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
-[device\_name](#4.2.8-device\_name) - Return device name string<br/>
-[device\_connected](#4.2.6-device\_connected) - Return device connection state<br>
-[ctic\_ok](#4.2.5-cti\c_ok) - Return LE characteristic valid flag<br/>
-[ctic\_name](#4.2.4-ctic\_name) - Return LE characteristic name string<br/>
-[disconnect\_node](#4.2.10-disconnect\_node) - Disconnect initiated by client<br/>
-[wait\_for\_disconnect](#4.2.34-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
-[scroll\_back/forward](#4.2.31-scroll\_back/forward) - Scroll screen back/forward<br/>
-[set\_print\_flag](#4.2.32-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
-[output\_file](#4.2.24-output\_file) - Save all recent screen output to a file<br/>
-[strtohex](#4.2.33-strtohex) - Convert ascii string to array of hex values<br/>
-[mesh\_on](#4.2.20-mesh\_on) - Turn mesh transmission on<br/>
-[mesh\_off](#4.2.21-mesh\_off) - Turn mesh transmission off<br/>
+[init\_blue](#4-2-14-init\_blue) - Initialize must be called on program start<br/>
+[close\_all](#4-2-2-close\_all) - Close all connections on program end<br/>
+[device\_info](#4-2-7-device\_info) - Print device information<br/>
+[classic\_scan](#4-2-1-classic\_scan) - Scan for classic devices<br/>
+[le\_scan](#4-2-15-le\_scan) - Scan for LE devices<br/>
+[localnode](#4-2-19-localnode) - Return node number of local device<br/>
+[list\_channels](#4-2-16-list\_channels) - List serial data channels of a Classic device<br/>
+[list\_ctics](#4-2-17-list\_ctics) - List characteristics of an LE device<br/>
+[list\_uuid](#4-2-18-list\_uuid) - List node services that contain a specified UUID<br/>
+[connect\_node](#4-2-3-connect\_node) - Connect to a server node as a client<br/>
+[node\_server](#4-2-23-node\_server) - Become a node server. Listen for connection<br/>
+[mesh\_server](#4-2-22-mesh\_server) - Listen for broadcast mesh packets<br/>
+[find\_channel](#4-2-11-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
+[find\_ctics](#4-2-12-find\_ctics) - Read all characteristic info from LE device<br/>
+[find\_ctic\_index](#4-2-13-find\_ctic\_index) - Find characteristic index of UUID<br/>
+[write\_ctic](#4-2-35-write\_ctic) - Write characteristic to an LE device<br/>
+[read\_ctic](#4-2-25-read\_ctic) - Read characteristic from an LE device<br/>
+[write\_node](#4-2-37-write\_node) - Write serial data to connected node device<br/>
+[write\_mesh](#4-2-36-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
+[read\_mesh](#4-2-27-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
+[read\_node\_count](#4-2-28-read\_node\_count) - Read a specified byte count from specified node<br/>
+[read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar) - Read from specified or all nodes until end char received<br/>
+[read\_node/all\_clear](#4-2-30-read\_node/all\_clear) - Clear data in input buffer<br/>
+[read\_error](#4-2-26-read\_error) - Return error code of last read<br/>
+[device\_type](#4-2-9-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
+[device\_name](#4-2-8-device\_name) - Return device name string<br/>
+[device\_connected](#4-2-6-device\_connected) - Return device connection state<br>
+[ctic\_ok](#4-2-5-cti\c_ok) - Return LE characteristic valid flag<br/>
+[ctic\_name](#4-2-4-ctic\_name) - Return LE characteristic name string<br/>
+[disconnect\_node](#4-2-10-disconnect\_node) - Disconnect initiated by client<br/>
+[wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
+[scroll\_back/forward](#4-2-31-scroll\_back/forward) - Scroll screen back/forward<br/>
+[set\_print\_flag](#4-2-32-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
+[output\_file](#4-2-24-output\_file) - Save all recent screen output to a file<br/>
+[strtohex](#4-2-33-strtohex) - Convert ascii string to array of hex values<br/>
+[mesh\_on](#4-2-20-mesh\_on) - Turn mesh transmission on<br/>
+[mesh\_off](#4-2-21-mesh\_off) - Turn mesh transmission off<br/>
 
 
-## 4.2 Functions
+## 4-2 Functions
 
-## 4.2.1 classic\_scan
+## 4-2-1 classic\_scan
 
 ```
 void classic_scan(void)
 ```
 
 Scan for Classic Bluetooth devices. If a device is not already on the device information list, 
-it is added and will be listed via [device\_info](#4.2.7-device\_info)
+it is added and will be listed via [device\_info](#4-2-7-device\_info)
  . 
 
 
-## 4.2.2 close\_all
+## 4-2-2 close\_all
 
 ```
 void close_all(void)
@@ -650,7 +650,7 @@ Close all connections to remote devices and the local Bluetooth adapter. Call th
 program termination.
  
 
-## 4.2.3 connect\_node
+## 4-2-3 connect\_node
 
 ```
 int connect_node(int node,int flag,int channel)
@@ -678,14 +678,14 @@ channel = RFCOMM channel
 ```
 
 The RFCOMM channel must be the serial channel on which the remote device (acting as a
-server) is listening (see [UUIDs](#5.1-what-gives-with-uuids?)).
+server) is listening (see [UUIDs](#5-1-what-gives-with-uuids?)).
 Remote device channels can be found
-by calling [find\_channel](#4.2.11-find\_channel) or [list\_channels](#4.2.16-list\_channels).
+by calling [find\_channel](#4-2-11-find\_channel) or [list\_channels](#4-2-16-list\_channels).
 Use
 CHANNEL\_NEW to specify the channel in the parameters. CHANNEL\_STORED uses the channel stored
 in device information that can be set in two ways:
 
-1. With an e.g. "CHANNEL=1" entry in the [init\_blue](#4.2.14-init\_blue) devices.txt infomation.
+1. With an e.g. "CHANNEL=1" entry in the [init\_blue](#4-2-14-init\_blue) devices.txt infomation.
 
 2. A CHANNEL\_NEW connection will store the channel number, so CHANNEL\_STORED can be used for
 all subsequent reconnections.
@@ -736,7 +736,7 @@ connect_node(7,CHANNEL_NEW,channel)  // connect to Windows PC node 7 on found ch
 ```
 
 
-## 4.2.4 ctic\_name
+## 4-2-4 ctic\_name
 
 ```
 char *ctic_name(int node,int cticn)
@@ -759,10 +759,10 @@ Pointer to a zero-terminated ascii string containing characteristic name
 (or "Invalid node","Invald characteristic","Nameless")
 ```
 
-See [device\_type](#4.2.9-device\_type) for sample code.
+See [device\_type](#4-2-9-device\_type) for sample code.
 
 
-## 4.2.5 ctic\_ok
+## 4-2-5 ctic\_ok
 
 ```
 int ctic_ok(int node,int cticn)
@@ -785,10 +785,10 @@ RETURN
 1 = Valid node and characteristic
 ```
 
-See [device\_type](#4.2.9-device\_type) for sample code.
+See [device\_type](#4-2-9-device\_type) for sample code.
 
 
-## 4.2.6 device\_connected
+## 4-2-6 device\_connected
 
 ```
 int device_connected(int node)
@@ -810,7 +810,7 @@ RETURN
 ```
 
 
-## 4.2.7 device\_info
+## 4-2-7 device\_info
 
 ```
 int device_info(int mask)
@@ -845,7 +845,7 @@ device_info(BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_SHORT)
 ```
                    
 
-## 4.2.8 device\_name
+## 4-2-8 device\_name
 
 ```
 char *device_name(int node)
@@ -864,10 +864,10 @@ pointer to a zero terminated string containing device name or
 "Invalid node"
 ```
 
-See [device\_type](#4.2.9-device\_type) for sample code.
+See [device\_type](#4-2-9-device\_type) for sample code.
 
 
-## 4.2.9 device\_type
+## 4-2-9 device\_type
 
 ```
 int device_type(int node)
@@ -893,10 +893,10 @@ BTYPE_LO = Local device 0
 
 SAMPLE CODE
 
-Use [device\_type](#4.2.9-device\_type) and [ctic\_ok](#4.2.5-ctic\_ok)
+Use [device\_type](#4-2-9-device\_type) and [ctic\_ok](#4-2-5-ctic\_ok)
 to check devices and characteristics
-in the device information and list their names with [device\_name](#4.2.8-device\_name)
-and [ctic\_name](#4.2.4-ctic\_name).
+in the device information and list their names with [device\_name](#4-2-8-device\_name)
+and [ctic\_name](#4-2-4-ctic\_name).
 
 ```
 int k;
@@ -909,7 +909,7 @@ if(device_type(7) == BTYPE_LE)
   }       
 ```
 
-## 4.2.10 disconnect\_node
+## 4-2-10 disconnect\_node
 
 ```
 int disconnect_node(int node)
@@ -950,10 +950,10 @@ disconnected.
 The solution is to send the server a message that it interprets as an instruction
 to disconnect. The server then initiates
 the disconnection and the client must wait for a disconnection sequence from the server to 
-complete the process gracefully - and [wait\_for\_disconnect](#4.2.34-wait\_for\_disconnect)
+complete the process gracefully - and [wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
-[node client/server connection](#3.5-node-client/server-connection).
+[node client/server connection](#3-5-node-client/server-connection).
 
 ```
    // Send a serial data message to node 3 that it interprets as
@@ -974,15 +974,15 @@ wait_for_disconnect(3,3000);
 ```
 
 
-## 4.2.11 find\_channel
+## 4-2-11 find\_channel
 
 ```
 int find_channel(int node,int flag,char *uuid)
 ```
 
 Returns the RFCOMM channel number of a specified
-[UUID](#5.1-what-gives-with-uuids?). Use the RFCOMM channel to
-connect to a Classic server via [connect\_node](#4.2.3-connect\_node).
+[UUID](#5-1-what-gives-with-uuids?). Use the RFCOMM channel to
+connect to a Classic server via [connect\_node](#4-2-3-connect\_node).
 
 PARAMETERS
 
@@ -1024,7 +1024,7 @@ if(channel > 0)
   connect_node(7,CHANNEL_NEW,channel)  // connect to Classic server node 7 on found channel 
 ```
 
-## 4.2.12 find\_ctics
+## 4-2-12 find\_ctics
 
 ```
 int find_ctics(int node)
@@ -1032,7 +1032,7 @@ int find_ctics(int node)
 
 Read the characteristic information from a connected LE server and save it
 in the device info. This is not necessary if the characteristic
-information has been set via devices.txt in [init\_blue](#4.2.14-init\_blue).
+information has been set via devices.txt in [init\_blue](#4-2-14-init\_blue).
 
 PARAMETERS
 
@@ -1055,7 +1055,7 @@ Find all characteristics of LE server node 5 and save in device info
 find_citcs(5);
 ```
 
-## 4.2.13 find\_ctic\_index
+## 4-2-13 find\_ctic\_index
 
 ```
 int find_ctic_index(int node,int flag,char *uuid)
@@ -1064,12 +1064,12 @@ int find_ctic_index(int node,int flag,char *uuid)
 Returns the characteristic index of a specified UUID for an LE server. This
 searches the device information for the UUID. It does not read information from
 the LE device itself. If the characteristic is not in the device information (most 
-conveniently via devices.txt in [init\_blue](#4.2.14-init\_blue)),
-call [find\_ctics](#4.2.12-find\_ctics) which reads all
+conveniently via devices.txt in [init\_blue](#4-2-14-init\_blue)),
+call [find\_ctics](#4-2-12-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
-Use the characteristic index in [read\_ctic](#4.2.25-read\_ctic)
-and [write\_ctic](#4.2.35-write\_ctic).
+Use the characteristic index in [read\_ctic](#4-2-25-read\_ctic)
+and [write\_ctic](#4-2-35-write\_ctic).
 
 
 PARAMETERS
@@ -1110,7 +1110,7 @@ cticn = find_ctic_index(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB
 
 ```
 
-## 4.2.14 init\_blue
+## 4-2-14 init\_blue
 
 ```
 int init_blue(char *filename)
@@ -1205,12 +1205,12 @@ With this minimum information, when the characteristic is read via
 read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
 
 Additional devices can be found and added to the device information 
-via [classic\_scan](#4.2.1-classic\_scan)
-or [le\_scan](#4.2.15-le\_scan).
-Characteristics are found via [find\_ctics](#4.2.12-find\_ctics).
+via [classic\_scan](#4-2-1-classic\_scan)
+or [le\_scan](#4-2-15-le\_scan).
+Characteristics are found via [find\_ctics](#4-2-12-find\_ctics).
 
 
-## 4.2.15 le\_scan
+## 4-2-15 le\_scan
 
 ```
 void le_scan(void)
@@ -1219,11 +1219,11 @@ void le_scan(void)
 Scan for active LE devices. If a device is not in the device information, it is
 added. (Except if it is transmitting mesh packets and is not in the devices.txt list,
 it is ignored for security reasons.) If the device's characteristics are 
-unknown, they can be found via [find\_ctics](#4.2.12-find\_ctics),
+unknown, they can be found via [find\_ctics](#4-2-12-find\_ctics),
 and they will also be added to the device
 information. 
 
-## 4.2.16 list\_channels
+## 4-2-16 list\_channels
 
 ```
 int list_channels(int node,int flag)
@@ -1255,13 +1255,13 @@ list_channels(5,LIST_FULL);   // full info about node 5 serial channels
 ```
 
 
-## 4.2.17 list\_ctics
+## 4-2-17 list\_ctics
 
 ```
 int list_ctics(int node,int flag)
 ```
 List characteristics known by device info. If device info
-does not have the required knowledge, call [find\_ctics](#4.2.12-find\_ctics)
+does not have the required knowledge, call [find\_ctics](#4-2-12-find\_ctics)
 to read from the 
 device itself.
 
@@ -1294,14 +1294,14 @@ list_ctics(3,LIST_FULL);   // full characteristic info of node 3
                            // known by device info
 ```
                            
-## 4.2.18 list\_uuid
+## 4-2-18 list\_uuid
 
 ```
 int list_uuid(int node,char *uuid)
 ```
 
 List information about a node's services that contain a
-specified 2-byte [UUID](#5.1-what-gives-with-uuids?).
+specified 2-byte [UUID](#5-1-what-gives-with-uuids?).
 
 PARAMETERS
 
@@ -1334,14 +1334,14 @@ list_uuid(5,strtohex("0100",NULL));
 
 ```
 
-## 4.2.19 localnode
+## 4-2-19 localnode
 
 ```
 int localnode(void)
 ```
 
 Return the node number of the local device - should be set via devices.txt
-data in [init\_blue](#4.2.14-init\_blue).
+data in [init\_blue](#4-2-14-init\_blue).
 
 SAMPLE CODE
 
@@ -1350,7 +1350,7 @@ printf("Local device node number = %d\n",localnode());
 ```
 
 
-## 4.2.20 mesh\_on
+## 4-2-20 mesh\_on
 
 ```
 void mesh_on(void)
@@ -1358,13 +1358,13 @@ void mesh_on(void)
 
 Turn on mesh transmission. The local device will continuously send the last
 mesh packet set via write\_mesh. Mesh transmission is automatically enabled
-by calling [write\_mesh](#4.2.36-write\_mesh), or [read\_mesh](#4.2.27-read\_mesh),
-or [mesh\_server](#4.2.22-mesh\_server), or [node\_server](#4.2.23-node\_server),
+by calling [write\_mesh](#4-2-36-write\_mesh), or [read\_mesh](#4-2-27-read\_mesh),
+or [mesh\_server](#4-2-22-mesh\_server), or [node\_server](#4-2-23-node\_server),
 so it is usually not necessary to call mesh\_on explicitly. Mesh must be on for
 another mesh device to connect.
 
 
-## 4.2.21 mesh\_off
+## 4-2-21 mesh\_off
 
 ```
 void mesh_off(void)
@@ -1374,14 +1374,14 @@ Turn off mesh transmission. The local device will stop continuously sending
 the last mesh packet set via write_mesh. The purpose is to reduce the load on the 
 system when mesh functions are no longer needed, or to make the device invisible.
 
-## 4.2.22 mesh\_server
+## 4-2-22 mesh\_server
 
 ```
 void mesh_server(int (*callback)())
 ```
 
 Sets up the local device as a mesh server which spends all its time listening
-for mesh packets from all other mesh devices, sent via [write\_mesh](#4.2.36-write\_mesh).
+for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-36-write\_mesh).
 The packets are limited to a maximum size of
 25 bytes. When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling mesh\_server to continue
@@ -1424,7 +1424,7 @@ int mesh_callback(int clientnode,char *data,int datlen)
   }  
 ```
 
-## 4.2.23 node\_server
+## 4-2-23 node\_server
 
 ```
 int node_server(int clientnode,int (*callback)(),char endchar)
@@ -1432,7 +1432,7 @@ int node_server(int clientnode,int (*callback)(),char endchar)
 
 Sets up the local device as a node server that waits for 
 a specified client (clientnode) to connect, then spends all its time listening
-for node packets sent from that client via [write\_node](#4.2.37-write\_node).
+for node packets sent from that client via [write\_node](#4-2-37-write\_node).
 The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 400 bytes.
 When a packet is received,
@@ -1488,7 +1488,7 @@ int node_callback(int clientnode,char *data,int datlen)
   }  
 ```
 
-## 4.2.24 output\_file
+## 4-2-24 output\_file
 
 ```
 int output_file(char *filemame)
@@ -1518,7 +1518,7 @@ output_file("/home/pi/output.txt");
 ```
 
 
-## 4.2.25 read\_ctic
+## 4-2-25 read\_ctic
 
 ```
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize)
@@ -1586,16 +1586,16 @@ nread = read_ctic(4,cticn),data,sizeof(data));
 disconnect_node(4);
 ```
 
-## 4.2.26 read\_error
+## 4-2-26 read\_error
 
 ```
 int read_error(void)
 ```
 
 Return error state following a read via
-[read\_node/all\_endchar](#4.2.29-read\_node/all\_endchar), or
-[read\_node\_count](#4.2.28-read\_node\_count), or
-[read\_ctic](#4.2.25-read\_ctic).
+[read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar), or
+[read\_node\_count](#4-2-28-read\_node\_count), or
+[read\_ctic](#4-2-25-read\_ctic).
 
 RETURN
 
@@ -1607,7 +1607,7 @@ RETURN
 ```
 
 
-## 4.2.27 read\_mesh
+## 4-2-27 read\_mesh
 
 ```
 int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
@@ -1616,7 +1616,7 @@ int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
 Reads a mesh packet sent by any other trasmitting mesh device. The maximum size
 of a mesh packet is 25 bytes. Mesh reads do not look for a termination character,
 they read the full byte count in the packet. The most convenient way to wait for
-mesh packets as a server is to use [mesh\_server](#4.2.22-mesh\_server).
+mesh packets as a server is to use [mesh\_server](#4-2-22-mesh\_server).
 
 PARAMETERS
 
@@ -1674,16 +1674,16 @@ while(read_error() == 0);
 ```
 
 
-## 4.2.28 read\_node\_count
+## 4-2-28 read\_node\_count
 
 ```
 int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
 Read node packet from a specified connected node until a specified 
-number of bytes (count) is received (sent via [write\_node](#4.2.37-write\_node)).
+number of bytes (count) is received (sent via [write\_node](#4-2-37-write\_node)).
 If no such packet is received, the
-function terminates via a time out or x key press. The [read\_error](#4.2.26-read\_error)
+function terminates via a time out or x key press. The [read\_error](#4-2-26-read\_error)
 function returns
 the error state. Node packets have a maximum size of 400 bytes.
 
@@ -1738,7 +1738,7 @@ if(read_error() != 0)
 
 ```
 
-## 4.2.29 read\_node/all\_endchar
+## 4-2-29 read\_node/all\_endchar
 
 ```
 int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
@@ -1746,13 +1746,13 @@ int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag
 ```
 
 Read node packet from a specified connected node, or all connected nodes, until a specified 
-termination character (endchar) is received (sent via [write\_node](#4.2.37-write\_node)).
+termination character (endchar) is received (sent via [write\_node](#4-2-37-write\_node)).
 If no such packet is received, the function terminates via a time out or x key press.
-The [read\_error](#4.2.26-read\_error) function returns
+The [read\_error](#4-2-26-read\_error) function returns
 the error state. The read\_all\_node function listens to all connected nodes and
 returns the first packet received. Node packets have a maximum size of 400 bytes.
 The most convenient way to wait for node packets as a server is to
-use [node\_server](#4.2.23-node\_server).
+use [node\_server](#4-2-23-node\_server).
 
 PARAMETERS
 
@@ -1824,7 +1824,7 @@ if(read_error() != 0)
 
 ```
 
-## 4.2.30 read\_node/all\_clear
+## 4-2-30 read\_node/all\_clear
 
 ```
 void read_node_clear(int node)
@@ -1851,7 +1851,7 @@ read_all_clear();     // clear all node packets
  
 
 
-## 4.2.31 scroll\_back/forward
+## 4-2-31 scroll\_back/forward
 
 ```
 void scroll_back(void)
@@ -1860,8 +1860,8 @@ void scroll_forward(void)
 
 Screen prints performed by btlib.c funtions are saved in a buffer. These functions
 scroll the screen backwards and forwards through this buffer. Screen prints can
-be controlled via [set\_print\_flag](#4.2.32-set\_print\_flag).
-The buffer can be saved to a file via [output\_file](#4.2.24-output\_file).
+be controlled via [set\_print\_flag](#4-2-32-set\_print\_flag).
+The buffer can be saved to a file via [output\_file](#4-2-24-output\_file).
 
 SAMPLE CODE
 
@@ -1870,7 +1870,7 @@ scroll_back();      // scroll screen back through print buffer
 scroll_forward();   // scroll screen forwards through print buffer
 ```
 
-## 4.2.32 set\_print\_flag
+## 4-2-32 set\_print\_flag
 
 ```
 int set_print_flag(int flag)
@@ -1880,8 +1880,8 @@ The print flag controls how btlib.c functions print to the screen. The verbose
 mode prints all Bluetooth HCI traffic with details of how the packets are
 constructed, the replies expected and explanations of what is going on. This will often
 scroll off the top of the screen, but can be seen via
-[scroll\_back/forward](#4.2.31-scroll\_back/forward), or the
-square bracket keys in btferret, or saved to a file via [output\_file](#4.2.24-output\_file).
+[scroll\_back/forward](#4-2-31-scroll\_back/forward), or the
+square bracket keys in btferret, or saved to a file via [output\_file](#4-2-24-output\_file).
 
 PARAMETERS
 
@@ -1912,15 +1912,15 @@ savflag = set_print_flag(PRINT_VERBOSE);
 set_print_flag(savflag);  // restore original setting
 ```
 
-## 4.2.33 strtohex
+## 4-2-33 strtohex
 
 ```
 char *strtohex(char *s,int *nbytes)
 ```
 
 Convert an ascii string in hex format to an array of byte values. This can
-be used to specify a UUID in [find\_ctic\_index](#4.2.13-find\_ctic\_index)
-and [find\_channel](#4.2.11-find\_channel).
+be used to specify a UUID in [find\_ctic\_index](#4-2-13-find\_ctic\_index)
+and [find\_channel](#4-2-11-find\_channel).
 
 PARAMETERS
 
@@ -1963,14 +1963,14 @@ channel = find_channel(5,strtohex("1101",NULL));
 
 ```
 
-## 4.2.34 wait\_for\_disconnect
+## 4-2-34 wait\_for\_disconnect
 
 ```
 int wait_for_disconnect(int node,int timout)
 ```
 
 Wait for server to initiate disconnection. See explanation in
-[disconnect\_node](#4.2.10-disconnect\_node).
+[disconnect\_node](#4-2-10-disconnect\_node).
 
 
 PARAMETERS
@@ -1988,7 +1988,7 @@ RETURN
 1 = OK
 ```
 
-## 4.2.35 write\_ctic
+## 4-2-35 write\_ctic
 
 ```
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
@@ -2049,7 +2049,7 @@ write_ctic(4,cticn,data,1);
 disconnect_node(4);
 ```
 
-## 4.2.36 write\_mesh
+## 4-2-36 write\_mesh
 
 ```
 int write_mesh(char *outbuf,int count)
@@ -2057,10 +2057,10 @@ int write_mesh(char *outbuf,int count)
 
 Broadcast a mesh packet. This packet will be transmitted repeatedly until another
 write_mesh changes the data, or mesh transmission is turned off via
-[mesh\_off](#4.2.21-mesh\_off).
+[mesh\_off](#4-2-21-mesh\_off).
 All other mesh devices can read the
-packet via [read\_mesh](#4.2.27-read\_mesh).
-Other mesh devices running a [mesh\_server](#4.2.22-mesh\_server) will read the 
+packet via [read\_mesh](#4-2-27-read\_mesh).
+Other mesh devices running a [mesh\_server](#4-2-22-mesh\_server) will read the 
 packet and pass it to their callback function. The maximum size of a mesh packet is
 25 bytes. Mesh reads do not look for a termination character, they read the full
 byte count of the packet.
@@ -2100,7 +2100,7 @@ mesh_write(data,3);
 ```
 
 
-## 4.2.37 write\_node
+## 4-2-37 write\_node
 
 ```
 int write_node(int node,unsigned char *outbuf,int count)
@@ -2108,7 +2108,7 @@ int write_node(int node,unsigned char *outbuf,int count)
 
 Write a node packet to the specified connected classic server
 or mesh device connected as a node server. The remote node
-must have been connected via [connect\_node](#4.2.3-connect\_node). A node server reads
+must have been connected via [connect\_node](#4-2-3-connect\_node). A node server reads
 the packet via the various read_node functions.
 
 PARAMETERS
@@ -2154,7 +2154,7 @@ write_node(5,buf,3);
 
 ## 5 Reference
 
-## 5.1 What gives with UUIDs?
+## 5-1 What gives with UUIDs?
 
 When making a serial data connection to a remote Classic server, the server will listen on a
 particular RFCOMM channel (a small number like 1,2,3..). The client must
@@ -2205,14 +2205,14 @@ record for a serial channel. (decode info v3,pB,3)
 The UUID is in the aid=1 entry. The aid=4 entry identifies this record as an RFCOMM channel.
 
 A channel can be specified in the device information via the devices.txt
-file passed to [init\_blue](#4.2.14-init\_blue). 
+file passed to [init\_blue](#4-2-14-init\_blue). 
 BTlib also has functions for reading a remote device's SDP
-database [list\_channels](#4.2.16-list\_channels),
-finding the RFCOMM channel of a specified UUID [find\_channel](#4.2.11-find\_channel).
-Connecting to a classic device [connect\_node](#4.2.3-connect\_node)
+database [list\_channels](#4-2-16-list\_channels),
+finding the RFCOMM channel of a specified UUID [find\_channel](#4-2-11-find\_channel).
+Connecting to a classic device [connect\_node](#4-2-3-connect\_node)
 needs the RFCOMM channel number.
 To see full SDP database records as above, set verbose print mode
-during [list\_channels](#4.2.16-list\_channels) or use [list\_uuid](#4.2.18-list\_uuid).      
+during [list\_channels](#4-2-16-list\_channels) or use [list\_uuid](#4-2-18-list\_uuid).      
 
 The situation with LE devices is similar. LE devices hold characteristics that are values 
 that can be read and sometimes written (e.g. Heart rate). Each characteristic is identified
@@ -2232,26 +2232,26 @@ The full list can be found in a pdf document called "16-bit UUID Numbers Documen
 [here](https://www.bluetooth.com/specifications/assigned-numbers/). 
 
 A handle or UUID can be pre-set in the device information via the devices.txt file
-passed to [init\_blue](#4.2.14-init\_blue).
+passed to [init\_blue](#4-2-14-init\_blue).
  
 BTlib also has functions for reading an LE device's characteristic/UUID list
-[find\_ctics](#4.2.12-find\_ctics) which
+[find\_ctics](#4-2-12-find\_ctics) which
 adds the list to the device information, listing it
-[list\_ctics](#4.2.17-list\_ctics), and subsequently
-[find\_ctic\_index](#4.2.13-find\_ctic\_index)
+[list\_ctics](#4-2-17-list\_ctics), and subsequently
+[find\_ctic\_index](#4-2-13-find\_ctic\_index)
 to find the characteristic
 index of a specified UUID in the device information. Functions to
 read and write characteristics
-[read\_ctic](#4.2.25-read\_ctic),
-[write\_ctic](#4.2.35-write\_ctic)
+[read\_ctic](#4-2-25-read\_ctic),
+[write\_ctic](#4-2-35-write\_ctic)
 need this index. 
 
  
-## 5.2 Packet formats
+## 5-2 Packet formats
 
 These are the formats of packets exchanged at the HCI level.
 
-## 5.2.1 Starting 01 HCI Commands
+## 5-2-1 Starting 01 HCI Commands
 
 HCI commands to read information, connect to a remote device, etc..
 Reference Vol 2 Part E Section 7
@@ -2287,7 +2287,7 @@ OGF OGF*4   Reference Vol 2 Part E Section
 Each of these OGF reference sections is a list of OCF commands.
 ```
 
-## 5.2.2 Starting 04 HCI Events
+## 5-2-2 Starting 04 HCI Events
 
 Mostly replies from HCI commands. Reference Vol 2 Part E Section 7.7
 
@@ -2304,7 +2304,7 @@ Example packet
 The reference section 7.7 is a list of Event opcodes.
 ```
 
-## 5.2.3 Starting 02 Channel 0001
+## 5-2-3 Starting 02 Channel 0001
 
 Request/reply exchanges during connection establishment.
 Reference Vol 3 Part A Section 4
@@ -2340,7 +2340,7 @@ Request Reply Purpose
 So an opcode:ID = 0A:04 expects a reply 0B:04 
 ```
 
-## 5.2.4 Starting 02 Channel 0004
+## 5-2-4 Starting 02 Channel 0004
 
 LE packets. Reference Vol 3 Part F Section 3.4
 
@@ -2367,7 +2367,7 @@ The relevant opcodes for LE commands are
 ```
 
 This packet format is also used for data packets sent via
-[write\_node](#4.2.37-write\_node) to a connected mesh device acting as a node
+[write\_node](#4-2-37-write\_node) to a connected mesh device acting as a node
 server (it is an LE connection and the data is sent as LE packets). 
 In this case there is no opcode - just data as shown in
 the multiple packets example next.
@@ -2407,7 +2407,7 @@ Here are the last 0009 bytes from [5] to [4+0009]
 
 ```
 
-## 5.2.5 Starting 02 Channel 0040+
+## 5-2-5 Starting 02 Channel 0040+
 
 These packets are used by serial RFCOMM connections to a Classic server.
 Reference [RFCOMM](https://www.bluetooth.com/specifications/protocol-specifications/) section here.
@@ -2438,12 +2438,12 @@ of the first, plus the second << 7. The number of data bytes
 does not include the final error check FCS.
 ```
 
-## 5.3 Procedures
+## 5-3 Procedures
 
 These procedure setions are largely as produced by the verbose print mode
 with added explanations.
 
-## 5.3.1 HCI socket - read/write packets
+## 5-3-1 HCI socket - read/write packets
 
 Bluetooth packets are sent and received through an HCI socket opened
 as follows.
@@ -2514,18 +2514,18 @@ as [4] refer to offsets in the packet data.
 
 ```
 
-## 5.3.2 Classic procedures 
+## 5-3-2 Classic procedures 
 
 This connects to a classic device server, sets up a serial channel, exchanges
 a few serial data packets with the server and disconnects. It includes
-[HCI Commands](#5.2.1-starting-01-hci-commands),
-[HCI Events](#5.2.2-starting-04-hci-events),
-[L2CAP 0001 packets](#5.2.3-starting-02-channel-0001), and
-[L2CAP 0040+ packets](#5.2.5-starting-02-channel-0040+).
+[HCI Commands](#5-2-1-starting-01-hci-commands),
+[HCI Events](#5-2-2-starting-04-hci-events),
+[L2CAP 0001 packets](#5-2-3-starting-02-channel-0001), and
+[L2CAP 0040+ packets](#5-2-5-starting-02-channel-0040+).
 The disconnection here is initiated by the client, but there
 may be reasons for letting the server initiate - see 
-[disconnect\_node](#4.2.10-disconnect\_node), and
-[Classic disconnect initiated by server](#5.3.4-classic-disconnect-initiated-by-server).
+[disconnect\_node](#4-2-10-disconnect\_node), and
+[Classic disconnect initiated by server](#5-3-4-classic-disconnect-initiated-by-server).
 
 ```
 Connect to Pi4 (DC:A6:32:04:DB:56) on RFCOMM channel 2
@@ -2970,7 +2970,7 @@ GOT Disconnected OK (Event 05)
 
 ```
 
-## 5.3.3 Classic connect with PIN code
+## 5-3-3 Classic connect with PIN code
 
 This is the procedure to connect to an HC-05 module on its single
 RFCOMM channel 1 and a PIN code of 1234.
@@ -3068,7 +3068,7 @@ Classic procedures section...
 
 ```
 
-## 5.3.4 Classic disconnect initiated by server
+## 5-3-4 Classic disconnect initiated by server
 
 ```
 Server initiates the disconnection by sending an opcode 53 packet
@@ -3139,7 +3139,7 @@ Device Pi4 disconnected
 
 ```
 
-## 5.3.5 Classic scan
+## 5-3-5 Classic scan
 
 ```
 Scanning for Classic devices - 10 seconds
@@ -3171,7 +3171,7 @@ Found 2 devices
 
 ```
 
-## 5.3.6 SDP database operations
+## 5-3-6 SDP database operations
 
 The following procedure shows how to read a remote device's SDP database which
 can then be searched for RFCOMM serial channels. The btlib procedure is more 
@@ -3823,12 +3823,12 @@ Decode SDP info 139 bytes start 35 89 35 end 69 61 6C
 
 ``` 
 
-## 5.3.7 LE Procedures
+## 5-3-7 LE Procedures
 
 This connects to an LE device, writes a 1-byte characteristic with
 no acknowledge, writes a 2-byte characteristic with acknowledge, reads
 the 2-byte characteristic back, and disconnects. The commands use the 
-[L2CAP 0004](#5.2.4-starting-02-channel-0004)  LE packet format. The connect opcode
+[L2CAP 0004](#5-2-4-starting-02-channel-0004)  LE packet format. The connect opcode
 is documented at v2,pE,7.8.12, the Event 3E reply at 7.7.65.1. The read 
 opcodes are documented at v3,pF,3.4.4.3 and 3.4.4.4. The write
 opcodes at v3,pF,3.4.5. A characteristic with no
@@ -3899,7 +3899,7 @@ GOT Disconnected OK (Event 05)
 
 ```
 
-## 5.3.8 Read LE services
+## 5-3-8 Read LE services
 
 This reads a list of characteristic UUIDs and handles from an
 LE device. The read UUID opcode is documented at v3,pF,3.4.4.1 and 
@@ -4017,7 +4017,7 @@ GOT Disconnected OK (Event 05)
 
 ```
 
-## 5.3.9 LE scan
+## 5-3-9 LE scan
 
 This searches for active LE devices and reads their advertising
 data. Information on decoding the advertising data can be found at
@@ -4070,14 +4070,14 @@ Decode the advertising data returned by each device.
 
 ```
 
-## 5.4 Server Code
+## 5-4 Server Code
 
 The following sections are intended as a brief guide to writing server
 code for other machines from scratch. The listings are not fully workable
 code. They are mostly code fragments, with no error checking, that give an
 indication of how to get started.  
 
-## 5.4.1 Raspberry Pi bluez server
+## 5-4-1 Raspberry Pi bluez server
 
 Because it uses bluez, this code cannot co-exist with btferret.
 
@@ -4152,7 +4152,7 @@ run the code with root priviledges from root or with sudo.
   
 ```
 
-## 5.4.2 Windows COM port
+## 5-4-2 Windows COM port
 
 Probably the easiest way to program a Windows server because the
 operating system does the work and presents the connection as a
@@ -4220,7 +4220,7 @@ find the RFCOMM channel (which is not the same as the COM number).
   
 ```
 
-## 5.4.3 Windows Sockets
+## 5-4-3 Windows Sockets
 
 This code sets up a Bluetooth socket directly rather than going via a 
 COM port, and registers a custom 16-byte UUID serial channel. The
@@ -4327,7 +4327,7 @@ the services to find the RFCOMM channel number.
 
 ```
 
-## 5.4.4 Android
+## 5-4-4 Android
 
 This code sets up a custom 16-byte UUID serial channel.
 
