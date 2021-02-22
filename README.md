@@ -9,11 +9,11 @@ btferret/btlib Bluetooth Interface
 - [3 Interface](#3-interface)
     - [3.1 Networks](#3-1-networks)
     - [3.2 btferret](#3-2-btferret)
-    - [3.3 Windows/Android/HC-05 Classic devices](#3-3-windows/android/hc-05-classic-devices)   
+    - [3.3 Windows-Android-HC-05 Classic devices](#3-3-windows-android-hc-05-classic-devices)   
     - [3.4 LE devices](#3-4-le-devices) 
-    - [3.5 Node client/server connection](#3-5-node-client/server-connection) 
+    - [3.5 Node client-server connection](#3-5-node-client-server-connection) 
     - [3.6 Broadcast to all mesh servers](#3-6-broadcast-to-all-mesh-servers) 
-    - [3.7 sample.c](#3-7-sample.c)
+    - [3.7 sample.c](#3-7-sample)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
     - [4.2 Functions](#4-2-functions)    
@@ -45,9 +45,9 @@ btferret/btlib Bluetooth Interface
         - [4.2.26 read\_error](#4-2-26-read\_error)
         - [4.2.27 read\_mesh](#4-2-27-read\_mesh)
         - [4.2.28 read\_node\_count](#4-2-28-read\_node\_count)
-        - [4.2.29 read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar)
-        - [4.2.30 read\_node/all\_clear](#4-2-30-read\_node/all\_clear)
-        - [4.2.31 scroll\_back/forward](#4-2-31-scroll\_back/forward)
+        - [4.2.29 read\_node-all\_endchar](#4-2-29-read\_node-all\_endchar)
+        - [4.2.30 read\_node-all\_clear](#4-2-30-read\_node-all\_clear)
+        - [4.2.31 scroll\_back-forward](#4-2-31-scroll\_back-forward)
         - [4.2.32 set\_print\_flag](#4-2-32-set\_print\_flag)
         - [4.2.33 strtohex](#4-2-33-strtohex)
         - [4.2.34 wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
@@ -55,15 +55,15 @@ btferret/btlib Bluetooth Interface
         - [4.2.36 write\_mesh](#4-2-36-write\_mesh)
         - [4.2.37 write\_node](#4-2-37-write\_node) 
 - [5 Reference](#5-reference)
-    - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids?)
+    - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids)
     - [5.2 Packet formats](#5-2-packet-formats)
         - [5.2.1 Starting 01 HCI Commands](#5-2-1-starting-01-hci-commands)
         - [5.2.2 Starting 04 HCI Events](#5-2-2-starting-04-hci-events)
         - [5.2.3 Starting 02 Channel 0001](#5-2-3-starting-02-channel-0001)
         - [5.2.4 Starting 02 Channel 0004](#5-2-4-starting-02-channel-0004)
-        - [5.2.5 Starting 02 Channel 0040+](#5-2-5-starting-02-channel-0040+)
+        - [5.2.5 Starting 02 Channel 0040+](#5-2-5-starting-02-channel-0040-plus)
     - [5.3 Procedures](#5-3-procedures)
-        - [5.3.1 HCI socket read/write packets](#5-3-1-hci-socket-read/write-packets)
+        - [5.3.1 HCI socket read/write packets](#5-3-1-hci-socket-read-write-packets)
         - [5.3.2 Classic procedures](#5-3-2-classic-procedures) 
         - [5.3.3 Classic connect with PIN code](#5-3-3-classic-connect-with-pin-code)
         - [5.3.4 Classic disconnect initiated by server](#5-3-4-classic-disconnect-initiated-by-server)
@@ -94,7 +94,7 @@ transfer routine) and display of information - it is a bit like a super bluetoot
 you mad. It has a verbose print mode that displays the HCI Bluetooth traffic with details of
 the packets that are exchanged.
 
-Also included is the code for a simple [mesh network example](#3-7-sample.c).
+Also included is the code for a simple [mesh network example](#3-7-sample).
 
 In the [reference](#5-reference) section there is a detailed description
 of the HCI Bluetooth interface, the packet formats and how they are constructed,
@@ -220,7 +220,7 @@ The following sections describe how to use these commands to
 establish connections and exchange data.
 
 
-## 3-3 Windows/Android/HC-05 Classic devices
+## 3-3 Windows-Android-HC-05 Classic devices
 
 The btferret/btlib code can connect to a Windows/Android/HC-05 Classic server. This might be a
 Bluetooth terminal program set up as a server (via a "Make discoverable" option for example). It
@@ -230,7 +230,7 @@ code for other machines is in the [server code](#5-4-server-code) section.
 
 With the server waiting
 for a connection, btferret must first find
-the [RFCOMM channel](#5-1-what-gives-with-uuids?) on which
+the [RFCOMM channel](#5-1-what-gives-with-uuids) on which
 the server is listening.
 
 ```
@@ -354,7 +354,7 @@ disconnect_node(7);
 
 ```
 
-## 3-5 Node client/server connection
+## 3-5 Node client-server connection
 
 Two Pis connected as a client/server pair. There must be two Pis
 listed as MESH type in devices.txt.
@@ -522,7 +522,7 @@ write_mesh(buf,2);
 write_mesh('D',1);
 ```
 
-## 3-7 sample.c
+## 3-7 sample
 
 The sample.c code is an illustration of a procedure using mesh, node and
 Classic connections on the following mesh network.
@@ -609,8 +609,8 @@ These library functions are in btlib.c/btlib.h.
 [write\_mesh](#4-2-36-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
 [read\_mesh](#4-2-27-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
 [read\_node\_count](#4-2-28-read\_node\_count) - Read a specified byte count from specified node<br/>
-[read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar) - Read from specified or all nodes until end char received<br/>
-[read\_node/all\_clear](#4-2-30-read\_node/all\_clear) - Clear data in input buffer<br/>
+[read\_node/all\_endchar](#4-2-29-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
+[read\_node/all\_clear](#4-2-30-read\_node-all\_clear) - Clear data in input buffer<br/>
 [read\_error](#4-2-26-read\_error) - Return error code of last read<br/>
 [device\_type](#4-2-9-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
 [device\_name](#4-2-8-device\_name) - Return device name string<br/>
@@ -619,7 +619,7 @@ These library functions are in btlib.c/btlib.h.
 [ctic\_name](#4-2-4-ctic\_name) - Return LE characteristic name string<br/>
 [disconnect\_node](#4-2-10-disconnect\_node) - Disconnect initiated by client<br/>
 [wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
-[scroll\_back/forward](#4-2-31-scroll\_back/forward) - Scroll screen back/forward<br/>
+[scroll\_back/forward](#4-2-31-scroll\_back-forward) - Scroll screen back/forward<br/>
 [set\_print\_flag](#4-2-32-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
 [output\_file](#4-2-24-output\_file) - Save all recent screen output to a file<br/>
 [strtohex](#4-2-33-strtohex) - Convert ascii string to array of hex values<br/>
@@ -678,7 +678,7 @@ channel = RFCOMM channel
 ```
 
 The RFCOMM channel must be the serial channel on which the remote device (acting as a
-server) is listening (see [UUIDs](#5-1-what-gives-with-uuids?)).
+server) is listening (see [UUIDs](#5-1-what-gives-with-uuids)).
 Remote device channels can be found
 by calling [find\_channel](#4-2-11-find\_channel) or [list\_channels](#4-2-16-list\_channels).
 Use
@@ -953,7 +953,7 @@ the disconnection and the client must wait for a disconnection sequence from the
 complete the process gracefully - and [wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
-[node client/server connection](#3-5-node-client/server-connection).
+[node client/server connection](#3-5-node-client-server-connection).
 
 ```
    // Send a serial data message to node 3 that it interprets as
@@ -981,7 +981,7 @@ int find_channel(int node,int flag,char *uuid)
 ```
 
 Returns the RFCOMM channel number of a specified
-[UUID](#5-1-what-gives-with-uuids?). Use the RFCOMM channel to
+[UUID](#5-1-what-gives-with-uuids). Use the RFCOMM channel to
 connect to a Classic server via [connect\_node](#4-2-3-connect\_node).
 
 PARAMETERS
@@ -1301,7 +1301,7 @@ int list_uuid(int node,char *uuid)
 ```
 
 List information about a node's services that contain a
-specified 2-byte [UUID](#5-1-what-gives-with-uuids?).
+specified 2-byte [UUID](#5-1-what-gives-with-uuids).
 
 PARAMETERS
 
@@ -1593,7 +1593,7 @@ int read_error(void)
 ```
 
 Return error state following a read via
-[read\_node/all\_endchar](#4-2-29-read\_node/all\_endchar), or
+[read\_node/all\_endchar](#4-2-29-read\_node-all\_endchar), or
 [read\_node\_count](#4-2-28-read\_node\_count), or
 [read\_ctic](#4-2-25-read\_ctic).
 
@@ -1738,7 +1738,7 @@ if(read_error() != 0)
 
 ```
 
-## 4-2-29 read\_node/all\_endchar
+## 4-2-29 read\_node-all\_endchar
 
 ```
 int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
@@ -1824,7 +1824,7 @@ if(read_error() != 0)
 
 ```
 
-## 4-2-30 read\_node/all\_clear
+## 4-2-30 read\_node-all\_clear
 
 ```
 void read_node_clear(int node)
@@ -1851,7 +1851,7 @@ read_all_clear();     // clear all node packets
  
 
 
-## 4-2-31 scroll\_back/forward
+## 4-2-31 scroll\_back-forward
 
 ```
 void scroll_back(void)
@@ -1880,7 +1880,7 @@ The print flag controls how btlib.c functions print to the screen. The verbose
 mode prints all Bluetooth HCI traffic with details of how the packets are
 constructed, the replies expected and explanations of what is going on. This will often
 scroll off the top of the screen, but can be seen via
-[scroll\_back/forward](#4-2-31-scroll\_back/forward), or the
+[scroll\_back/forward](#4-2-31-scroll\_back-forward), or the
 square bracket keys in btferret, or saved to a file via [output\_file](#4-2-24-output\_file).
 
 PARAMETERS
@@ -2154,7 +2154,7 @@ write_node(5,buf,3);
 
 ## 5 Reference
 
-## 5-1 What gives with UUIDs?
+## 5-1 What gives with UUIDs
 
 When making a serial data connection to a remote Classic server, the server will listen on a
 particular RFCOMM channel (a small number like 1,2,3..). The client must
@@ -2407,7 +2407,7 @@ Here are the last 0009 bytes from [5] to [4+0009]
 
 ```
 
-## 5-2-5 Starting 02 Channel 0040+
+## 5-2-5 Starting 02 Channel 0040 plus
 
 These packets are used by serial RFCOMM connections to a Classic server.
 Reference [RFCOMM](https://www.bluetooth.com/specifications/protocol-specifications/) section here.
@@ -2443,7 +2443,7 @@ does not include the final error check FCS.
 These procedure setions are largely as produced by the verbose print mode
 with added explanations.
 
-## 5-3-1 HCI socket - read/write packets
+## 5-3-1 HCI socket - read-write packets
 
 Bluetooth packets are sent and received through an HCI socket opened
 as follows.
@@ -2521,7 +2521,7 @@ a few serial data packets with the server and disconnects. It includes
 [HCI Commands](#5-2-1-starting-01-hci-commands),
 [HCI Events](#5-2-2-starting-04-hci-events),
 [L2CAP 0001 packets](#5-2-3-starting-02-channel-0001), and
-[L2CAP 0040+ packets](#5-2-5-starting-02-channel-0040+).
+[L2CAP 0040+ packets](#5-2-5-starting-02-channel-0040-plus).
 The disconnection here is initiated by the client, but there
 may be reasons for letting the server initiate - see 
 [disconnect\_node](#4-2-10-disconnect\_node), and
