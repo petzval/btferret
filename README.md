@@ -7,7 +7,7 @@ btferret/btlib Bluetooth Interface
 - [1 Introduction](#1-introduction)
 - [2 File list and compile](#2-file-list-and-compile)
 - [3 Interface](#3-interface)
-    - [3.1 Networks](#3:1-networks)
+    - [3.1 Networks](#3\.1-networks)
     - [3.2 btferret](#3.2-btferret)
     - [3.3 Windows/Android/HC-05 Classic devices](#3.3-windows/android/hc-05-classic-devices)   
     - [3.4 LE devices](#3.4-le-devices) 
@@ -17,7 +17,7 @@ btferret/btlib Bluetooth Interface
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4.1-function-list)
     - [4.2 Functions](#4.2-functions)    
-        - [4.2.1 classic\_scan](#4:2:1-classic\_scan)
+        - [4.2.1 classic\_scan](#4\.2\.1-classic\_scan)
         - [4.2.2 close\_all](#4.2.2-close\_all)
         - [4.2.3 connect\_node](#4.2.3-connect\_node)
         - [4.2.4 ctic\_name](#4.2.4-ctic\_name)
@@ -156,7 +156,7 @@ gcc mycode.c btlib.c -o mycode
 ## 3 Interface  
    
 
-## 3:1 Networks
+## 3.1 Networks
 
 A Mesh Pi running btferret/btlib can operate as a client or as two types of server: mesh or node.
 
@@ -629,7 +629,7 @@ These library functions are in btlib.c/btlib.h.
 
 ## 4.2 Functions
 
-## 4:2:1 classic\_scan
+## 4\.2\.1 classic\_scan
 
 ```
 void classic_scan(void)
