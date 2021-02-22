@@ -143,7 +143,7 @@ service bluetooth status
 
 To customise btferret.c for your devices, an essential first step is to
 edit the devices.txt file to list all the devices in the
-network (see the [init_blue](#4-2-2-init\_blue) documentation).
+network (see the [init_blue](#4-2-14-init\_blue) documentation).
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify the btferret.c or sample.c examples.
