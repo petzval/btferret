@@ -629,7 +629,7 @@ These library functions are in btlib.c/btlib.h.
 
 ## 4.2 Functions
 
-## 4-2-1 classic\_scan
+## 4.2.1 classic\_scan
 
 ```
 void classic_scan(void)
