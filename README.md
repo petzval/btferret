@@ -403,7 +403,7 @@ DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 // Specify 10 as end char for packets sent by client
 
  
-node_server(2,node_callback,10)
+node_server(2,node_callback,10);
 
 // This node_callback routine receives packets sent by the client.
 
@@ -1412,7 +1412,7 @@ when the first data byte is an ascii 'D'. It can also be stopped by
 pressing the x key. See btferret.c or sample.c for similar examples.
 
 ```c
-mesh_server(mesh_callback)
+mesh_server(mesh_callback);
 
 
 int mesh_callback(int clientnode,char *data,int datlen)
