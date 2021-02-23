@@ -714,25 +714,25 @@ DEVICE = My other Pi  TYPE=MESH NODE=9 ADDRESS = B8:27:EB:F1:50:C3
 
 int channel;
 
-connect_node(3,0,0)   // connect to Pictail LE server node 3
-connect_node(9,0,0)   // connect to My other Pi Mesh device node 9
+connect_node(3,0,0);  // connect to Pictail LE server node 3
+connect_node(9,0,0);  // connect to My other Pi Mesh device node 9
                       // listening as a node server
                       
 connect_node(6,CHANNEL_STORED,0); // connect to HC-05 classic server node 6
                                   // via channel 1 specified in devices.txt                       
 
-connect_node(7,CHANNEL_NEW,4)  // connect to Windows PC Classic server node 7 
-                               // listening on RFCOMM serial channel 4
-                               // will store channel 4 in device info
-connect_node(7,CHANNEL_STORED,0)  // reconnect to Windows PC classic server node 7
-                                  // using stored channel 4 set by the previous
-                                  // CHANNEL_NEW connection  
+connect_node(7,CHANNEL_NEW,4);  // connect to Windows PC Classic server node 7 
+                                // listening on RFCOMM serial channel 4
+                                // will store channel 4 in device info
+connect_node(7,CHANNEL_STORED,0);  // reconnect to Windows PC classic server node 7
+                                   // using stored channel 4 set by the previous
+                                   // CHANNEL_NEW connection  
                                   
       // find Classic server channel number from its 2 or 16-byte UUID               
 channel = find_channel(7,UUID_2,strtohex("1101",NULL));
 // OR
 channel = find_channel(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL));
-connect_node(7,CHANNEL_NEW,channel)  // connect to Windows PC node 7 on found channel 
+connect_node(7,CHANNEL_NEW,channel);  // connect to Windows PC node 7 on found channel 
 
 ```
 
@@ -837,11 +837,11 @@ BTYPE_SHORT  short list with device names only
 SAMPLE CODE
 
 ```c
-device_info(BTYPE_LO | BTYPE_ME | BTYPE_CL | BTYPE_LE)
+device_info(BTYPE_LO | BTYPE_ME | BTYPE_CL | BTYPE_LE);
                     // full list all device info
-device_info(BTYPE_CL | BTYPE_CONNECTED)
+device_info(BTYPE_CL | BTYPE_CONNECTED);
                     // full list connected classic servers
-device_info(BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_SHORT)
+device_info(BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_SHORT);
                     // short list disconnected LE servers
 ```
                    
@@ -1022,7 +1022,7 @@ channel = find_channel(7,UUID_2,strtohex("1101",NULL));
 channel = find_channel(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL));
 
 if(channel > 0)
-  connect_node(7,CHANNEL_NEW,channel)  // connect to Classic server node 7 on found channel 
+  connect_node(7,CHANNEL_NEW,channel);  // connect to Classic server node 7 on found channel 
 ```
 
 ## 4-2-12 find\_ctics
