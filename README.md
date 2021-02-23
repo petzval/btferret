@@ -73,10 +73,9 @@ btferret/btlib Bluetooth Interface
         - [5.3.8 Read LE services](#5-3-8-read-le-services)
         - [5.3.9 LE scan](#5-3-9-le-scan)
     - [5.4 Server Code](#5-4-server-code)
-        - [5.4.1 Raspberry Pi bluez server](#5-4-1-raspberry-pi-bluez-server)
-        - [5.4.2 Windows COM port](#5-4-2-windows-com-port)
-        - [5.4.3 Windows Sockets](#5-4-3-windows-sockets)
-        - [5.4.4 Android](#5-4-4-android)
+        - [5.4.1 Windows COM port](#5-4-1-windows-com-port)
+        - [5.4.2 Windows Sockets](#5-4-2-windows-sockets)
+        - [5.4.3 Android](#5-4-3-android)
 - [6 Documentation References](#6-documentation-references)
 
 ## 1 Introduction
@@ -263,7 +262,7 @@ d - Disconnect. Enter the device node number.
 
 The same procedure is programmed via btlib functions as follows:
 
-```
+```c
 devices.txt 
 DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
 DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
@@ -530,7 +529,7 @@ Classic connections on the following mesh network.
 ![picture](image2.png)
 
 The Classic server might be a Windows PC with Bluetooth set up as an
-incoming [COM port](#5-4-2-windows-com-port) that presents as a UUID=1101 channel.
+incoming [COM port](#5-4-1-windows-com-port) that presents as a UUID=1101 channel.
 All three mesh Pis run the same sample.c code that executes the following sequence:
 
 ```
@@ -4077,82 +4076,8 @@ code for other machines from scratch. The listings are not fully workable
 code. They are mostly code fragments, with no error checking, that give an
 indication of how to get started.  
 
-## 5-4-1 Raspberry Pi bluez server
 
-Because it uses bluez, this code cannot co-exist with btferret.
-
-```
-To enable access to bluez the following will be necessary:
-
-MODIFY service file:
-
-sudo nano /lib/systemd/system/bluetooth.service
-Add -C to the ExecStart line so it reads:
-ExecStart=/usr.....bluetoothd -C
-reboot or restart the bluetooth service to implement the change
-
-If access to /var/run/sdp is denied, change its permissions or
-run the code with root priviledges from root or with sudo.
-
-   // libbluetooth-dev must be installed
-#include <bluetooth/bluetooth.h>
-
-  struct sockaddr_rc locaddr,remaddr;
-  socklen_t opt; 
-  int n,serversock,serialfd,flags,channel;
-  char *c;
-  
-     // set up server to listen on an RFCOMM channel
-     // which you choose and must be a serial service
-     // in the local SDP database
- 
-  channel = 4;  // RFCOMM channel = 4 for example    
-     
-  serversock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-
-  locaddr.rc_family = AF_BLUETOOTH;
-  c = (char *)locaddr.rc_bdaddr;
-  for(n = 0 ; n < 6 ; ++n)
-    c[n] = 0;    // all zero = BDADDR_ANY
-  locaddr.rc_channel = channel;
-  
-  bind(serversock,(struct sockaddr *)&locaddr, sizeof(locaddr));
-   
-  listen(serversock,50);
-  
-    // unblock socket
-  flags = fcntl(serversock,F_GETFL);
-  fcntl(serversock,F_SETFL,flags | O_NONBLOCK);
-  
-  opt = sizeof(remaddr);
- 
-  do
-    {   // wait for client to connect
-    serialfd = accept(serversock,(struct sockaddr *)&remaddr,&opt);
-    }
-  while(serialfd <= 0 && time out or stop listen test);
-  
-    // unblock socket
-     
-  flags = fcntl(serialfd,F_GETFL);
-  fcntl(serialfd,F_SETFL,flags | O_NONBLOCK);
-  
-    // serialfd is now open for serial data exchange with client
-  
-    // read/write serial data
-    
-  read(serialfd,data,count);
-  write(serialfd,data,count);
-  
-  
-   // disconnect
-   
-  close(serialfd);
-  close(serversock);
-  
-```
-
-## 5-4-2 Windows COM port
+## 5-4-1 Windows COM port
 
 Probably the easiest way to program a Windows server because the
 operating system does the work and presents the connection as a
@@ -4220,7 +4145,7 @@ find the RFCOMM channel (which is not the same as the COM number).
   
 ```
 
-## 5-4-3 Windows Sockets
+## 5-4-2 Windows Sockets
 
 This code sets up a Bluetooth socket directly rather than going via a 
 COM port, and registers a custom 16-byte UUID serial channel. The
@@ -4327,7 +4252,7 @@ the services to find the RFCOMM channel number.
 
 ```
 
-## 5-4-4 Android
+## 5-4-3 Android
 
 This code sets up a custom 16-byte UUID serial channel.
 
