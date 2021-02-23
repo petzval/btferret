@@ -263,10 +263,10 @@ d - Disconnect. Enter the device node number.
 The same procedure is programmed via btlib functions as follows:
 
 ```c
-devices.txt 
+/* devices.txt
 DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
 DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
-
+*/
 
 int channel,len;
 char buf[16],inbuf[64];
@@ -277,7 +277,7 @@ connect_node(6,CHANNEL_STORED,0);
 
    // find the serial channel of node 4 if not known  
 channel = find_channel(4,UUID_2,strtohex("1101",NULL));
-OR
+// OR
 channel = find_channel(4,UUID_16,strtohex("00001101-0000-1000-8000-00805F9B34FB",NULL));
    // if channel > 0 then the serial channel has been found 
 connect_node(4,CHANNEL_NEW,channel);
@@ -326,12 +326,12 @@ d - Disconnect
 ```
 LE read/writes are programmed via btlib funtions as follows:
 
-```
-devices.txt
+```c
+/* devices.txt
 DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Name    UUID=2A00                        ; index 0
   LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2     ; index 1
- 
+*/ 
 
 
 char buf[32];
@@ -392,18 +392,20 @@ D - Disconnect. A 'D' command that the server has been programmed
 
 The same procedure is programmed via btlib functions as follows:
 
-```
-devices.txt
+```c
+/* devices.txt
 DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
+*/
 
-NODE SERVER - node 1
-Set up node 1 as a server listening for node 2 to connect
-Specify 10 as end char for packets sent by client
+// NODE SERVER - node 1
+// Set up node 1 as a server listening for node 2 to connect
+// Specify 10 as end char for packets sent by client
+
  
 node_server(2,node_callback,10)
 
-This node_callback routine receives packets sent by the client.
+// This node_callback routine receives packets sent by the client.
 
 int node_callback(int clientnode,char *data,int datlen)
   {
@@ -427,8 +429,8 @@ int node_callback(int clientnode,char *data,int datlen)
 
 
 
-NODE CLIENT - node 2
-Connect as a client to the node 1 server
+// NODE CLIENT - node 2
+// Connect as a client to the node 1 server
 
 char outbuf[4],inbuf[64];
 
@@ -481,18 +483,18 @@ D - Disconnect. Tell all mesh servers to stop.
 
 The same procedure is programmed via btlib funtions as follows:
 
-```
-devices.txt
+```c
+/* devices.txt
 DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
+*/
 
-
-MESH SERVER
+// MESH SERVER
 
 mesh_server(mesh_callback);
 
-This mesh callback routine receives all broadcast packets from
-devices on the devices.txt list.
+// This mesh callback routine receives all broadcast packets from
+// devices on the devices.txt list.
 
 int mesh_callback(int clientnode,char *data,int datlen)
   {
@@ -509,7 +511,7 @@ int mesh_callback(int clientnode,char *data,int datlen)
   } 
  
 
-MESH BROADCASTER
+// MESH BROADCASTER
 
 char buf[4];
 
@@ -630,18 +632,17 @@ These library functions are in btlib.c/btlib.h.
 
 ## 4-2-1 classic\_scan
 
-```
+```c
 void classic_scan(void)
 ```
 
 Scan for Classic Bluetooth devices. If a device is not already on the device information list, 
-it is added and will be listed via [device\_info](#4-2-7-device\_info)
- . 
+it is added and will be listed via [device\_info](#4-2-7-device\_info). 
 
 
 ## 4-2-2 close\_all
 
-```
+```c
 void close_all(void)
 ```
 
@@ -651,7 +652,7 @@ program termination.
 
 ## 4-2-3 connect\_node
 
-```
+```c
 int connect_node(int node,int flag,int channel)
 ```
 
@@ -701,14 +702,15 @@ RETURN
 
 SAMPLE CODE
 
-```
+```c
+/*
 If device information in devices.txt for init_blue() is:
 
 DEVICE = Windows PC  TYPE=classic NODE=7 address=00:1A:7D:DA:71:13
 DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
 DEVICE = Pictail  TYPE=LE NODE=3  ADDRESS = 00:1E:C0:2D:17:7C
 DEVICE = My other Pi  TYPE=MESH NODE=9 ADDRESS = B8:27:EB:F1:50:C3
-
+*/
 
 int channel;
 
@@ -728,7 +730,7 @@ connect_node(7,CHANNEL_STORED,0)  // reconnect to Windows PC classic server node
                                   
       // find Classic server channel number from its 2 or 16-byte UUID               
 channel = find_channel(7,UUID_2,strtohex("1101",NULL));
-OR
+// OR
 channel = find_channel(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL));
 connect_node(7,CHANNEL_NEW,channel)  // connect to Windows PC node 7 on found channel 
 
@@ -737,7 +739,7 @@ connect_node(7,CHANNEL_NEW,channel)  // connect to Windows PC node 7 on found ch
 
 ## 4-2-4 ctic\_name
 
-```
+```c
 char *ctic_name(int node,int cticn)
 ```
 
@@ -763,7 +765,7 @@ See [device\_type](#4-2-9-device\_type) for sample code.
 
 ## 4-2-5 ctic\_ok
 
-```
+```c
 int ctic_ok(int node,int cticn)
 ```
 
@@ -789,7 +791,7 @@ See [device\_type](#4-2-9-device\_type) for sample code.
 
 ## 4-2-6 device\_connected
 
-```
+```c
 int device_connected(int node)
 ```
 
@@ -811,7 +813,7 @@ RETURN
 
 ## 4-2-7 device\_info
 
-```
+```c
 int device_info(int mask)
 ```
 
@@ -834,7 +836,7 @@ BTYPE_SHORT  short list with device names only
 
 SAMPLE CODE
 
-```
+```c
 device_info(BTYPE_LO | BTYPE_ME | BTYPE_CL | BTYPE_LE)
                     // full list all device info
 device_info(BTYPE_CL | BTYPE_CONNECTED)
@@ -846,7 +848,7 @@ device_info(BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_SHORT)
 
 ## 4-2-8 device\_name
 
-```
+```c
 char *device_name(int node)
 ```
 
@@ -868,7 +870,7 @@ See [device\_type](#4-2-9-device\_type) for sample code.
 
 ## 4-2-9 device\_type
 
-```
+```c
 int device_type(int node)
 ```
 
@@ -897,7 +899,7 @@ to check devices and characteristics
 in the device information and list their names with [device\_name](#4-2-8-device\_name)
 and [ctic\_name](#4-2-4-ctic\_name).
 
-```
+```c
 int k;
 
 printf("Node 7 name = %s\n",device_name(7));
@@ -910,7 +912,7 @@ if(device_type(7) == BTYPE_LE)
 
 ## 4-2-10 disconnect\_node
 
-```
+```c
 int disconnect_node(int node)
 ```
 
@@ -939,7 +941,7 @@ RETURN
 SAMPLE CODE
 
 
-```
+```c
 disconnect_node(3);   // disconnect node 3
 ```
 
@@ -954,7 +956,7 @@ does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
 [node client/server connection](#3-5-node-client-server-connection).
 
-```
+```c
    // Send a serial data message to node 3 that it interprets as
    // a disconnect instruction - in this case a single 'D' character
 
@@ -975,7 +977,7 @@ wait_for_disconnect(3,3000);
 
 ## 4-2-11 find\_channel
 
-```
+```c
 int find_channel(int node,int flag,char *uuid)
 ```
 
@@ -1003,9 +1005,9 @@ RETURN
 
 SAMPLE CODE
 
-```
+```c
 
-Find RFCOMM channel of node 7's serial data channel with UUID = 1101
+// Find RFCOMM channel of node 7's serial data channel with UUID = 1101
 
 int channel;
 char uuid[2];
@@ -1014,7 +1016,7 @@ uuid[0] = 0x11;
 uuid[1] = 0x01;
 channel = find_channel(7,UUID_2,uuid);
 
-The strtohex() function can be used to generate the uuid array from an ascii string.
+// The strtohex() function can be used to generate the uuid array from an ascii string.
 
 channel = find_channel(7,UUID_2,strtohex("1101",NULL));
 channel = find_channel(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL));
@@ -1025,7 +1027,7 @@ if(channel > 0)
 
 ## 4-2-12 find\_ctics
 
-```
+```c
 int find_ctics(int node)
 ```
 
@@ -1048,15 +1050,15 @@ RETURN
 
 SAMPLE CODE
 
-```
-Find all characteristics of LE server node 5 and save in device info
+```c
+// Find all characteristics of LE server node 5 and save in device info
 
 find_citcs(5);
 ```
 
 ## 4-2-13 find\_ctic\_index
 
-```
+```c
 int find_ctic_index(int node,int flag,char *uuid)
 ```
 
@@ -1090,9 +1092,8 @@ RETURN
 
 SAMPLE CODE
 
-```
-
-Find index of LE server node 7's characteristic with UUID = 2A00 and read it.
+```c
+// Find index of LE server node 7's characteristic with UUID = 2A00 and read it.
 
 int cticn;
 char uuid[2],data[64];
@@ -1102,7 +1103,7 @@ uuid[1] = 0x00;
 cticn = find_ctic_index(7,UUID_2,uuid);
 read_ctic(7,cticn,data,sizeof(data));
 
-The strtohex() function can be used to generate the uuid array from an ascii string.
+// The strtohex() function can be used to generate the uuid array from an ascii string.
 
 cticn = find_ctic_index(7,UUID_2,strtohex("2A00",NULL));
 cticn = find_ctic_index(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL));
@@ -1111,7 +1112,7 @@ cticn = find_ctic_index(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB
 
 ## 4-2-14 init\_blue
 
-```
+```c
 int init_blue(char *filename)
 ```
 
@@ -1139,7 +1140,7 @@ SAMPLE CODE
 if(init_blue("/home/pi/mydevices.txt") == 0)
   return(0);
   
-txt file example:
+devices txt file example:
 
   ; semi colon is comment character - everything beyond ignored
   ; This file must list all network devices
@@ -1211,7 +1212,7 @@ Characteristics are found via [find\_ctics](#4-2-12-find\_ctics).
 
 ## 4-2-15 le\_scan
 
-```
+```c
 void le_scan(void)
 ```
 
@@ -1224,7 +1225,7 @@ information.
 
 ## 4-2-16 list\_channels
 
-```
+```c
 int list_channels(int node,int flag)
 ```
 
@@ -1248,7 +1249,7 @@ RETURN
 
 SAMPLE CODE
 
-```
+```c
 list_channels(7,LIST_SHORT);  // list of node 7 RFCOMM serial channel names
 list_channels(5,LIST_FULL);   // full info about node 5 serial channels
 ```
@@ -1256,7 +1257,7 @@ list_channels(5,LIST_FULL);   // full info about node 5 serial channels
 
 ## 4-2-17 list\_ctics
 
-```
+```c
 int list_ctics(int node,int flag)
 ```
 List characteristics known by device info. If device info
@@ -1284,7 +1285,7 @@ RETURN
 
 SAMPLE CODE
 
-```
+```c
 list_citcs(4,LIST_SHORT);           // list all characteristic names of node 4
 list_citcs(4,LIST_SHORT | CTIC_R);  // list readable characteristic names of node 4
 list_citcs(4,LIST_SHORT | CTIC_W);  // list writeable characteristic names of node 4
@@ -1295,7 +1296,7 @@ list_ctics(3,LIST_FULL);   // full characteristic info of node 3
                            
 ## 4-2-18 list\_uuid
 
-```
+```c
 int list_uuid(int node,char *uuid)
 ```
 
@@ -1318,8 +1319,8 @@ RETURN
 
 SAMPLE CODE
 
-```
-List services of node 5 that contain the UUID = 0100
+```c
+// List services of node 5 that contain the UUID = 0100
 
 char uuid[2];
 
@@ -1327,7 +1328,7 @@ uuid[0] = 0x01;
 uuid[1] = 0x00;
 list_uuid(5,uuid);
 
-The strtohex function can be used to generate the uuid array from an ascii string.
+// The strtohex function can be used to generate the uuid array from an ascii string.
 
 list_uuid(5,strtohex("0100",NULL));
 
@@ -1335,7 +1336,7 @@ list_uuid(5,strtohex("0100",NULL));
 
 ## 4-2-19 localnode
 
-```
+```c
 int localnode(void)
 ```
 
@@ -1344,14 +1345,14 @@ data in [init\_blue](#4-2-14-init\_blue).
 
 SAMPLE CODE
 
-```
+```c
 printf("Local device node number = %d\n",localnode());
 ```
 
 
 ## 4-2-20 mesh\_on
 
-```
+```c
 void mesh_on(void)
 ```
 
@@ -1365,7 +1366,7 @@ another mesh device to connect.
 
 ## 4-2-21 mesh\_off
 
-```
+```c
 void mesh_off(void)
 ```
 
@@ -1375,7 +1376,7 @@ system when mesh functions are no longer needed, or to make the device invisible
 
 ## 4-2-22 mesh\_server
 
-```
+```c
 void mesh_server(int (*callback)())
 ```
 
@@ -1410,7 +1411,7 @@ This a minimal mesh server callback that simply prints a message, and exits
 when the first data byte is an ascii 'D'. It can also be stopped by
 pressing the x key. See btferret.c or sample.c for similar examples.
 
-```
+```c
 mesh_server(mesh_callback)
 
 
@@ -1425,7 +1426,7 @@ int mesh_callback(int clientnode,char *data,int datlen)
 
 ## 4-2-23 node\_server
 
-```
+```c
 int node_server(int clientnode,int (*callback)(),char endchar)
 ```
 
@@ -1473,7 +1474,7 @@ This a minimal node server callback that simply prints a message, and exits
 when the first data byte is an ascii 'D'. It can also be stopped by
 pressing the x key. See btferret.c or sample.c for other examples.
 
-```
+```c
    // listen for packets from node 4 with termination character 10
 node_server(4,node_callback,10);
 
@@ -1489,7 +1490,7 @@ int node_callback(int clientnode,char *data,int datlen)
 
 ## 4-2-24 output\_file
 
-```
+```c
 int output_file(char *filemame)
 ```
 
@@ -1512,14 +1513,14 @@ RETURN
 
 SAMPLE CODE
 
-```
+```c
 output_file("/home/pi/output.txt");
 ```
 
 
 ## 4-2-25 read\_ctic
 
-```
+```c
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize)
 ```
 
@@ -1555,14 +1556,15 @@ but the LE device has not set it and Number of bytes read = 0
 
 SAMPLE CODE
 
-```
+```c
+/*
 If devices.txt information for init_blue() is as follows:
 
 DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Alert HANDLE=000B PERMIT=06 SIZE=1               ; index 0
   LECHAR=Test  HANDLE=0014 PERMIT=0A SIZE=2               ; index 1
   LECHAR=My data UUID=11223344-5566-7788-99AABBCCDDEEFF00 ; index 2 
-
+*/
 
 char data[32];
 int nread,cticn;
@@ -1587,7 +1589,7 @@ disconnect_node(4);
 
 ## 4-2-26 read\_error
 
-```
+```c
 int read_error(void)
 ```
 
@@ -1608,7 +1610,7 @@ RETURN
 
 ## 4-2-27 read\_mesh
 
-```
+```c
 int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
 ```
 
@@ -1652,7 +1654,7 @@ The read_error() function returns one of the following:
 
 SAMPLE CODE
 
-```
+```c
 int nread,node;
 char inbuf[32];
 
@@ -1675,7 +1677,7 @@ while(read_error() == 0);
 
 ## 4-2-28 read\_node\_count
 
-```
+```c
 int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
@@ -1723,7 +1725,7 @@ The read_error() function returns one of the following:
 
 SAMPLE CODE
 
-```
+```c
 int nread;
 char buff[64];
 
@@ -1739,7 +1741,7 @@ if(read_error() != 0)
 
 ## 4-2-29 read\_node-all\_endchar
 
-```
+```c
 int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
 int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
 ```
@@ -1799,7 +1801,7 @@ The read_error() function returns one of the following:
 
 SAMPLE CODE
 
-```
+```c
 int nread,node;
 char buff[64];
 
@@ -1825,7 +1827,7 @@ if(read_error() != 0)
 
 ## 4-2-30 read\_node-all\_clear
 
-```
+```c
 void read_node_clear(int node)
 void read_all_clear(void)
 ```
@@ -1841,7 +1843,7 @@ node = Node number - clear all packets from this node
 
 SAMPLE CODE
 
-```
+```c
 read_node_clear(6);   // clear all packets from node 6 
                       // from the input buffer
 read_all_clear();     // clear all node packets
@@ -1852,7 +1854,7 @@ read_all_clear();     // clear all node packets
 
 ## 4-2-31 scroll\_back-forward
 
-```
+```c
 void scroll_back(void)
 void scroll_forward(void)
 ```
@@ -1864,14 +1866,14 @@ The buffer can be saved to a file via [output\_file](#4-2-24-output\_file).
 
 SAMPLE CODE
 
-```
+```c
 scroll_back();      // scroll screen back through print buffer
 scroll_forward();   // scroll screen forwards through print buffer
 ```
 
 ## 4-2-32 set\_print\_flag
 
-```
+```c
 int set_print_flag(int flag)
 ```
 
@@ -1901,7 +1903,7 @@ change.
 
 SAMPLE CODE
 
-```
+```c
 int savflag;
 
 savflag = set_print_flag(PRINT_VERBOSE);
@@ -1913,7 +1915,7 @@ set_print_flag(savflag);  // restore original setting
 
 ## 4-2-33 strtohex
 
-```
+```c
 char *strtohex(char *s,int *nbytes)
 ```
 
@@ -1948,7 +1950,7 @@ pointer to array of bytes
 
 SAMPLE CODE
 
-```
+```c
 int n,count,channel;
 char *dat;
 
@@ -1964,7 +1966,7 @@ channel = find_channel(5,strtohex("1101",NULL));
 
 ## 4-2-34 wait\_for\_disconnect
 
-```
+```c
 int wait_for_disconnect(int node,int timout)
 ```
 
@@ -1989,7 +1991,7 @@ RETURN
 
 ## 4-2-35 write\_ctic
 
-```
+```c
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
 ```
 
@@ -2013,14 +2015,15 @@ Number of bytes written
 
 SAMPLE CODE
 
-```
+```c
+/*
 If devices.txt information for init_blue() is as follows:
 
 DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Alert HANDLE=000B PERMIT=06 SIZE=1                 ; index 0
   LECHAR=Test  HANDLE=0014 PERMIT=0A SIZE=2                 ; index 1
   LECHAR=My data UUID = 11223344-5566-7788-99AABBCCDDEEFF00 ; index 2 
-
+*/
 
 int cticn;
 char data[8];
@@ -2050,7 +2053,7 @@ disconnect_node(4);
 
 ## 4-2-36 write\_mesh
 
-```
+```c
 int write_mesh(char *outbuf,int count)
 ```
 
@@ -2085,7 +2088,7 @@ Number of bytes written
 
 SAMPLE CODE
 
-```
+```c
 char data[4];
 
 
@@ -2101,7 +2104,7 @@ mesh_write(data,3);
 
 ## 4-2-37 write\_node
 
-```
+```c
 int write_node(int node,unsigned char *outbuf,int count)
 ```
 
@@ -2130,7 +2133,7 @@ Number of bytes written
 
 SAMPLE CODE
 
-```
+```c
 char buf[4];
 
 buf[0] = 0x00;
@@ -2447,7 +2450,7 @@ with added explanations.
 Bluetooth packets are sent and received through an HCI socket opened
 as follows.
 
-```
+```c
 void hcisock()
   {
   int dd;
@@ -2492,10 +2495,12 @@ void hcisock()
    // Close 
  
   close(dd);
-  }  
+  } 
+``` 
   
 In the following sections, the packets are shown as follows.
 
+```
 < indicates a packet sent to the Bluetooth adapter
 The full packet (01 01 0C 08...) is listed on the lines starting 0000
 which is the hex address of the packet data. The Set addresses such
@@ -4097,7 +4102,7 @@ serial channel to be visible to clients. It will be reported
 as UUID 1101 "COM 3". The client must read the services to
 find the RFCOMM channel (which is not the same as the COM number).
 
-```
+```c
 
   HANDLE hCom;
   COMMTIMEOUTS cto;
@@ -4153,7 +4158,7 @@ RFCOMM channel number cannot be specified, and is set by the WSASetService
 function, so may be different each time. Consequently the client must read
 the services to find the RFCOMM channel number. 
 
-```
+```c
 #include <ws2bth.h>    
 #include <winsock2.h>  
 
