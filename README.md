@@ -519,8 +519,8 @@ buf[0] = 0x12;
 buf[1] = 0x34;
    // broadcast two-byte mesh packet
 write_mesh(buf,2);
-   // broadcast 'D' disconnect command
-write_mesh('D',1);
+   // broadcast D disconnect command
+write_mesh("D",1);
 ```
 
 ## 3-7 sample
@@ -2098,7 +2098,7 @@ data[2] = 0x22;
 
   // start transmitting a 3-byte mesh packet
   
-mesh_write(data,3);
+write_mesh(data,3);
 ```
 
 
