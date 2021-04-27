@@ -123,6 +123,11 @@ devices.txt
 ```
 gcc btferret.c btlib.c -o btferret
 
+btferret must be run with root permissions
+from the root account or via sudo as follows:
+
+sudo ./btferret
+
 Run with devices.txt in the same directory
 ```
 
@@ -577,6 +582,11 @@ sampledev.txt
 COMPILE
 
 gcc sample.c btlib.c -o sample
+
+sample must be run with root permissions
+from the root account or via sudo as follows:
+
+sudo ./sample
 
 Run with sampledev.txt in the same directory
 ```
