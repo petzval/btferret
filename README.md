@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 1 Feb 2021*
+*Version 2*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -9,51 +9,56 @@ btferret/btlib Bluetooth Interface
 - [3 Interface](#3-interface)
     - [3.1 Networks](#3-1-networks)
     - [3.2 btferret](#3-2-btferret)
-    - [3.3 Windows-Android-HC-05 Classic devices](#3-3-windows-android-hc-05-classic-devices)   
-    - [3.4 LE devices](#3-4-le-devices) 
-    - [3.5 Node client-server connection](#3-5-node-client-server-connection) 
-    - [3.6 Broadcast to all mesh servers](#3-6-broadcast-to-all-mesh-servers) 
-    - [3.7 sample.c](#3-7-sample)
+    - [3.3 Windows-Android-HC-05 Classic servers](#3-3-windows-android-hc-05-classic-servers) 
+    - [3.4 Windows-Android Classic clients](#3-4-windows-android-classic-clients)        
+    - [3.5 LE devices](#3-5-le-devices) 
+    - [3.6 Pi-Pi client-server connection](#3-6-pi-pi-client-server-connection) 
+    - [3.7 Broadcast to all mesh servers](#3-7-broadcast-to-all-mesh-servers) 
+    - [3.8 sample.c](#3-8-sample)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
     - [4.2 Functions](#4-2-functions)    
         - [4.2.1 classic\_scan](#4-2-1-classic\_scan)
-        - [4.2.2 close\_all](#4-2-2-close\_all)
-        - [4.2.3 connect\_node](#4-2-3-connect\_node)
-        - [4.2.4 ctic\_name](#4-2-4-ctic\_name)
-        - [4.2.5 ctic\_ok](#4-2-5-ctic\_ok)
-        - [4.2.6 device\_connected](#4-2-6-device\_connected)
-        - [4.2.7 device\_info](#4-2-7-device\_info)
-        - [4.2.8 device\_name](#4-2-8-device\_name)
-        - [4.2.9 device\_type](#4-2-9-device\_type)
-        - [4.2.10 disconnect\_node](#4-2-10-disconnect\_node)
-        - [4.2.11 find\_channel](#4-2-11-find\_channel)
-        - [4.2.12 find\_ctics](#4-2-12-find\_ctics)
-        - [4.2.13 find\_ctic\_index](#4-2-13-find\_ctic\_index)
-        - [4.2.14 init\_blue](#4-2-14-init\_blue)
-        - [4.2.15 le\_scan](#4-2-15-le\_scan)
-        - [4.2.16 list\_channels](#4-2-16-list\_channels)
-        - [4.2.17 list\_ctics](#4-2-17-list\_ctics)
-        - [4.2.18 list\_uuid](#4-2-18-list\_uuid)       
-        - [4.2.19 localnode](#4-2-19-localnode)
-        - [4.2.20 mesh\_on](#4-2-20-mesh\_on)
-        - [4.2.21 mesh\_off](#4-2-21-mesh\_off)
-        - [4.2.22 mesh\_server](#4-2-22-mesh\_server)
-        - [4.2.23 node\_server](#4-2-23-node\_server)
-        - [4.2.24 output\_file](#4-2-24-output\_file)
-        - [4.2.25 read\_ctic](#4-2-25-read\_ctic)
-        - [4.2.26 read\_error](#4-2-26-read\_error)
-        - [4.2.27 read\_mesh](#4-2-27-read\_mesh)
-        - [4.2.28 read\_node\_count](#4-2-28-read\_node\_count)
-        - [4.2.29 read\_node-all\_endchar](#4-2-29-read\_node-all\_endchar)
-        - [4.2.30 read\_node-all\_clear](#4-2-30-read\_node-all\_clear)
-        - [4.2.31 scroll\_back-forward](#4-2-31-scroll\_back-forward)
-        - [4.2.32 set\_print\_flag](#4-2-32-set\_print\_flag)
-        - [4.2.33 strtohex](#4-2-33-strtohex)
-        - [4.2.34 wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
-        - [4.2.35 write\_ctic](#4-2-35-write\_ctic)
-        - [4.2.36 write\_mesh](#4-2-36-write\_mesh)
-        - [4.2.37 write\_node](#4-2-37-write\_node) 
+        - [4.2.2 classic\_server](#4-2-2-classic\_server)
+        - [4.2.3 close\_all](#4-2-3-close\_all)
+        - [4.2.4 connect\_node](#4-2-4-connect\_node)
+        - [4.2.5 ctic\_name](#4-2-5-ctic\_name)
+        - [4.2.6 ctic\_ok](#4-2-6-ctic\_ok)
+        - [4.2.7 device\_connected](#4-2-7-device\_connected)
+        - [4.2.8 device\_info](#4-2-8-device\_info)
+        - [4.2.9 device\_name](#4-2-9-device\_name)
+        - [4.2.10 device\_type](#4-2-10-device\_type)
+        - [4.2.11 disconnect\_node](#4-2-11-disconnect\_node)
+        - [4.2.12 find\_channel](#4-2-12-find\_channel)
+        - [4.2.13 find\_ctics](#4-2-13-find\_ctics)
+        - [4.2.14 find\_ctic\_index](#4-2-14-find\_ctic\_index)
+        - [4.2.15 init\_blue](#4-2-15-init\_blue)
+        - [4.2.16 le\_scan](#4-2-16-le\_scan)
+        - [4.2.17 list\_channels](#4-2-17-list\_channels)
+        - [4.2.18 list\_ctics](#4-2-18-list\_ctics)
+        - [4.2.19 list\_uuid](#4-2-19-list\_uuid)       
+        - [4.2.20 localnode](#4-2-20-localnode)
+        - [4.2.21 mesh\_on](#4-2-21-mesh\_on)
+        - [4.2.22 mesh\_off](#4-2-22-mesh\_off)
+        - [4.2.23 mesh\_server](#4-2-23-mesh\_server)
+        - [4.2.24 node\_server](#4-2-24-node\_server)
+        - [4.2.25 notify\_ctic](#4-2-25-notify\_ctic)
+        - [4.2.26 output\_file](#4-2-26-output\_file)
+        - [4.2.27 read\_ctic](#4-2-27-read\_ctic)
+        - [4.2.28 read\_error](#4-2-28-read\_error)
+        - [4.2.29 read\_mesh](#4-2-29-read\_mesh)
+        - [4.2.30 read\_node\_count](#4-2-30-read\_node\_count)
+        - [4.2.31 read\_node-all\_endchar](#4-2-31-read\_node-all\_endchar)
+        - [4.2.32 read\_node-all\_clear](#4-2-32-read\_node-all\_clear)
+        - [4.2.33 read\_notify](#4-2-33-read\_notify)
+        - [4.2.34 register\_serial](#4-2-34-register\_serial)
+        - [4.2.35 scroll\_back-forward](#4-2-35-scroll\_back-forward)
+        - [4.2.36 set\_print\_flag](#4-2-36-set\_print\_flag)
+        - [4.2.37 strtohex](#4-2-37-strtohex)
+        - [4.2.38 wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect)
+        - [4.2.39 write\_ctic](#4-2-39-write\_ctic)
+        - [4.2.40 write\_mesh](#4-2-40-write\_mesh)
+        - [4.2.41 write\_node](#4-2-41-write\_node) 
 - [5 Reference](#5-reference)
     - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids)
     - [5.2 Packet formats](#5-2-packet-formats)
@@ -68,21 +73,28 @@ btferret/btlib Bluetooth Interface
         - [5.3.3 Classic connect with PIN code](#5-3-3-classic-connect-with-pin-code)
         - [5.3.4 Classic disconnect initiated by server](#5-3-4-classic-disconnect-initiated-by-server)
         - [5.3.5 Classic scan](#5-3-5-classic-scan)
-        - [5.3.6 SDP database operations](#5-3-6-sdp-database-operations)
-        - [5.3.7 LE Procedures](#5-3-7-le-procedures)
-        - [5.3.8 Read LE services](#5-3-8-read-le-services)
-        - [5.3.9 LE scan](#5-3-9-le-scan)
+        - [5.3.6 Classic server simple](#5-3-6-classic-server-simple)       
+        - [5.3.7 Classic server pair and link key](#5-3-7-classic-server-pair-and-link-key)      
+        - [5.3.8 SDP database operations](#5-3-8-sdp-database-operations)
+        - [5.3.9 LE Procedures](#5-3-9-le-procedures)
+        - [5.3.10 Read LE services](#5-3-10-read-le-services)
+        - [5.3.11 LE scan](#5-3-11-le-scan)
     - [5.4 Server Code](#5-4-server-code)
         - [5.4.1 Windows COM port](#5-4-1-windows-com-port)
         - [5.4.2 Windows Sockets](#5-4-2-windows-sockets)
         - [5.4.3 Android](#5-4-3-android)
+    - [5.5 Client Code](#5-5-client-code)
+        - [5.5.1 Windows COM port](#5-5-1-windows-com-port)
+        - [5.5.2 Windows Sockets](#5-5-2-windows-sockets)
+        - [5.5.3 Android](#5-5-3-android)        
+        
 - [6 Documentation References](#6-documentation-references)
 
 ## 1 Introduction
 
 This is a Bluetooth interface that has been developed for Raspberry Pis.
 
-A Pi running this interface can connect simultaneously to multiple Classic and LE servers,
+A Pi running this interface can connect simultaneously to multiple Classic and LE devices,
 and also to a mesh network of other Pis running the same software.
 
 There is a library of functions ([btlib](#4-btlib-library)) and a sample program
@@ -93,7 +105,7 @@ transfer routine) and display of information - it is a bit like a super bluetoot
 you mad. It has a verbose print mode that displays the HCI Bluetooth traffic with details of
 the packets that are exchanged.
 
-Also included is the code for a simple [mesh network example](#3-7-sample).
+Also included is the code for a simple [mesh network example](#3-8-sample).
 
 In the [reference](#5-reference) section there is a detailed description
 of the HCI Bluetooth interface, the packet formats and how they are constructed,
@@ -101,8 +113,9 @@ and the sequence of instructions
 needed to establish connections and exchange data. This information
 is difficult to extract in a coherent form from the Bluetooth specification documents.
 
-There is a [server code](#5-4-server-code) section that is a brief guide to writing code
-for other machines to act as servers for btferret/btlib.
+There are [server code](#5-4-server-code) and [client code](#5-5-client-code) sections
+that are brief guides to writing code
+for other machines to act as servers/clients for btferret/btlib.
 
 This interface is programmed at the HCI level and bypasses higher-level bluez functions,
 so it does not use the Pi's Bluetooth service, which can be stopped.
@@ -147,7 +160,7 @@ service bluetooth status
 
 To customise btferret.c for your devices, an essential first step is to
 edit the devices.txt file to list all the devices in the
-network (see the [init_blue](#4-2-14-init\_blue) documentation).
+network (see the [init_blue](#4-2-15-init\_blue) documentation).
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify the btferret.c or sample.c examples.
@@ -155,6 +168,10 @@ Compile and link to the library functions in btlib.c.
 
 ```
 gcc mycode.c btlib.c -o mycode
+
+Run via:
+
+sudo ./mycode
 ```
 
 ## 3 Interface  
@@ -162,20 +179,23 @@ gcc mycode.c btlib.c -o mycode
 
 ## 3-1 Networks
 
-A Mesh Pi running btferret/btlib can operate as a client or as two types of server: mesh or node.
+A Mesh Pi running btferret/btlib can operate as a client or as three types of server:
+mesh, node (LE) or classic.
 
-Any Mesh Pi can connect to multiple Classic and LE servers as a client.
+Any Mesh Pi can connect as a client to multiple Classic and LE servers.
 
-A node server is in a one-to-one connection
-with a client Mesh Pi and only exchanges packets with that device. These packets are sent once.
+A Classic client can connect to a Mesh Pi acting as a classic server.
+
+Two Mesh Pis can establish a one-to-one node (LE) or classic connection and
+exchange packets. These packets are sent once.
 
 A mesh server receives all mesh packets that
 any other Mesh Pi broadcasts. A broadcasting device sends its packet repeatedly - not just once.
 A receiving device will read each packet once and ignore subsequent repeats.
 
 Don't expect too much of the speeds here. The mesh packet repeat rate may only be around once per
-second, btferret's file transfer speed to another Mesh Pi is about 2000 bytes/s, but can be more like
-50,000 bytes/s to a suitably programmed Classic server.
+second, btferret's file transfer speed is about 2000 bytes/s for a NODE
+connection and about 50,000 bytes/s for a CLASSIC connection.
 
 The following diagram shows these connections
 with the principal btlib functions that apply in each case.
@@ -197,43 +217,42 @@ b - Scan for LE and Mesh Pi Bluetooth devices
 i - Print device information
 v - Read services (Classic serial channels or LE characteristics)
 c - Connect to a classic/LE/Mesh node (can be multiple)
-d - Disconnect a node (use D instead for btferret node and mesh servers)
+d - Disconnect a node (use D instead for btferret servers)
 t - Transmit ascii string to a connected node
 T - Transmit (broadcast) ascii string to mesh
 r - Read characteristic from LE device
 w - Write characteristic to LE device
+j - Enable/disable LE characteristic notifications
+R - Read LE characteristic notifications
 k - Settings (inc. verbose print option to print HCI traffic)
 [] - Scroll screen output back/forward
 o - Save all recent screen output to a text file
-s - Become a mesh or node server and listen for remote client
+s - Become a mesh/node(LE)/classic server and listen for remote client
 y - List services that contain a specified UUID
+g - Register a custom UUID serial service
 h - Print help
 
 ```
 
 These commands only work when connected to another Mesh Pi running
-btferret set up as a node server (via s).
+btferret set up as a node or classic server (via s).
 
 ```
-p - Ping a node server for OK reply
-f - Send a file to a node server
-D - Tell a node server (or all mesh servers) to disconnect
+p - Ping a server for OK reply
+f - Send a file to a server
+D - Tell a server (or all mesh servers) to disconnect
 ```
 
 The following sections describe how to use these commands to 
 establish connections and exchange data.
 
 
-## 3-3 Windows-Android-HC-05 Classic devices
+## 3-3 Windows-Android-HC-05 Classic servers
 
 The btferret/btlib code can connect to a Windows/Android/HC-05 Classic server. This might be a
-Bluetooth terminal program set up as a server (via a "Make discoverable" option for example). It
-is not possible to connect from a Bluetooth terminal program as a client to btferret/btlib as a server,
-so commands in the terminal program such as "connect" will not work. Guidance on writing server
-code for other machines is in the [server code](#5-4-server-code) section.
-
-With the server waiting
-for a connection, btferret must first find
+Bluetooth terminal program set up as a server (via a "Make discoverable" option for example).
+Guidance on writing server code for other machines is in the [server code](#5-4-server-code) section.
+With the server waiting for a connection, btferret must first find
 the [RFCOMM channel](#5-1-what-gives-with-uuids) on which
 the server is listening.
 
@@ -304,7 +323,90 @@ disconnect_node(4);
     // see the discussion in disconnect_node() section 4.2.10 
 ```
 
-## 3-4 LE devices
+## 3-4 Windows-Android Classic clients
+
+A Mesh Pi can be set up as a classic server and receive connections from remote
+clients (running a Bluetooth terminal program for example).
+(See [Pi-Pi client-server connection](#3-6-pi-pi-client-server-connection) for 
+classic connections between two Mesh Pis).
+Sometimes a client will require a link key and some experimentation is required to
+determine whether to set link key on or off. Some terminal programs
+require the server to be paired before attempting to connect, some will pair during 
+connection, and some do not need to be paired, or may even have to be unpaired.
+If pairing is required, the server must be waiting for a connection when the client attempts to
+pair, and a link key will almost certainly be needed.
+Otherwise, trial and error will determine what combination of pairing and link key 
+will work. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
+in Android: Settings/Bluetooth. A brief guide to writing [Client Code](#5-5-client-code)
+for Windows/Android devices is in the Reference section.
+ 
+```
+devices.txt 
+DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
+
+
+btferret commands
+
+i - Print device info. If client is already in device info via devices.txt
+    the following step is not necessary
+a - Scan for classic devices if not already set in devices.txt.
+    This should find the client device. 
+s - Become a server. Select Classic server. Enter node of client that will connect.
+    Choose link key on or off. The Pi will then wait for a connection, listening
+    on channel 1 and two standard serial UUID services called Serial2 and Serial16.
+    The server can be terminated with the x key.
+
+Initiate connection from the client. If there is an option for line ending, choose
+line feed (char 10). Sending a single character p + line feed will ping the server
+for an "OK" reply. Sending D + line feed will terminate the connection and the
+server function.
+ 
+```
+
+The same procedure is programmed via btlib functions as follows:
+
+```c
+/* devices.txt
+DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
+*/
+
+// CLASSIC SERVER code
+// Wait for connection (and/or pairing) from node 4
+// Termination char for packets = 10 (line feed)
+// Use a link key
+
+classic_server(4,classic_callback,10,KEY_ON);
+
+
+// This classic_callback routine receives packets sent by the client.
+// It works the same way for NODE and CLASSIC connections so the 
+// same code can be used for both.
+
+int classic_callback(int clientnode,char *data,int datlen)
+  {
+  char buf[4];
+  
+  // data[] has datlen bytes from clientnode
+  
+  printf("Packet from %s\n",device_name(clientnode));
+  if(data[0] == 'p')
+    {   // pinged - send OK reply
+    buf[0] = 'O';
+    buf[1] = 'K';
+    buf[2] = 10;   // end char expected by client
+    write_node(clientnode,buf,3);  // send 3-byte reply
+    }
+  else if(data[0] == 'D')  // 'D' programmed as exit command   
+    return(SERVER_EXIT);   // server initiates disconnection
+  
+  return(SERVER_CONTINUE);  // wait for another packet
+  }  
+
+
+```
+
+
+## 3-5 LE devices
 
 Connect to an LE device and read/write characteristics as follows:
 
@@ -358,10 +460,13 @@ disconnect_node(7);
 
 ```
 
-## 3-5 Node client-server connection
+## 3-6 Pi-Pi client-server connection
 
-Two Pis connected as a client/server pair. There must be two Pis
-listed as MESH type in devices.txt.
+Two Mesh Pis connected as a client/server pair. There must be two Pis
+listed as MESH type in devices.txt. The connection can be NODE (LE) or CLASSIC.
+The NODE type connects quickly but has slow transfer speeds (2000 bytes/s), 
+while the CLASSIC type has a more convoluted connection procedure, but much
+faster speeds (50,000 bytes/s).
 
 
 ```
@@ -371,21 +476,22 @@ DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 
 btferret commands
 
-NODE SERVER
-Set up one Pi as a node server:
+NODE/CLASSIC SERVER
+Set up one Pi as a node or classic server:
 
 i - Print device info. The client that will connect must be listed.
     If not, add it to the devices.txt info.
-s - Select node server. Enter node number of client that will connect.
+s - Select node or classic server. Enter node number of client that will connect.
     The device will now report that it is waiting for a connection
     from the specified client node.
     At any time, pressing the x key will stop the server.
     
-NODE CLIENT
+NODE/CLASSIC CLIENT
 On another Pi, connect as a client
 
-i - Print device info. The node server Pi must be listed.
-c - Connect. Enter node number of the listening node server Pi.
+i - Print device info. The server Pi must be listed.
+c - Connect. Enter type of listening server (node or classic).
+    Enter node number of the listening server Pi.
     The devices should both report a connection
 p - Ping. Enter server node number. It should reply "OK" as 
     programmed in btferret's node_callback routine.
@@ -403,14 +509,24 @@ DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 */
 
-// NODE SERVER - node 1
-// Set up node 1 as a server listening for node 2 to connect
-// Specify 10 as end char for packets sent by client
+// SERVER code
 
- 
+// NODE SERVER - node 1
+// Set up node 1 as a node server listening for node 2 to connect
+// Specify 10 as end char for packets sent by client
 node_server(2,node_callback,10);
+   
+// *** OR ***
+
+// CLASSIC SERVER - node 1
+// Set up node 1 as a classic server listening for node 2 to connect
+// Specify 10 as end char for packets sent by client
+classic_server(2,node_callback,10);
+
 
 // This node_callback routine receives packets sent by the client.
+// It works the same way for NODE and CLASSIC connections so the 
+// same code can be used for both.
 
 int node_callback(int clientnode,char *data,int datlen)
   {
@@ -418,7 +534,7 @@ int node_callback(int clientnode,char *data,int datlen)
   
   // data[] has datlen bytes from clientnode
   
-  printf("Node packet from %s\n",device_name(clientnode));
+  printf("Packet from %s\n",device_name(clientnode));
   if(data[0] == 'p')
     {   // pinged - send OK reply
     buf[0] = 'O';
@@ -434,12 +550,20 @@ int node_callback(int clientnode,char *data,int datlen)
 
 
 
-// NODE CLIENT - node 2
-// Connect as a client to the node 1 server
+// CLIENT code
 
 char outbuf[4],inbuf[64];
 
-connect_node(1,0,0);  // connect to node 1
+// NODE CLIENT - node 2
+// Connect as a node client to the node 1 node server
+connect_node(1,CHANNEL_NODE,0); // NODE CLIENT connect to node 1 NODE SERVER
+
+// *** OR ***
+
+// CLASSIC CLIENT - node 2
+// Connect as a classic client to the node 1 classic server
+connect_node(1,CHANNEL_NEW,1);  // CLASSIC CLIENT connect to node 1 CLASSIC SERVER
+                                // Mesh Pis listen on channel 1
 
    // Ping node 1 server
 outbuf[0] = 'p';
@@ -459,7 +583,7 @@ wait_for_disconnect();
 ```
 
 
-## 3-6 Broadcast to all mesh servers
+## 3-7 Broadcast to all mesh servers
 
 There must be at least two Pis listed as MESH type in devices.txt. 
 
@@ -528,7 +652,7 @@ write_mesh(buf,2);
 write_mesh("D",1);
 ```
 
-## 3-7 sample
+## 3-8 sample
 
 The sample.c code is an illustration of a procedure using mesh, node and
 Classic connections on the following mesh network.
@@ -599,44 +723,114 @@ These library functions are in btlib.c/btlib.h.
 ## 4-1 Function List
 
 
-[init\_blue](#4-2-14-init\_blue) - Initialize must be called on program start<br/>
-[close\_all](#4-2-2-close\_all) - Close all connections on program end<br/>
-[device\_info](#4-2-7-device\_info) - Print device information<br/>
+[init\_blue](#4-2-15-init\_blue) - Initialize must be called on program start<br/>
+[close\_all](#4-2-3-close\_all) - Close all connections on program end<br/>
+[device\_info](#4-2-8-device\_info) - Print device information<br/>
 [classic\_scan](#4-2-1-classic\_scan) - Scan for classic devices<br/>
 [le\_scan](#4-2-15-le\_scan) - Scan for LE devices<br/>
-[localnode](#4-2-19-localnode) - Return node number of local device<br/>
-[list\_channels](#4-2-16-list\_channels) - List serial data channels of a Classic device<br/>
-[list\_ctics](#4-2-17-list\_ctics) - List characteristics of an LE device<br/>
-[list\_uuid](#4-2-18-list\_uuid) - List node services that contain a specified UUID<br/>
-[connect\_node](#4-2-3-connect\_node) - Connect to a server node as a client<br/>
-[node\_server](#4-2-23-node\_server) - Become a node server. Listen for connection<br/>
-[mesh\_server](#4-2-22-mesh\_server) - Listen for broadcast mesh packets<br/>
-[find\_channel](#4-2-11-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
-[find\_ctics](#4-2-12-find\_ctics) - Read all characteristic info from LE device<br/>
-[find\_ctic\_index](#4-2-13-find\_ctic\_index) - Find characteristic index of UUID<br/>
-[write\_ctic](#4-2-35-write\_ctic) - Write characteristic to an LE device<br/>
-[read\_ctic](#4-2-25-read\_ctic) - Read characteristic from an LE device<br/>
-[write\_node](#4-2-37-write\_node) - Write serial data to connected node device<br/>
-[write\_mesh](#4-2-36-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
-[read\_mesh](#4-2-27-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
-[read\_node\_count](#4-2-28-read\_node\_count) - Read a specified byte count from specified node<br/>
-[read\_node/all\_endchar](#4-2-29-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
-[read\_node/all\_clear](#4-2-30-read\_node-all\_clear) - Clear data in input buffer<br/>
-[read\_error](#4-2-26-read\_error) - Return error code of last read<br/>
-[device\_type](#4-2-9-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
-[device\_name](#4-2-8-device\_name) - Return device name string<br/>
-[device\_connected](#4-2-6-device\_connected) - Return device connection state<br>
-[ctic\_ok](#4-2-5-cti\c_ok) - Return LE characteristic valid flag<br/>
-[ctic\_name](#4-2-4-ctic\_name) - Return LE characteristic name string<br/>
-[disconnect\_node](#4-2-10-disconnect\_node) - Disconnect initiated by client<br/>
-[wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
-[scroll\_back/forward](#4-2-31-scroll\_back-forward) - Scroll screen back/forward<br/>
-[set\_print\_flag](#4-2-32-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
-[output\_file](#4-2-24-output\_file) - Save all recent screen output to a file<br/>
-[strtohex](#4-2-33-strtohex) - Convert ascii string to array of hex values<br/>
-[mesh\_on](#4-2-20-mesh\_on) - Turn mesh transmission on<br/>
-[mesh\_off](#4-2-21-mesh\_off) - Turn mesh transmission off<br/>
+[localnode](#4-2-20-localnode) - Return node number of local device<br/>
+[list\_channels](#4-2-17-list\_channels) - List serial data channels of a Classic device<br/>
+[list\_ctics](#4-2-18-list\_ctics) - List characteristics of an LE device<br/>
+[list\_uuid](#4-2-19-list\_uuid) - List node services that contain a specified UUID<br/>
+[register\_serial](#4-2-34-register\_serial) - Register a custom UUID serial service<br/>
+[connect\_node](#4-2-4-connect\_node) - Connect to a server node as a client<br/>
+[classic\_server](#4-2-2-classic\_server) - Become a classic server. Listen for connection<br/>
+[node\_server](#4-2-24-node\_server) - Become a node (LE) server. Listen for connection<br/>
+[mesh\_server](#4-2-23-mesh\_server) - Listen for broadcast mesh packets<br/>
+[find\_channel](#4-2-12-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
+[find\_ctics](#4-2-13-find\_ctics) - Read all characteristic info from LE device<br/>
+[find\_ctic\_index](#4-2-14-find\_ctic\_index) - Find characteristic index of UUID<br/>
+[write\_ctic](#4-2-39-write\_ctic) - Write characteristic to an LE device<br/>
+[read\_ctic](#4-2-27-read\_ctic) - Read characteristic from an LE device<br/>
+[notify\_ctic](#4-2-25-notify\_ctic) - Enable/disable LE characterisitc notifications<br/>
+[write\_node](#4-2-41-write\_node) - Write serial data to connected node device<br/>
+[write\_mesh](#4-2-40-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
+[read\_mesh](#4-2-29-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
+[read\_node\_count](#4-2-30-read\_node\_count) - Read a specified byte count from specified node<br/>
+[read\_node/all\_endchar](#4-2-31-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
+[read\_node/all\_clear](#4-2-32-read\_node-all\_clear) - Clear data in input buffer<br/>
+[read\_notify](#4-2-33-read\_notify) - Read LE notifications<br/>
+[read\_error](#4-2-28-read\_error) - Return error code of last read<br/>
+[device\_type](#4-2-10-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
+[device\_name](#4-2-9-device\_name) - Return device name string<br/>
+[device\_connected](#4-2-7-device\_connected) - Return device connection state<br>
+[ctic\_ok](#4-2-6-cti\c_ok) - Return LE characteristic valid flag<br/>
+[ctic\_name](#4-2-5-ctic\_name) - Return LE characteristic name string<br/>
+[disconnect\_node](#4-2-11-disconnect\_node) - Disconnect initiated by client<br/>
+[wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
+[scroll\_back/forward](#4-2-35-scroll\_back-forward) - Scroll screen back/forward<br/>
+[set\_print\_flag](#4-2-36-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
+[output\_file](#4-2-26-output\_file) - Save all recent screen output to a file<br/>
+[strtohex](#4-2-37-strtohex) - Convert ascii string to array of hex values<br/>
+[mesh\_on](#4-2-21-mesh\_on) - Turn mesh transmission on<br/>
+[mesh\_off](#4-2-22-mesh\_off) - Turn mesh transmission off<br/>
 
+
+### QUICK REFERENCE
+
+```
+classic_scan()
+classic_server(node,classic_callback,endchar,keyflag)
+    keyflag = KEY_ON, KEY_OFF
+    classic_callback(node,data[],datlen)
+close_all()
+connect_node(node,flag,channel)
+    flag = 0, CHANNEL_NODE, CHANNEL_NEW, CHANNEL_STORED
+*ctic_name(node,cticn)
+ctic_ok(node,cticn)
+device_connected(node)
+device_info(mask)
+    mask = BTYPE_LO, BTYPE_ME, BTYPE_CL, BTYPE_LE,
+           BTYPE_CONNECTED, BTYPE_DISCONNECTED, BTYPE_SHORT  
+*device_name(node)
+device_type(node)
+    return = BTYPE_CL, BTYPE_LE, BTYPE_ME, BTYPE_LO
+disconnect_node(node)
+find_channel(node,flag,uuid[])
+    flag = UUID_2, UUID_16
+find_ctics(node)
+find_ctic_index(node,flag,uuid[])
+    flag =  UUID_2, UUID_16
+init_blue("filename")
+le_scan()
+list_channels(node,flag)
+    flag = LIST_SHORT, LIST_FULL 
+list_ctics(node,flag)
+    flag = LIST_FULL, LIST_SHORT, CTIC_R, CTIC_W  
+list_uuid(node,uuid[])
+localnode()
+mesh_on()
+mesh_off()
+mesh_server(mesh_callback)
+    mesh_callback(clientnode,data[],datlen)
+node_server(clientnode,node_callback,endchar)
+    node_callback(clientnode,data[],datlen)
+notify_ctic(node,cticn,notifyflag,notify_callback)
+    notifyflag = NOTIFY_ENABLE, NOTIFY_DISABLE  
+    notify_callback(lenode,cticn,data[],datlen)  
+output_file("filename")
+read_ctic(node,cticn,inbuf[],bufsize)
+read_error()
+    return = 0, ERROR_TIMEOUT, ERROR_KEY, ERROR_FATAL
+read_mesh(&node,inbuf[],bufsize,exitflag,timeoutms)
+read_node_count(node,inbuf[],count,exitflag,timeoutms)
+read_node_endchar(node,inbuf[],bufsize,endchar,exitflag,timeoutms)
+read_all_endchar(&node,inbuf[],bufsize,endchar,exitflag,timeoutms)
+    exitflag = EXIT_TIMEOUT, EXIT_KEY
+read_node_clear(node)
+read_all_clear()
+read_notify(timeoutms)
+register_serial(uuid[],"name")
+scroll_back()
+scroll_forward()
+set_print_flag(flag)
+     flag = PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
+*strtohex("ascii string",&nbytes)
+wait_for_disconnect(node,timeoutms)
+write_ctic(node,cticn,outbuf[],count)
+write_mesh(outbuf[],count)
+write_node(node,outbuf[],count)
+```
 
 ## 4-2 Functions
 
@@ -647,10 +841,107 @@ void classic_scan(void)
 ```
 
 Scan for Classic Bluetooth devices. If a device is not already on the device information list, 
-it is added and will be listed via [device\_info](#4-2-7-device\_info). 
+it is added and will be listed via [device\_info](#4-2-8-device\_info). 
+
+## 4-2-2 classic\_server
+
+```c
+int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag)
+```
+
+Sets up the local device as a classic server that waits for 
+a specified client (clientnode) to connect, then spends all its time listening
+for packets sent from that client. The client may be a Windows/Android/.. device (maybe
+running a Bluetooth terminal program), or another Mesh Pi acting as a classic client
+and connecting via [connect\_node()](#4-2-4-connect\_node). The packets must have the specified
+termination character (endchar), and are limited to a maximum size of 1000 bytes.
+When a packet is received, it is despatched to the callback
+function. The callback function returns a flag telling classic\_server to continue
+or exit. The classic\_server function only completes when it receives this exit return or the
+x key is pressed.
+When operating as a classic\_server, there is a 1:1 connection between the client and
+this server - the other mesh devices do not participate.
+
+The server listens on channel 1, and advertises the following serial services: 
+
+```
+UUID = 1101 channel=1 name=Serial2 
+UUID = 00001101-0000-1000-8000-00805F9B34FB  channel=1 name=Serial16
+UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB  channel=1 name=My Custom Serial
+```
+
+The UUID and name of this last custom serial service can be changed via
+[register\_serial](#4-2-34-register\_serial).
 
 
-## 4-2-2 close\_all
+PARAMETERS
+
+```
+clientnode = Node number of the client that will connect
+callback() = Callback function that deals with the received packets
+endchar = termination character of packets sent by the client
+keyflag = Flag to specify whether a link key is used:
+   KEY_OFF   Do not use a link key
+   KEY_ON    Use a link key
+```
+
+When connecting two Mesh Pis, use KEY\_OFF. When the client is a Windows/Android/.. device,
+some experimentation is required to determine whether to use a link key. Some terminal programs
+require the server to be paired before attempting to connect, some will pair during 
+connection, and some do not need to be paired, or may even have to be unpaired.
+If pairing is required, the server must 
+be running classic\_server() during the pairing process and KEY\_ON will almost certainly be
+needed. Otherwise, trial and error will determine what combination of pairing and keyflag 
+will work. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
+in Android Settings/Bluetooth.
+
+
+RETURN
+
+```
+0 = Fail
+1 = OK exit via callback returning SERVER_EXIT 
+```
+
+The callback function is defined as follows:
+
+```
+int callback(int clientnode,char *data,int datlen)
+
+clientnode = Node number of the device that sent the packet
+data = array of packet data bytes
+datlen = number of bytes in data[] - max 400
+```
+
+SAMPLE CODE
+
+This a minimal classic server callback that simply prints a message, and exits
+when the first data byte is an ascii 'D'. It can also be stopped by
+pressing the x key. See btferret.c or sample.c for other examples. Note that the
+callback function is effectively identical to the node callback listed in 
+[node\_server](#4-2-24-node\_server), so the same code can be used for classic and node callbacks.
+
+```c
+   // listen for packets from node 4 with termination character 10
+   // do not use a link key
+classic_server(4,classic_callback,10,KEY_OFF);
+
+
+int classic_callback(int clientnode,char *data,int datlen)
+  {
+  
+  // data[] has datlen bytes from clientnode  
+  
+  printf("Classic packet from %s\n",device_name(clientnode));
+  if(data[0] == 'D')      // 'D' programmed as exit command
+    return(SERVER_EXIT);
+  return(SERVER_CONTINUE);
+  }  
+```
+
+
+
+## 4-2-3 close\_all
 
 ```c
 void close_all(void)
@@ -660,7 +951,7 @@ Close all connections to remote devices and the local Bluetooth adapter. Call th
 program termination.
  
 
-## 4-2-3 connect\_node
+## 4-2-4 connect\_node
 
 ```c
 int connect_node(int node,int flag,int channel)
@@ -672,30 +963,29 @@ PARAMETERS
 
 ```
 node = Node number
-
-For LE servers and Pi Mesh nodes, channel and flag are ignored
-For Classic servers, channel and flag are required
-  
+ 
 flag = one of the following
-    CHANNEL_NEW       Use channel in parameters
-    CHANNEL_STORED    Reconnect using previous/stored channel
-    ignored if device is not a Classic server
+    CHANNEL_NODE      Connect to Mesh Pi listening as a node server
+    CHANNEL_NEW       Connect to classic server listening on specified channel
+    CHANNEL_STORED    Reconnect to classic server using previous/stored channel
+    Ignored for LE servers
     
 channel = RFCOMM channel
-          ignored if flag = CHANNEL_STORED
-          ignored if device is not a Classic server        
+          Ignored if flag = CHANNEL_NODE or CHANNEL_STORED
+          always 1 if the server is a Mesh Pi listening as a classic server.
+          Ignored for LE servers.                  
     
 ```
 
 The RFCOMM channel must be the serial channel on which the remote device (acting as a
 server) is listening (see [UUIDs](#5-1-what-gives-with-uuids)).
 Remote device channels can be found
-by calling [find\_channel](#4-2-11-find\_channel) or [list\_channels](#4-2-16-list\_channels).
+by calling [find\_channel](#4-2-12-find\_channel) or [list\_channels](#4-2-17-list\_channels).
 Use
 CHANNEL\_NEW to specify the channel in the parameters. CHANNEL\_STORED uses the channel stored
 in device information that can be set in two ways:
 
-1. With an e.g. "CHANNEL=1" entry in the [init\_blue](#4-2-14-init\_blue) devices.txt infomation.
+1. With an e.g. "CHANNEL=1" entry in the [init\_blue](#4-2-15-init\_blue) devices.txt infomation.
 
 2. A CHANNEL\_NEW connection will store the channel number, so CHANNEL\_STORED can be used for
 all subsequent reconnections.
@@ -725,15 +1015,20 @@ DEVICE = My other Pi  TYPE=MESH NODE=9 ADDRESS = B8:27:EB:F1:50:C3
 int channel;
 
 connect_node(3,0,0);  // connect to Pictail LE server node 3
-connect_node(9,0,0);  // connect to My other Pi Mesh device node 9
-                      // listening as a node server
-                      
+connect_node(9,CHANNEL_NODE,0);  // connect to My other Pi Mesh device node 9
+                                 // listening as a node server
+                                 
+connect_node(9,CHANNEL_NEW,1);  // connect to My other Pi Mesh device node 9
+                                // listening as a classic server on channel 1
+                                // (all Mesh Pis listen on channel 1)
+                                            
 connect_node(6,CHANNEL_STORED,0); // connect to HC-05 classic server node 6
                                   // via channel 1 specified in devices.txt                       
 
 connect_node(7,CHANNEL_NEW,4);  // connect to Windows PC Classic server node 7 
                                 // listening on RFCOMM serial channel 4
                                 // will store channel 4 in device info
+                                
 connect_node(7,CHANNEL_STORED,0);  // reconnect to Windows PC classic server node 7
                                    // using stored channel 4 set by the previous
                                    // CHANNEL_NEW connection  
@@ -747,7 +1042,7 @@ connect_node(7,CHANNEL_NEW,channel);  // connect to Windows PC node 7 on found c
 ```
 
 
-## 4-2-4 ctic\_name
+## 4-2-5 ctic\_name
 
 ```c
 char *ctic_name(int node,int cticn)
@@ -770,10 +1065,10 @@ Pointer to a zero-terminated ascii string containing characteristic name
 (or "Invalid node","Invald characteristic","Nameless")
 ```
 
-See [device\_type](#4-2-9-device\_type) for sample code.
+See [device\_type](#4-2-10-device\_type) for sample code.
 
 
-## 4-2-5 ctic\_ok
+## 4-2-6 ctic\_ok
 
 ```c
 int ctic_ok(int node,int cticn)
@@ -796,10 +1091,10 @@ RETURN
 1 = Valid node and characteristic
 ```
 
-See [device\_type](#4-2-9-device\_type) for sample code.
+See [device\_type](#4-2-10-device\_type) for sample code.
 
 
-## 4-2-6 device\_connected
+## 4-2-7 device\_connected
 
 ```c
 int device_connected(int node)
@@ -821,7 +1116,7 @@ RETURN
 ```
 
 
-## 4-2-7 device\_info
+## 4-2-8 device\_info
 
 ```c
 int device_info(int mask)
@@ -834,7 +1129,7 @@ mask = OR'ed combination of the following flags:
 
 BTYPE_LO  include local device
 BTYPE_ME  include Pi Mesh devices
-BTYPE_CL  include classic servers
+BTYPE_CL  include classic clients/servers
 BTYPE_LE  include LE servers
 
 BTYPE_CONNECTED     exclude disconnected devices
@@ -850,13 +1145,13 @@ SAMPLE CODE
 device_info(BTYPE_LO | BTYPE_ME | BTYPE_CL | BTYPE_LE);
                     // full list all device info
 device_info(BTYPE_CL | BTYPE_CONNECTED);
-                    // full list connected classic servers
+                    // full list connected classic clients/servers
 device_info(BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_SHORT);
                     // short list disconnected LE servers
 ```
                    
 
-## 4-2-8 device\_name
+## 4-2-9 device\_name
 
 ```c
 char *device_name(int node)
@@ -875,10 +1170,10 @@ pointer to a zero terminated string containing device name or
 "Invalid node"
 ```
 
-See [device\_type](#4-2-9-device\_type) for sample code.
+See [device\_type](#4-2-10-device\_type) for sample code.
 
 
-## 4-2-9 device\_type
+## 4-2-10 device\_type
 
 ```c
 int device_type(int node)
@@ -896,18 +1191,18 @@ RETURN
 
 ```
 0        = Invalid node number
-BTYPE_CL = Classic server
+BTYPE_CL = Classic client/server
 BTYPE_LE = LE server
 BTYPE_ME = Pi Mesh device
-BTYPE_LO = Local device 0
+BTYPE_LO = Local device
 ```
 
 SAMPLE CODE
 
-Use [device\_type](#4-2-9-device\_type) and [ctic\_ok](#4-2-5-ctic\_ok)
+Use [device\_type](#4-2-10-device\_type) and [ctic\_ok](#4-2-6-ctic\_ok)
 to check devices and characteristics
-in the device information and list their names with [device\_name](#4-2-8-device\_name)
-and [ctic\_name](#4-2-4-ctic\_name).
+in the device information and list their names with [device\_name](#4-2-9-device\_name)
+and [ctic\_name](#4-2-5-ctic\_name).
 
 ```c
 int k;
@@ -920,7 +1215,7 @@ if(device_type(7) == BTYPE_LE)
   }       
 ```
 
-## 4-2-10 disconnect\_node
+## 4-2-11 disconnect\_node
 
 ```c
 int disconnect_node(int node)
@@ -961,10 +1256,10 @@ disconnected.
 The solution is to send the server a message that it interprets as an instruction
 to disconnect. The server then initiates
 the disconnection and the client must wait for a disconnection sequence from the server to 
-complete the process gracefully - and [wait\_for\_disconnect](#4-2-34-wait\_for\_disconnect)
+complete the process gracefully - and [wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
-[node client/server connection](#3-5-node-client-server-connection).
+[node client/server connection](#3-6-pi-pi-client-server-connection).
 
 ```c
    // Send a serial data message to node 3 that it interprets as
@@ -985,7 +1280,7 @@ wait_for_disconnect(3,3000);
 ```
 
 
-## 4-2-11 find\_channel
+## 4-2-12 find\_channel
 
 ```c
 int find_channel(int node,int flag,char *uuid)
@@ -993,7 +1288,7 @@ int find_channel(int node,int flag,char *uuid)
 
 Returns the RFCOMM channel number of a specified
 [UUID](#5-1-what-gives-with-uuids). Use the RFCOMM channel to
-connect to a Classic server via [connect\_node](#4-2-3-connect\_node).
+connect to a Classic server via [connect\_node](#4-2-4-connect\_node).
 
 PARAMETERS
 
@@ -1035,7 +1330,7 @@ if(channel > 0)
   connect_node(7,CHANNEL_NEW,channel);  // connect to Classic server node 7 on found channel 
 ```
 
-## 4-2-12 find\_ctics
+## 4-2-13 find\_ctics
 
 ```c
 int find_ctics(int node)
@@ -1043,7 +1338,7 @@ int find_ctics(int node)
 
 Read the characteristic information from a connected LE server and save it
 in the device info. This is not necessary if the characteristic
-information has been set via devices.txt in [init\_blue](#4-2-14-init\_blue).
+information has been set via devices.txt in [init\_blue](#4-2-15-init\_blue).
 
 PARAMETERS
 
@@ -1066,7 +1361,7 @@ SAMPLE CODE
 find_citcs(5);
 ```
 
-## 4-2-13 find\_ctic\_index
+## 4-2-14 find\_ctic\_index
 
 ```c
 int find_ctic_index(int node,int flag,char *uuid)
@@ -1075,12 +1370,12 @@ int find_ctic_index(int node,int flag,char *uuid)
 Returns the characteristic index of a specified UUID for an LE server. This
 searches the device information for the UUID. It does not read information from
 the LE device itself. If the characteristic is not in the device information (most 
-conveniently via devices.txt in [init\_blue](#4-2-14-init\_blue)),
-call [find\_ctics](#4-2-12-find\_ctics) which reads all
+conveniently via devices.txt in [init\_blue](#4-2-15-init\_blue)),
+call [find\_ctics](#4-2-13-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
-Use the characteristic index in [read\_ctic](#4-2-25-read\_ctic)
-and [write\_ctic](#4-2-35-write\_ctic).
+Use the characteristic index in [read\_ctic](#4-2-27-read\_ctic)
+and [write\_ctic](#4-2-39-write\_ctic).
 
 
 PARAMETERS
@@ -1120,21 +1415,27 @@ cticn = find_ctic_index(7,UUID_16,strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB
 
 ```
 
-## 4-2-14 init\_blue
+## 4-2-15 init\_blue
 
 ```c
 int init_blue(char *filename)
+int init_blue_ex(char *filename,int device)
 ```
 
 Initialise the btlib.c library. Must be called on program start. It reads a text
 file with information about devices in the network (btferret assumes devices.txt).
-The list should include the local device itself. All other Pis in the network
-should be MESH type, while other servers will be CLASSIC or LE.
+The list should include the local device itself. All Pis in the network
+should be MESH type, while other devices will be CLASSIC or LE. If there is only one
+Bluetooth adapter it will be hci0 (as reported by hciconfig), and init\_blue should be used.
+For other hci device numbers, use init\_blue\_ex.
 
 PARAMETERS
 
 ```
 filename = text file containing pre-set device information
+device = hci device number
+         init_blue() assumes device=0 (hci0)
+         use init_blue_ex() to specify some other hci number (e.g. 2 for hci2)
 ```
 
 RETURN
@@ -1194,11 +1495,13 @@ UUID = 2A00       Not needed if HANDLE specified
 PERMIT permissions should be one of the following bit combinations:
 
 ```
-02 = Read
-04 = Write no acknowledge
-08 = Write with acknowledge
-06 = Read/Write no ack
-0A = Read/Write ack
+02 = r   Read
+04 = w   Write no acknowledge
+08 = wa  Write with acknowledge
+06 = rw  Read/Write no ack
+0A = rwa Read/Write ack
+10 = n   Notify capable
+20 = n   Indicate (notify+acknowledge) capable
 ```
 
 If PERMIT is not known, find_ctics will
@@ -1216,11 +1519,11 @@ read_ctic, the code will find the HANDLE and SIZE and save them in the device in
 
 Additional devices can be found and added to the device information 
 via [classic\_scan](#4-2-1-classic\_scan)
-or [le\_scan](#4-2-15-le\_scan).
-Characteristics are found via [find\_ctics](#4-2-12-find\_ctics).
+or [le\_scan](#4-2-16-le\_scan).
+Characteristics are found via [find\_ctics](#4-2-13-find\_ctics).
 
 
-## 4-2-15 le\_scan
+## 4-2-16 le\_scan
 
 ```c
 void le_scan(void)
@@ -1229,11 +1532,11 @@ void le_scan(void)
 Scan for active LE devices. If a device is not in the device information, it is
 added. (Except if it is transmitting mesh packets and is not in the devices.txt list,
 it is ignored for security reasons.) If the device's characteristics are 
-unknown, they can be found via [find\_ctics](#4-2-12-find\_ctics),
+unknown, they can be found via [find\_ctics](#4-2-13-find\_ctics),
 and they will also be added to the device
 information. 
 
-## 4-2-16 list\_channels
+## 4-2-17 list\_channels
 
 ```c
 int list_channels(int node,int flag)
@@ -1265,13 +1568,13 @@ list_channels(5,LIST_FULL);   // full info about node 5 serial channels
 ```
 
 
-## 4-2-17 list\_ctics
+## 4-2-18 list\_ctics
 
 ```c
 int list_ctics(int node,int flag)
 ```
 List characteristics known by device info. If device info
-does not have the required knowledge, call [find\_ctics](#4-2-12-find\_ctics)
+does not have the required knowledge, call [find\_ctics](#4-2-13-find\_ctics)
 to read from the 
 device itself.
 
@@ -1304,7 +1607,7 @@ list_ctics(3,LIST_FULL);   // full characteristic info of node 3
                            // known by device info
 ```
                            
-## 4-2-18 list\_uuid
+## 4-2-19 list\_uuid
 
 ```c
 int list_uuid(int node,char *uuid)
@@ -1344,14 +1647,14 @@ list_uuid(5,strtohex("0100",NULL));
 
 ```
 
-## 4-2-19 localnode
+## 4-2-20 localnode
 
 ```c
 int localnode(void)
 ```
 
 Return the node number of the local device - should be set via devices.txt
-data in [init\_blue](#4-2-14-init\_blue).
+data in [init\_blue](#4-2-15-init\_blue).
 
 SAMPLE CODE
 
@@ -1360,7 +1663,7 @@ printf("Local device node number = %d\n",localnode());
 ```
 
 
-## 4-2-20 mesh\_on
+## 4-2-21 mesh\_on
 
 ```c
 void mesh_on(void)
@@ -1368,13 +1671,13 @@ void mesh_on(void)
 
 Turn on mesh transmission. The local device will continuously send the last
 mesh packet set via write\_mesh. Mesh transmission is automatically enabled
-by calling [write\_mesh](#4-2-36-write\_mesh), or [read\_mesh](#4-2-27-read\_mesh),
-or [mesh\_server](#4-2-22-mesh\_server), or [node\_server](#4-2-23-node\_server),
+by calling [write\_mesh](#4-2-40-write\_mesh), or [read\_mesh](#4-2-29-read\_mesh),
+or [mesh\_server](#4-2-23-mesh\_server), or [node\_server](#4-2-24-node\_server),
 so it is usually not necessary to call mesh\_on explicitly. Mesh must be on for
 another mesh device to connect.
 
 
-## 4-2-21 mesh\_off
+## 4-2-22 mesh\_off
 
 ```c
 void mesh_off(void)
@@ -1384,14 +1687,14 @@ Turn off mesh transmission. The local device will stop continuously sending
 the last mesh packet set via write_mesh. The purpose is to reduce the load on the 
 system when mesh functions are no longer needed, or to make the device invisible.
 
-## 4-2-22 mesh\_server
+## 4-2-23 mesh\_server
 
 ```c
 void mesh_server(int (*callback)())
 ```
 
 Sets up the local device as a mesh server which spends all its time listening
-for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-36-write\_mesh).
+for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-40-write\_mesh).
 The packets are limited to a maximum size of
 25 bytes. When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling mesh\_server to continue
@@ -1434,15 +1737,15 @@ int mesh_callback(int clientnode,char *data,int datlen)
   }  
 ```
 
-## 4-2-23 node\_server
+## 4-2-24 node\_server
 
 ```c
 int node_server(int clientnode,int (*callback)(),char endchar)
 ```
 
-Sets up the local device as a node server that waits for 
+Sets up the local device as a node (LE) server that waits for 
 a specified client (clientnode) to connect, then spends all its time listening
-for node packets sent from that client via [write\_node](#4-2-37-write\_node).
+for node packets sent from that client via [write\_node](#4-2-41-write\_node).
 The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 400 bytes.
 When a packet is received,
@@ -1482,7 +1785,9 @@ SAMPLE CODE
 
 This a minimal node server callback that simply prints a message, and exits
 when the first data byte is an ascii 'D'. It can also be stopped by
-pressing the x key. See btferret.c or sample.c for other examples.
+pressing the x key. See btferret.c or sample.c for other examples. Note that the
+callback function is effectively identical to the classic callback listed in 
+[classic\_server](#4-2-2-classic\_server), so the same code can be used for classic and node callbacks.
 
 ```c
    // listen for packets from node 4 with termination character 10
@@ -1498,7 +1803,80 @@ int node_callback(int clientnode,char *data,int datlen)
   }  
 ```
 
-## 4-2-24 output\_file
+## 4-2-25 notify\_ctic
+
+```c
+int notify_ctic(int node,int cticn,int notifyflag,int (*callback)())
+```
+
+Enables/disables LE characteristic notifications. If an LE characteristic has permission
+bits 0x10 or 0x20 set then it is capable of sending notifications: when the value changes, the
+LE device sends it to the client device without being asked. In addition to the permission
+bit (that is set by the LE device), notifications must also be enabled by the client
+via this function. Once enabled, when a notification is received, the callback
+function is called. The client must be listening for
+input via: [read\_node\_count](#4-2-30-read\_node\_count),
+[read\_node-all\_endchar](#4-2-31-read\_node-all\_endchar),
+[read\_notify](#4-2-33-read\_notify), or any other function that reads incoming packets.
+
+PARAMETERS
+
+```
+node = Node number of the connected LE device
+cticn = Characteristic index in device information
+callback() = Callback function that deals with the received characteristic value
+notifyflag = One of the following:
+               NOTIFY_ENABLE
+               NOTIFY_DISABLE  
+```
+
+RETURN
+
+```
+0 = Fail
+1 = OK
+```
+
+SAMPLE CODE
+
+```c
+/*
+If devices.txt information for init_blue() is as follows:
+
+DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
+  LECHAR=Test  HANDLE=0014 PERMIT=16 SIZE=2       ; index 0
+  
+  PERMIT has bit 0x10 set, so is notify capable
+  
+*/
+
+
+int notify_callback(int lenode,int cticn,char *buf,int nread);
+
+  // enable notifications for characteristic index 0 from LE node 4
+  
+notify_ctic(4,0,NOTIFY_ENABLE,notify_callback);
+
+
+  
+int notify_callback(int lenode,int cticn,char *buf,int nread)
+  {
+  int n;
+  
+  // LE device has sent notification or indication enabled by notify_ctic()
+  // buf[] has nread bytes = value of characteristic index cticn from lenode 
+  
+  printf("%s %s notify =",device_name(lenode),ctic_name(lenode,cticn));
+  for(n = 0 ; n < nread ; ++n)
+    printf(" %02X",buf[n]);
+  printf("\n");
+  return(0);
+  }
+
+```
+
+
+## 4-2-26 output\_file
 
 ```c
 int output_file(char *filemame)
@@ -1528,7 +1906,7 @@ output_file("/home/pi/output.txt");
 ```
 
 
-## 4-2-25 read\_ctic
+## 4-2-27 read\_ctic
 
 ```c
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize)
@@ -1540,8 +1918,9 @@ PARAMETERS
 
 ```
 node = Node number of connected LE device
-buf = char buffer to receive data
-bufsize = size of buf
+cticn = Characteristic index in device information
+inbuf = char buffer to receive data
+bufsize = size of inbuf
 ```
 
 RETURN
@@ -1597,16 +1976,16 @@ nread = read_ctic(4,cticn),data,sizeof(data));
 disconnect_node(4);
 ```
 
-## 4-2-26 read\_error
+## 4-2-28 read\_error
 
 ```c
 int read_error(void)
 ```
 
 Return error state following a read via
-[read\_node/all\_endchar](#4-2-29-read\_node-all\_endchar), or
-[read\_node\_count](#4-2-28-read\_node\_count), or
-[read\_ctic](#4-2-25-read\_ctic).
+[read\_node/all\_endchar](#4-2-31-read\_node-all\_endchar), or
+[read\_node\_count](#4-2-30-read\_node\_count), or
+[read\_ctic](#4-2-27-read\_ctic).
 
 RETURN
 
@@ -1618,7 +1997,7 @@ RETURN
 ```
 
 
-## 4-2-27 read\_mesh
+## 4-2-29 read\_mesh
 
 ```c
 int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
@@ -1627,7 +2006,7 @@ int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
 Reads a mesh packet sent by any other trasmitting mesh device. The maximum size
 of a mesh packet is 25 bytes. Mesh reads do not look for a termination character,
 they read the full byte count in the packet. The most convenient way to wait for
-mesh packets as a server is to use [mesh\_server](#4-2-22-mesh\_server).
+mesh packets as a server is to use [mesh\_server](#4-2-23-mesh\_server).
 
 PARAMETERS
 
@@ -1685,16 +2064,16 @@ while(read_error() == 0);
 ```
 
 
-## 4-2-28 read\_node\_count
+## 4-2-30 read\_node\_count
 
 ```c
 int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
 Read node packet from a specified connected node until a specified 
-number of bytes (count) is received (sent via [write\_node](#4-2-37-write\_node)).
+number of bytes (count) is received (sent via [write\_node](#4-2-41-write\_node)).
 If no such packet is received, the
-function terminates via a time out or x key press. The [read\_error](#4-2-26-read\_error)
+function terminates via a time out or x key press. The [read\_error](#4-2-28-read\_error)
 function returns
 the error state. Node packets have a maximum size of 400 bytes.
 
@@ -1749,7 +2128,7 @@ if(read_error() != 0)
 
 ```
 
-## 4-2-29 read\_node-all\_endchar
+## 4-2-31 read\_node-all\_endchar
 
 ```c
 int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
@@ -1757,13 +2136,13 @@ int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag
 ```
 
 Read node packet from a specified connected node, or all connected nodes, until a specified 
-termination character (endchar) is received (sent via [write\_node](#4-2-37-write\_node)).
+termination character (endchar) is received (sent via [write\_node](#4-2-41-write\_node)).
 If no such packet is received, the function terminates via a time out or x key press.
-The [read\_error](#4-2-26-read\_error) function returns
+The [read\_error](#4-2-28-read\_error) function returns
 the error state. The read\_all\_node function listens to all connected nodes and
 returns the first packet received. Node packets have a maximum size of 400 bytes.
 The most convenient way to wait for node packets as a server is to
-use [node\_server](#4-2-23-node\_server).
+use [node\_server](#4-2-24-node\_server).
 
 PARAMETERS
 
@@ -1835,7 +2214,7 @@ if(read_error() != 0)
 
 ```
 
-## 4-2-30 read\_node-all\_clear
+## 4-2-32 read\_node-all\_clear
 
 ```c
 void read_node_clear(int node)
@@ -1860,9 +2239,61 @@ read_all_clear();     // clear all node packets
                       // from the input buffer
 ```
  
+## 4-2-33 read\_notify
+
+```c
+void read_notify(int timeoutms)
+```
+
+Waits for input from all devices and returns if a notification is received from an LE
+device. An LE device characteristic must have been enabled for notifications via
+[notify\_ctic](#4-2-25-notify\_ctic). If a notification is received, its callback function
+is called. All other functions that read input will also do this, so it is only necessary
+to use this function if there is no other activity.
+If no notifications are received, the function times out after the specified time. 
+
+PARAMETERS
+
+```
+timeoutms = Time out in ms
+```
 
 
-## 4-2-31 scroll\_back-forward
+
+
+## 4-2-34 register\_serial
+
+```c
+void register_serial(char *uuid,char *name)
+```
+
+When set up as a [classic\_server](#4-2-2-classic\_server), the following serial
+services are advertised to clients:
+
+```
+UUID = 1101 channel=1 name=Serial2 
+UUID = 00001101-0000-1000-8000-00805F9B34FB  channel=1 name=Serial16
+UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB  channel=1 name=My Custom Serial
+```
+
+The first two are standard serial UUIDs and cannot be changed. This function
+changes the UUID and name of the third.
+
+
+PARAMETERS
+
+```
+uuid = 16-byte UUID
+name = name ascii string
+```
+
+SAMPLE CODE
+
+```c
+register_serial(strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL),"My custom serial");  
+```
+
+## 4-2-35 scroll\_back-forward
 
 ```c
 void scroll_back(void)
@@ -1871,8 +2302,8 @@ void scroll_forward(void)
 
 Screen prints performed by btlib.c funtions are saved in a buffer. These functions
 scroll the screen backwards and forwards through this buffer. Screen prints can
-be controlled via [set\_print\_flag](#4-2-32-set\_print\_flag).
-The buffer can be saved to a file via [output\_file](#4-2-24-output\_file).
+be controlled via [set\_print\_flag](#4-2-36-set\_print\_flag).
+The buffer can be saved to a file via [output\_file](#4-2-26-output\_file).
 
 SAMPLE CODE
 
@@ -1881,7 +2312,7 @@ scroll_back();      // scroll screen back through print buffer
 scroll_forward();   // scroll screen forwards through print buffer
 ```
 
-## 4-2-32 set\_print\_flag
+## 4-2-36 set\_print\_flag
 
 ```c
 int set_print_flag(int flag)
@@ -1891,8 +2322,8 @@ The print flag controls how btlib.c functions print to the screen. The verbose
 mode prints all Bluetooth HCI traffic with details of how the packets are
 constructed, the replies expected and explanations of what is going on. This will often
 scroll off the top of the screen, but can be seen via
-[scroll\_back/forward](#4-2-31-scroll\_back-forward), or the
-square bracket keys in btferret, or saved to a file via [output\_file](#4-2-24-output\_file).
+[scroll\_back/forward](#4-2-35-scroll\_back-forward), or the
+square bracket keys in btferret, or saved to a file via [output\_file](#4-2-26-output\_file).
 
 PARAMETERS
 
@@ -1923,15 +2354,15 @@ savflag = set_print_flag(PRINT_VERBOSE);
 set_print_flag(savflag);  // restore original setting
 ```
 
-## 4-2-33 strtohex
+## 4-2-37 strtohex
 
 ```c
 char *strtohex(char *s,int *nbytes)
 ```
 
 Convert an ascii string in hex format to an array of byte values. This can
-be used to specify a UUID in [find\_ctic\_index](#4-2-13-find\_ctic\_index)
-and [find\_channel](#4-2-11-find\_channel).
+be used to specify a UUID in [find\_ctic\_index](#4-2-14-find\_ctic\_index)
+and [find\_channel](#4-2-12-find\_channel).
 
 PARAMETERS
 
@@ -1974,14 +2405,14 @@ channel = find_channel(5,strtohex("1101",NULL));
 
 ```
 
-## 4-2-34 wait\_for\_disconnect
+## 4-2-38 wait\_for\_disconnect
 
 ```c
 int wait_for_disconnect(int node,int timout)
 ```
 
 Wait for server to initiate disconnection. See explanation in
-[disconnect\_node](#4-2-10-disconnect\_node).
+[disconnect\_node](#4-2-11-disconnect\_node).
 
 
 PARAMETERS
@@ -1999,7 +2430,7 @@ RETURN
 1 = OK
 ```
 
-## 4-2-35 write\_ctic
+## 4-2-39 write\_ctic
 
 ```c
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
@@ -2061,7 +2492,7 @@ write_ctic(4,cticn,data,1);
 disconnect_node(4);
 ```
 
-## 4-2-36 write\_mesh
+## 4-2-40 write\_mesh
 
 ```c
 int write_mesh(char *outbuf,int count)
@@ -2069,10 +2500,10 @@ int write_mesh(char *outbuf,int count)
 
 Broadcast a mesh packet. This packet will be transmitted repeatedly until another
 write_mesh changes the data, or mesh transmission is turned off via
-[mesh\_off](#4-2-21-mesh\_off).
+[mesh\_off](#4-2-22-mesh\_off).
 All other mesh devices can read the
-packet via [read\_mesh](#4-2-27-read\_mesh).
-Other mesh devices running a [mesh\_server](#4-2-22-mesh\_server) will read the 
+packet via [read\_mesh](#4-2-29-read\_mesh).
+Other mesh devices running a [mesh\_server](#4-2-23-mesh\_server) will read the 
 packet and pass it to their callback function. The maximum size of a mesh packet is
 25 bytes. Mesh reads do not look for a termination character, they read the full
 byte count of the packet.
@@ -2112,16 +2543,14 @@ write_mesh(data,3);
 ```
 
 
-## 4-2-37 write\_node
+## 4-2-41 write\_node
 
 ```c
 int write_node(int node,unsigned char *outbuf,int count)
 ```
 
-Write a node packet to the specified connected classic server
-or mesh device connected as a node server. The remote node
-must have been connected via [connect\_node](#4-2-3-connect\_node). A node server reads
-the packet via the various read_node functions.
+Write a data packet to the specified connected node. The remote node
+must have been connected via [connect\_node](#4-2-4-connect\_node).
 
 PARAMETERS
 
@@ -2217,14 +2646,14 @@ record for a serial channel. (decode info v3,pB,3)
 The UUID is in the aid=1 entry. The aid=4 entry identifies this record as an RFCOMM channel.
 
 A channel can be specified in the device information via the devices.txt
-file passed to [init\_blue](#4-2-14-init\_blue). 
+file passed to [init\_blue](#4-2-15-init\_blue). 
 BTlib also has functions for reading a remote device's SDP
-database [list\_channels](#4-2-16-list\_channels),
-finding the RFCOMM channel of a specified UUID [find\_channel](#4-2-11-find\_channel).
-Connecting to a classic device [connect\_node](#4-2-3-connect\_node)
+database [list\_channels](#4-2-17-list\_channels),
+finding the RFCOMM channel of a specified UUID [find\_channel](#4-2-12-find\_channel).
+Connecting to a classic device [connect\_node](#4-2-4-connect\_node)
 needs the RFCOMM channel number.
 To see full SDP database records as above, set verbose print mode
-during [list\_channels](#4-2-16-list\_channels) or use [list\_uuid](#4-2-18-list\_uuid).      
+during [list\_channels](#4-2-17-list\_channels) or use [list\_uuid](#4-2-19-list\_uuid).      
 
 The situation with LE devices is similar. LE devices hold characteristics that are values 
 that can be read and sometimes written (e.g. Heart rate). Each characteristic is identified
@@ -2244,18 +2673,18 @@ The full list can be found in a pdf document called "16-bit UUID Numbers Documen
 [here](https://www.bluetooth.com/specifications/assigned-numbers/). 
 
 A handle or UUID can be pre-set in the device information via the devices.txt file
-passed to [init\_blue](#4-2-14-init\_blue).
+passed to [init\_blue](#4-2-15-init\_blue).
  
 BTlib also has functions for reading an LE device's characteristic/UUID list
-[find\_ctics](#4-2-12-find\_ctics) which
+[find\_ctics](#4-2-13-find\_ctics) which
 adds the list to the device information, listing it
-[list\_ctics](#4-2-17-list\_ctics), and subsequently
-[find\_ctic\_index](#4-2-13-find\_ctic\_index)
+[list\_ctics](#4-2-18-list\_ctics), and subsequently
+[find\_ctic\_index](#4-2-14-find\_ctic\_index)
 to find the characteristic
 index of a specified UUID in the device information. Functions to
 read and write characteristics
-[read\_ctic](#4-2-25-read\_ctic),
-[write\_ctic](#4-2-35-write\_ctic)
+[read\_ctic](#4-2-27-read\_ctic),
+[write\_ctic](#4-2-39-write\_ctic)
 need this index. 
 
  
@@ -2379,7 +2808,7 @@ The relevant opcodes for LE commands are
 ```
 
 This packet format is also used for data packets sent via
-[write\_node](#4-2-37-write\_node) to a connected mesh device acting as a node
+[write\_node](#4-2-41-write\_node) to a connected mesh device acting as a node
 server (it is an LE connection and the data is sent as LE packets). 
 In this case there is no opcode - just data as shown in
 the multiple packets example next.
@@ -2538,7 +2967,7 @@ a few serial data packets with the server and disconnects. It includes
 [L2CAP 0040+ packets](#5-2-5-starting-02-channel-0040-plus).
 The disconnection here is initiated by the client, but there
 may be reasons for letting the server initiate - see 
-[disconnect\_node](#4-2-10-disconnect\_node), and
+[disconnect\_node](#4-2-11-disconnect\_node), and
 [Classic disconnect initiated by server](#5-3-4-classic-disconnect-initiated-by-server).
 
 ```
@@ -3185,7 +3614,990 @@ Found 2 devices
 
 ```
 
-## 5-3-6 SDP database operations
+## 5-3-6 Classic server simple
+
+This is a connection with a classic client that does not require pairing or a link key.
+It has been done with a Windows PC client running [Windows Sockets](#5-5-2-windows-sockets) code.
+
+```
+Set event mask
+< HCI OGF=03 OCF=01
+      0000  01 01 0C 08 FF FF FB FF - 07 F8 BF 3D 
+> Event 0E = 01 01 0C 00
+      0000  04 0E 04 01 01 0C 00 
+STATUS OK
+Set simple pair mode on
+< HCI OGF=03 OCF=56
+      0000  01 56 0C 01 01 
+> Event 0E = 01 56 0C 00
+      0000  04 0E 04 01 56 0C 00 
+STATUS OK
+
+Listening for Windows PC to connect
+Waiting for Event 04 connect request
+
+> Event 04 = 13 71 DA 7D 1A 00 04 01 2A 01
+      0000  04 04 0A 13 71 DA 7D 1A - 00 04 01 2A 01 
+
+GOT Connect request (Event 4)
+SEND Accept connection
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=09
+      0000  01 09 04 07 13 71 DA 7D - 1A 00 00 
+> Event 0F = 00 01 09 04
+      0000  04 0F 04 00 01 09 04 
+> Event 12 = 00 13 71 DA 7D 1A 00 00
+      0000  04 12 08 00 13 71 DA 7D - 1A 00 00 
+GOT Open OK (Event 03) with handle = 000B
+> Event 03 = 00 0B 00 13 71 DA 7D 1A 00 01...
+      0000  04 03 0B 00 0B 00 13 71 - DA 7D 1A 00 01 00 
+> Event 1B = 0B 00 05
+      0000  04 1B 03 0B 00 05 
+> L2CAP 0001 Opcode:id = 02:59  Must send reply 03:59
+      0000  02 0B 20 0C 00 08 00 01 - 00 02 59 04 00 01 00 40 
+      0010  00 
+
+The Windows PC client now opens a psm 1 channel to read our SDP database
+to find a serial RFCOMM channel
+
+GOT L2 connect request psm 1 channel 0040
+SEND connect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 59
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 03:59   is reply to 02:59
+      0000  02 0B 00 10 00 0C 00 01 - 00 03 59 08 00 41 00 40 
+      0010  00 00 00 00 00 
+> L2CAP 0001 Opcode:id = 04:5A  Must send reply 05:5A
+      0000  02 0B 20 10 00 0C 00 01 - 00 04 5A 08 00 41 00 00 
+      0010  00 01 02 00 04 
+
+GOT L2 request config - id 5A
+SEND L2 config request. Choose id 05
+  Set [1][2] handle 0B 00
+  Set [10] id 05
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+      0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
+      0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
+SEND L2 config reply
+  Set [1][2] handle 0B 00
+  Set [10] id 5A
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 05:5A   is reply to 04:5A
+      0000  02 0B 00 12 00 0E 00 01 - 00 05 5A 0A 00 40 00 00 
+      0010  00 00 00 01 02 F5 03 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+      0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
+      0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
+> SDP operation
+      0000  02 0B 20 1F 00 1B 00 41 - 00 02 00 00 00 16 35 11 
+      0010  1C 00 00 11 01 00 00 10 - 00 80 00 00 80 5F 9B 34 
+      0020  FB 00 1E 00 
+
+GOT SDP data request (opcode 02) for SDP handle that
+contains UUID = 00 00 11 01 00 00 10 00 80 00 00 80 5F 9B 34 FB
+SEND SDP handle (opcode 03) = 00 01 00 02
+  Set [1][2] handle 0B 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0000
+  Set [18]..  SDP handle 00 01 00 02
+< SDP operation
+      0000  02 0B 00 12 00 0E 00 40 - 00 03 00 00 00 09 00 01 
+      0010  00 01 00 01 00 02 00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> SDP operation
+      0000  02 0B 20 15 00 11 00 41 - 00 04 00 01 00 0C 00 01 
+      0010  00 02 03 ED 35 03 09 00 - 04 00 
+
+GOT SDP data request (opcode 04) for contents of
+SDP handle = 00 10 00 02  aid = 00 04
+which is the serial RFCOMM info with channel=01 at [0022]
+SEND SDP reply (opcode 05) with SDP data sequence
+  Set [1][2] handle 0B 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0001
+< SDP operation
+      0000  02 0B 00 1F 00 1B 00 40 - 00 05 00 01 00 16 00 13 
+      0010  35 11 09 00 04 35 0C 35 - 03 19 01 00 35 05 19 00 
+      0020  03 08 01 00 
+> L2CAP 0001 Opcode:id = 06:5B  Must send reply 07:5B
+      0000  02 0B 20 0C 00 08 00 01 - 00 06 5B 04 00 41 00 40 
+      0010  00 
+
+GOT L2CAP disconnect psm 1 request - id 5B
+SEND same L2CAP disconnect request
+  Set [1][2] handle 0B 00
+  Set [10] id 0B
+  Set [13][14] remote L2CAP channel 40 00
+  Set [15][16] local L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+      0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
+      0010  00 
+SEND L2CAP disconnect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 5B
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 07:5B   is reply to 06:5B
+      0000  02 0B 00 0C 00 08 00 01 - 00 07 5B 04 00 41 00 40 
+      0010  00 
+> Event 32 = 13 71 DA 7D 1A 00 03 00 00
+      0000  04 32 09 13 71 DA 7D 1A - 00 03 00 00 
+GOT IO Cap response (Event 32) Auth = 0
+This has reported Authentication=0 so a link key is not needed.
+
+> Event 31 = 13 71 DA 7D 1A 00
+      0000  04 31 06 13 71 DA 7D 1A - 00 
+GOT IO capability request (Event 31)
+Event 31 does not require a PIN
+SEND IO capability request reply
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=2B
+      0000  01 2B 04 09 13 71 DA 7D - 1A 00 03 00 00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+      0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
+      0010  00 
+> Event 0E = 01 2B 04 00 13 71 DA 7D 1A 00
+      0000  04 0E 0A 01 2B 04 00 13 - 71 DA 7D 1A 00 
+> Event 33 = 13 71 DA 7D 1A 00 C2 A6 0E 00
+      0000  04 33 0A 13 71 DA 7D 1A - 00 C2 A6 0E 00 
+
+GOT User confirm request (Event 33)
+SEND User confirm reply
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=2C
+      0000  01 2C 04 06 13 71 DA 7D - 1A 00 
+> Event 13 = 01 0B 00 01 00
+      0000  04 13 05 01 0B 00 01 00 
+> Event 0E = 01 2C 04 00 13 71 DA 7D 1A 00
+      0000  04 0E 0A 01 2C 04 00 13 - 71 DA 7D 1A 00 
+> Event 36 = 00 13 71 DA 7D 1A 00
+      0000  04 36 07 00 13 71 DA 7D - 1A 00 
+
+> Event 18 = 13 71 DA 7D 1A 00 02 AD D9 B1...
+      0000  04 18 17 13 71 DA 7D 1A - 00 02 AD D9 B1 5F 28 54 
+      0010  CC DE 80 57 FF C6 18 2C - 6D 04 
+GOT link key (Event 18)
+This is the link key, but it is not needed because Event 32 above
+has reported Authentication=0
+
+> Event 08 = 00 0B 00 01
+      0000  04 08 04 00 0B 00 01 
+> L2CAP 0001 Opcode:id = 0A:5C  Must send reply 0B:5C
+      0000  02 0B 20 0A 00 06 00 01 - 00 0A 5C 02 00 02 00 
+
+GOT ask info (opcode 0A) type 2
+SEND info reply type 2
+  Set [1][2] handle 0B 00
+  Set [10] id 5C
+< L2CAP 0001 Opcode:id = 0B:5C   is reply to 0A:5C
+      0000  02 0B 00 10 00 0C 00 01 - 00 0B 5C 08 00 02 00 00 
+      0010  00 B8 02 00 00 
+> L2CAP 0001 Opcode:id = 02:5D  Must send reply 03:5D
+      0000  02 0B 20 0C 00 08 00 01 - 00 02 5D 04 00 03 00 41 
+      0010  00 
+
+The client now opens a series of channels to establish the
+RFCOMM serial connection.
+
+GOT L2 connect request psm 3 channel 0041
+SEND connect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 5D
+  Set [13][14] local L2CAP channel 43 00
+  Set [15][16] remote L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 03:5D   is reply to 02:5D
+      0000  02 0B 00 10 00 0C 00 01 - 00 03 5D 08 00 43 00 41 
+      0010  00 00 00 00 00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 04:5E  Must send reply 05:5E
+      0000  02 0B 20 10 00 0C 00 01 - 00 04 5E 08 00 43 00 00 
+      0010  00 01 02 F9 03 
+
+GOT L2 request config - id 5E
+SEND L2 config request. Choose id 05
+  Set [1][2] handle 0B 00
+  Set [10] id 05
+  Set [13][14] remote L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+      0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 41 00 00 
+      0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
+SEND L2 config reply
+  Set [1][2] handle 0B 00
+  Set [10] id 5E
+  Set [13][14] remote L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 05:5E   is reply to 04:5E
+      0000  02 0B 00 12 00 0E 00 01 - 00 05 5E 0A 00 41 00 00 
+      0010  00 00 00 01 02 F5 03 
+> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+      0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 43 00 00 
+      0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> CONTROL Address:Opcode 03:3F
+      0000  02 0B 20 08 00 04 00 43 - 00 03 3F 01 1C 
+
+GOT open channel 0 (opcode 3F)
+SEND UA reply
+  Set [9] Same address
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [12] FCS=D7 calculated for 3 bytes from [9]
+< CONTROL Address:Opcode = 03:73
+      0000  02 0B 00 08 00 04 00 41 - 00 03 73 01 D7 
+> CONTROL Address:Opcode 03:EF
+      0000  02 0B 20 12 00 0E 00 43 - 00 03 EF 15 83 11 02 F0 
+      0010  07 00 EF 03 00 07 70 
+
+Windows PC is trying to connect on RFCOMM channel 1 frame size 000C
+SEND PN reply
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [22] FCS=AA calculated for 2 bytes from [9]
+  Frame size at [18] = 03EF
+  Set [14] DLCI 02
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0B 00 12 00 0E 00 41 - 00 01 EF 15 81 11 02 F0 
+      0010  07 00 EF 03 00 07 AA 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> RFCOMM Address:Opcode 0B:3F
+      0000  02 0B 20 08 00 04 00 43 - 00 0B 3F 01 59 
+
+GOT open channel 1 (opcode 3F)
+SEND UA reply
+  Set [9] Same address
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [12] FCS=92 calculated for 3 bytes from [9]
+< RFCOMM Address:Opcode = 0B:73
+      0000  02 0B 00 08 00 04 00 41 - 00 0B 73 01 92 
+
+> CONTROL Address:Opcode 03:EF
+      0000  02 0B 20 0C 00 08 00 43 - 00 03 EF 09 E3 05 0B 8D 
+      0010  70 
+GOT MSC E3
+SEND MSC reply
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [16] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0B 00 0C 00 08 00 41 - 00 01 EF 09 E3 05 0B 8D 
+      0010  AA 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00
+      
+> CONTROL Address:Opcode 03:EF
+      0000  02 0B 20 0C 00 08 00 43 - 00 03 EF 09 E1 05 0B 8D 
+      0010  70 
+GOT MSC E1
+SEND MSC reply
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [16] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0B 00 0C 00 08 00 41 - 00 01 EF 09 E1 05 0B 8D 
+      0010  AA 
+
+SEND Top up credits
+  Set [12] credits = C8
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [9] RFCOMM address 09
+  Set [13] FCS=5C calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:FF
+      0000  02 0B 00 09 00 05 00 41 - 00 09 FF 01 C8 5C 
+      
+Connected OK
+Waiting for data from Windows PC
+
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> RFCOMM Address:Opcode 0B:EF   received serial data
+      0000  02 0B 20 09 00 05 00 43 - 00 0B EF 03 0A 9A 
+      TEXT  .
+  Has used a credit. Number remaining = 199
+GOT data from Windows PC = single termination char 0A = ping for OK reply
+SEND DATA 3 bytes = OK 0A
+  Set [11] one length byte = 07 (length*2 + 1 to indicate 1 byte)
+  Set [3].. packet lengths 0B 00 07 00
+  Set [12].. 3 data bytes 4F..
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [9] RFCOMM address 09
+  Set [15] FCS=40 calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:EF  Send serial data
+      0000  02 0B 00 0B 00 07 00 41 - 00 09 EF 07 4F 4B 0A 40 
+> Event 13 = 01 0B 00 01 00
+      0000  04 13 05 01 0B 00 01 00 
+> RFCOMM Address:Opcode 0B:EF   received serial data
+      0000  02 0B 20 0A 00 06 00 43 - 00 0B EF 05 44 0A 9A 
+      TEXT  D.
+  Has used a credit. Number remaining = 198
+GOT data from Windows PC = D = instruction to disconnect
+SEND DATA 21 bytes = Server disconnecting...
+  Set [11] one length byte = 2B (length*2 + 1 to indicate 1 byte)
+  Set [3].. packet lengths 1D 00 19 00
+  Set [12].. 21 data bytes 53..
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [9] RFCOMM address 09
+  Set [33] FCS=40 calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:EF  Send serial data
+      0000  02 0B 00 1D 00 19 00 41 - 00 09 EF 2B 53 65 72 76 
+      0010  65 72 20 64 69 73 63 6F - 6E 6E 65 63 74 69 6E 67 
+      0020  0A 40 
+
+SEND Close RFCOMM request (opcode 53)
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [9] RFCOMM address 09
+  Set [12] FCS=D9 calculated for 3 bytes from [9]
+< RFCOMM Address:Opcode = 09:53
+      0000  02 0B 00 08 00 04 00 41 - 00 09 53 01 D9 
+> RFCOMM Address:Opcode 0B:53
+      0000  02 0B 20 08 00 04 00 43 - 00 0B 53 01 B8 
+
+GOT Disconnect channel 1 request (opcode 53)
+SEND UA reply (opcode 73)
+  SET [9] Same address
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [12] FCS=92 calculated for 3 bytes from [9]
+< RFCOMM Address:Opcode = 0B:73
+      0000  02 0B 00 08 00 04 00 41 - 00 0B 73 01 92 
+> Event 13 = 01 0B 00 01 00
+      0000  04 13 05 01 0B 00 01 00 
+> RFCOMM Address:Opcode 09:73
+      0000  02 0B 20 08 00 04 00 43 - 00 09 73 01 F3 
+> CONTROL Address:Opcode 03:53
+      0000  02 0B 20 08 00 04 00 43 - 00 03 53 01 FD 
+
+GOT Disconnect channel 0 request (opcode 53)
+SEND UA reply (opcode 73)
+  SET [9] Same address
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [12] FCS=D7 calculated for 3 bytes from [9]
+< CONTROL Address:Opcode = 03:73
+      0000  02 0B 00 08 00 04 00 41 - 00 03 73 01 D7 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 06:5F  Must send reply 07:5F
+      0000  02 0B 20 0C 00 08 00 01 - 00 06 5F 04 00 43 00 41 
+      0010  00 
+
+GOT L2CAP disconnect psm 3 request - id 5F
+SEND same L2CAP disconnect request
+  Set [1][2] handle 0B 00
+  Set [10] id 0B
+  Set [13][14] remote L2CAP channel 41 00
+  Set [15][16] local L2CAP channel 43 00
+< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+      0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 41 00 43 
+      0010  00 
+SEND L2CAP disconnect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 5F
+  Set [13][14] local L2CAP channel 43 00
+  Set [15][16] remote L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 07:5F   is reply to 06:5F
+      0000  02 0B 00 0C 00 08 00 01 - 00 07 5F 04 00 43 00 41 
+      0010  00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+      0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 41 00 43 
+      0010  00 
+GOT UA reply (opcode 73)
+
+SEND Close connection
+  Set [4][5] handle 0B 00
+< HCI OGF=01 OCF=06
+      0000  01 06 04 03 0B 00 13 
+> Event 0F = 00 01 06 04
+      0000  04 0F 04 00 01 06 04 
+> Event 13 = 01 0B 00 01 00
+      0000  04 13 05 01 0B 00 01 00 
+> Event 05 = 00 0B 00 16
+      0000  04 05 04 00 0B 00 16 
+GOT Disconnected OK (Event 05)
+Windows PC disconnected
+
+```
+
+## 5-3-7 Classic server pair and link key
+
+This is a two-step process. The client first pairs with the Pi server and supplies
+a link key. Then a serial connection is made using the key. This has been done with
+a Windows PC client running a Bluetooth terminal program. The Pi had to be paired first
+from the PC via Settings/Devices/Add Bluetooth or other device. 
+
+```
+
+Set event mask
+< HCI OGF=03 OCF=01
+      0000  01 01 0C 08 FF FF FB FF - 07 F8 BF 3D 
+> Event 0E = 01 01 0C 00
+      0000  04 0E 04 01 01 0C 00 
+STATUS OK
+Set simple pair mode on
+< HCI OGF=03 OCF=56
+      0000  01 56 0C 01 01 
+> Event 0E = 01 56 0C 00
+      0000  04 0E 04 01 56 0C 00 
+STATUS OK
+
+Listening for Windows PC to connect
+Waiting for Event 04
+
+> Event 04 = 13 71 DA 7D 1A 00 04 01 2A 01
+      0000  04 04 0A 13 71 DA 7D 1A - 00 04 01 2A 01 
+
+GOT Connect request (Event 4)
+SEND Accept connection
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=09
+      0000  01 09 04 07 13 71 DA 7D - 1A 00 00 
+> Event 0F = 00 01 09 04
+      0000  04 0F 04 00 01 09 04 
+> Event 12 = 00 13 71 DA 7D 1A 00 00
+      0000  04 12 08 00 13 71 DA 7D - 1A 00 00 
+GOT Open OK (Event 03) with handle = 000B
+> Event 03 = 00 0B 00 13 71 DA 7D 1A 00 01...
+      0000  04 03 0B 00 0B 00 13 71 - DA 7D 1A 00 01 00 
+> Event 1B = 0B 00 05
+      0000  04 1B 03 0B 00 05 
+> L2CAP 0001 Opcode:id = 02:76  Must send reply 03:76
+      0000  02 0B 20 0C 00 08 00 01 - 00 02 76 04 00 01 00 40 
+      0010  00 
+
+Windows PC client now opens a psm 1 channel to read our SDP database
+to find an RFCOMM serial channel
+
+GOT L2 connect request psm 1 channel 0040
+SEND connect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 76
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 03:76   is reply to 02:76
+      0000  02 0B 00 10 00 0C 00 01 - 00 03 76 08 00 41 00 40 
+      0010  00 00 00 00 00 
+> L2CAP 0001 Opcode:id = 04:77  Must send reply 05:77
+      0000  02 0B 20 10 00 0C 00 01 - 00 04 77 08 00 41 00 00 
+      0010  00 01 02 00 04 
+
+GOT L2 request config - id 77
+SEND L2 config request. Choose id 05
+  Set [1][2] handle 0B 00
+  Set [10] id 05
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+      0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
+      0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
+SEND L2 config reply
+  Set [1][2] handle 0B 00
+  Set [10] id 77
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 05:77   is reply to 04:77
+      0000  02 0B 00 12 00 0E 00 01 - 00 05 77 0A 00 40 00 00 
+      0010  00 00 00 01 02 F5 03 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+      0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
+      0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
+> Event 32 = 13 71 DA 7D 1A 00 01 00 05
+      0000  04 32 09 13 71 DA 7D 1A - 00 01 00 05 
+
+GOT IO Cap response (Event 32) Auth = 5
+This has reported Authentication=5 which means that a link key is required.
+
+> Event 31 = 13 71 DA 7D 1A 00
+      0000  04 31 06 13 71 DA 7D 1A - 00 
+
+GOT IO capability request (Event 31)
+Event 31 does not require a PIN
+SEND IO capability request reply
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=2B
+      0000  01 2B 04 09 13 71 DA 7D - 1A 00 03 00 00 
+> Event 0E = 01 2B 04 00 13 71 DA 7D 1A 00
+      0000  04 0E 0A 01 2B 04 00 13 - 71 DA 7D 1A 00 
+> Event 13 = 01 0B 00 01 00
+      0000  04 13 05 01 0B 00 01 00 
+> Event 33 = 13 71 DA 7D 1A 00 C7 AA 02 00
+      0000  04 33 0A 13 71 DA 7D 1A - 00 C7 AA 02 00 
+
+GOT User confirm request (Event 33)
+SEND User confirm reply
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=2C
+      0000  01 2C 04 06 13 71 DA 7D - 1A 00 
+> Event 0E = 01 2C 04 00 13 71 DA 7D 1A 00
+      0000  04 0E 0A 01 2C 04 00 13 - 71 DA 7D 1A 00 
+> Event 36 = 00 13 71 DA 7D 1A 00
+      0000  04 36 07 00 13 71 DA 7D - 1A 00 
+
+Paired with Windows PC (Event 36)
+
+> Event 18 = 13 71 DA 7D 1A 00 4A 34 83 0A...
+      0000  04 18 17 13 71 DA 7D 1A - 00 4A 34 83 0A A1 0A 98 
+      0010  00 7A 49 69 5A ED FD 42 - 6B 04 
+GOT link key (Event 18) 16 bytes 4A....6B
+Save this link key 16 bytes for subsequent connections
+
+> Event 08 = 00 0B 00 01
+      0000  04 08 04 00 0B 00 01 
+> SDP operation
+      0000  02 0B 20 18 00 14 00 41 - 00 06 00 00 00 0F 35 03 
+      0010  19 01 00 03 ED 35 05 0A - 00 00 FF FF 00 
+
+GOT SDP data request (opcode 06) for records that contain UUID=01 00
+and all aid entries from 0000 to FFFF
+
+SEND SDP reply (opcode 07) with data sequence of three records
+  Set [1][2] handle 0B 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0000
+< SDP operation
+      0000  02 0B 00 D9 00 D5 00 40 - 00 07 00 00 00 D0 00 CD 
+      0010  35 CB 35 35 09 00 00 0A - 00 01 00 01 09 00 01 35 
+      0020  03 19 11 01 09 00 04 35 - 0C 35 03 19 01 00 35 05 
+      0030  19 00 03 08 01 09 00 05 - 35 03 19 10 02 09 01 00 
+      0040  25 07 53 65 72 69 61 6C - 32 35 44 09 00 00 0A 00 
+      0050  01 00 02 09 00 01 35 11 - 1C 00 00 11 01 00 00 10 
+      0060  00 80 00 00 80 5F 9B 34 - FB 09 00 04 35 0C 35 03 
+      0070  19 01 00 35 05 19 00 03 - 08 01 09 00 05 35 03 19 
+      0080  10 02 09 01 00 25 08 53 - 65 72 69 61 6C 31 36 35 
+      0090  4C 09 00 00 0A 00 01 00 - 03 09 00 01 35 11 1C FC 
+      00A0  F0 5A FD 67 D8 4F 41 83 - F5 7B EE 22 C0 3C DB 09 
+      00B0  00 04 35 0C 35 03 19 01 - 00 35 05 19 00 03 08 01 
+      00C0  09 00 05 35 03 19 10 02 - 09 01 00 25 10 4D 79 20 
+      00D0  63 75 73 74 6F 6D 20 73 - 65 72 69 61 6C 00 
+      
+> SDP operation
+      0000  02 0B 20 11 00 14 00 41 - 00 06 00 01 00 0F 35 03 
+      0010  19 12 00 03 ED 35 
+Need an extra 0007 bytes
+Following packet [3][4] = 0007 extra bytes from [5]..
+> Extra bytes - add to previous data
+      0000  02 0B 10 07 00 05 0A 02 - 01 02 05 00 
+
+GOT SDP data request (opcode 06) for record containing UUID = 12 00
+and aid entries from 0201 to 0205
+SEND SDP reply (opcode 07) with data sequence
+  Set [1][2] handle 0B 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0001
+< SDP operation
+      0000  02 0B 00 2D 00 29 00 40 - 00 07 00 01 00 24 00 21 
+      0010  35 1F 35 1D 09 02 01 09 - 1D 6B 09 02 02 09 02 46 
+      0020  09 02 03 09 05 2B 09 02 - 04 28 01 09 02 05 09 00 
+      0030  02 00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> L2CAP 0001 Opcode:id = 06:78  Must send reply 07:78
+      0000  02 0B 20 0C 00 08 00 01 - 00 06 78 04 00 41 00 40 
+      0010  00 
+
+Pairing is now done. Client closes the psm 1 channel
+and disconnects to wait for a connect request
+
+GOT L2CAP disconnect psm 1 request - id 78
+SEND same L2CAP disconnect request
+  Set [1][2] handle 0B 00
+  Set [10] id 0B
+  Set [13][14] remote L2CAP channel 40 00
+  Set [15][16] local L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+      0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
+      0010  00 
+SEND L2CAP disconnect reply
+  Set [1][2] handle 0B 00
+  Set [10] id 78
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 07:78   is reply to 06:78
+      0000  02 0B 00 0C 00 08 00 01 - 00 07 78 04 00 41 00 40 
+      0010  00 
+> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+      0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
+      0010  00 
+> Event 13 = 01 0B 00 02 00
+      0000  04 13 05 01 0B 00 02 00 
+> Event 05 = 00 0B 00 13
+      0000  04 05 04 00 0B 00 13 
+      
+Windows PC has disconnected - pairing complete
+             
+Waiting for connect request Event 04
+
+> Event 04 = 13 71 DA 7D 1A 00 04 01 2A 01
+      0000  04 04 0A 13 71 DA 7D 1A - 00 04 01 2A 01 
+
+GOT Connect request (Event 4)
+SEND Accept connection
+  Set [4].. board address reversed 13..00
+< HCI OGF=01 OCF=09
+      0000  01 09 04 07 13 71 DA 7D - 1A 00 00 
+> Event 0F = 00 01 09 04
+      0000  04 0F 04 00 01 09 04 
+> Event 12 = 00 13 71 DA 7D 1A 00 00
+      0000  04 12 08 00 13 71 DA 7D - 1A 00 00 
+GOT Open OK (Event 03) with handle = 000C
+> Event 03 = 00 0C 00 13 71 DA 7D 1A 00 01...
+      0000  04 03 0B 00 0C 00 13 71 - DA 7D 1A 00 01 00 
+> Event 1B = 0C 00 05
+      0000  04 1B 03 0C 00 05 
+> L2CAP 0001 Opcode:id = 02:79  Must send reply 03:79
+      0000  02 0C 20 0C 00 08 00 01 - 00 02 79 04 00 01 00 40 
+      0010  00 
+
+Windows PC client opens a psm 1 channel to read our SDP database
+
+GOT L2 connect request psm 1 channel 0040
+SEND connect reply
+  Set [1][2] handle 0C 00
+  Set [10] id 79
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 03:79   is reply to 02:79
+      0000  02 0C 00 10 00 0C 00 01 - 00 03 79 08 00 41 00 40 
+      0010  00 00 00 00 00 
+> L2CAP 0001 Opcode:id = 04:7A  Must send reply 05:7A
+      0000  02 0C 20 10 00 0C 00 01 - 00 04 7A 08 00 41 00 00 
+      0010  00 01 02 00 04 
+
+GOT L2 request config - id 7A
+SEND L2 config request. Choose id 05
+  Set [1][2] handle 0C 00
+  Set [10] id 05
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+      0000  02 0C 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
+      0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
+SEND L2 config reply
+  Set [1][2] handle 0C 00
+  Set [10] id 7A
+  Set [13][14] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 05:7A   is reply to 04:7A
+      0000  02 0C 00 12 00 0E 00 01 - 00 05 7A 0A 00 40 00 00 
+      0010  00 00 00 01 02 F5 03 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+      0000  02 0C 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
+      0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
+> SDP operation
+      0000  02 0C 20 1F 00 1B 00 41 - 00 02 00 00 00 16 35 11 
+      0010  1C 00 00 11 01 00 00 10 - 00 80 00 00 80 5F 9B 34 
+      0020  FB 0F FF 00 
+
+GOT SDP data request (opcode 02) for SDP handle that
+contains UUID = 00 00 11 01 00 00 10 00 80 00 00 80 5F 9B 34 FB
+SEND SDP handle reply (opcode 03) = 00 01 00 02
+  Set [1][2] handle 0C 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0000
+< SDP operation
+      0000  02 0C 00 12 00 0E 00 40 - 00 03 00 00 00 09 00 01 
+      0010  00 01 00 01 00 02 00 
+     
+> SDP operation
+      0000  02 0C 20 17 00 13 00 41 - 00 04 00 00 00 0E 00 01 
+      0010  00 02 03 ED 35 05 0A 00 - 00 FF FF 00 
+
+GOT SDP data request (opcode 04) for contents of SDP handle 00 01 00 02
+and all aid entries from 0000 to FFFF
+
+SEND SDP reply (opcode 05) with data sequence that contains
+the RFCOMM channel 01 at [0040] and its name Serial16
+  Set [1][2] handle 0C 00
+  Set [7][8] remote psm 1 channel
+  Set [10][11] id 0000
+< SDP operation
+      0000  02 0C 00 52 00 4E 00 40 - 00 05 00 00 00 49 00 46 
+      0010  35 44 09 00 00 0A 00 01 - 00 02 09 00 01 35 11 1C 
+      0020  00 00 11 01 00 00 10 00 - 80 00 00 80 5F 9B 34 FB 
+      0030  09 00 04 35 0C 35 03 19 - 01 00 35 05 19 00 03 08 
+      0040  01 09 00 05 35 03 19 10 - 02 09 01 00 25 08 53 65 
+      0050  72 69 61 6C 31 36 00 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00  
+           
+> L2CAP 0001 Opcode:id = 06:7E  Must send reply 07:7E
+      0000  02 0C 20 0C 00 08 00 01 - 00 06 7E 04 00 41 00 40 
+      0010  00 
+
+GOT L2CAP disconnect psm 1 request - id 7E
+SEND same L2CAP disconnect request
+  Set [1][2] handle 0C 00
+  Set [10] id 0B
+  Set [13][14] remote L2CAP channel 40 00
+  Set [15][16] local L2CAP channel 41 00
+< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+      0000  02 0C 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
+      0010  00 
+SEND L2CAP disconnect reply
+  Set [1][2] handle 0C 00
+  Set [10] id 7E
+  Set [13][14] local L2CAP channel 41 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 07:7E   is reply to 06:7E
+      0000  02 0C 00 0C 00 08 00 01 - 00 07 7E 04 00 41 00 40 
+      0010  00 
+> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+      0000  02 0C 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
+      0010  00  
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> Event 17 = 13 71 DA 7D 1A 00
+      0000  04 17 06 13 71 DA 7D 1A - 00 
+
+GOT link request (Event 17)
+Because Event 32 during pairing above reported Authentication=05
+the link key is required.
+SEND link key obtained from Event 18 during pairing above.
+  Set [4].. board address reversed 13..00
+  Set [10].. link key 16 bytes 4A...6B
+< HCI OGF=01 OCF=0B
+      0000  01 0B 04 16 13 71 DA 7D - 1A 00 4A 34 83 0A A1 0A 
+      0010  98 00 7A 49 69 5A ED FD - 42 6B 
+> Event 0E = 01 0B 04 00 13 71 DA 7D 1A 00
+      0000  04 0E 0A 01 0B 04 00 13 - 71 DA 7D 1A 00 
+> Event 08 = 00 0C 00 01
+      0000  04 08 04 00 0C 00 01 
+> L2CAP 0001 Opcode:id = 0A:7F  Must send reply 0B:7F
+      0000  02 0C 20 0A 00 06 00 01 - 00 0A 7F 02 00 02 00 
+
+GOT ask info (opcode 0A) type 2
+SEND info reply type 2
+  Set [1][2] handle 0C 00
+  Set [10] id 7F
+< L2CAP 0001 Opcode:id = 0B:7F   is reply to 0A:7F
+      0000  02 0C 00 10 00 0C 00 01 - 00 0B 7F 08 00 02 00 00 
+      0010  00 B8 02 00 00 
+> L2CAP 0001 Opcode:id = 02:80  Must send reply 03:80
+      0000  02 0C 20 0C 00 08 00 01 - 00 02 80 04 00 03 00 42 
+      0010  00 
+
+GOT L2 connect request psm 3 channel 0042
+SEND connect reply
+  Set [1][2] handle 0C 00
+  Set [10] id 80
+  Set [13][14] local L2CAP channel 43 00
+  Set [15][16] remote L2CAP channel 42 00
+< L2CAP 0001 Opcode:id = 03:80   is reply to 02:80
+      0000  02 0C 00 10 00 0C 00 01 - 00 03 80 08 00 43 00 42 
+      0010  00 00 00 00 00 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> L2CAP 0001 Opcode:id = 04:81  Must send reply 05:81
+      0000  02 0C 20 10 00 0C 00 01 - 00 04 81 08 00 43 00 00 
+      0010  00 01 02 F9 03 
+
+GOT L2 request config - id 81
+SEND L2 config request. Choose id 05
+  Set [1][2] handle 0C 00
+  Set [10] id 05
+  Set [13][14] remote L2CAP channel 42 00
+< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+      0000  02 0C 00 1B 00 17 00 01 - 00 04 05 13 00 42 00 00 
+      0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
+SEND L2 config reply
+  Set [1][2] handle 0C 00
+  Set [10] id 81
+  Set [13][14] remote L2CAP channel 42 00
+< L2CAP 0001 Opcode:id = 05:81   is reply to 04:81
+      0000  02 0C 00 12 00 0E 00 01 - 00 05 81 0A 00 42 00 00 
+      0010  00 00 00 01 02 F5 03 
+> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+      0000  02 0C 20 19 00 15 00 01 - 00 05 05 11 00 43 00 00 
+      0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> CONTROL Address:Opcode 03:3F
+      0000  02 0C 20 08 00 04 00 43 - 00 03 3F 01 1C 
+
+GOT open channel 0 (opcode 3F)
+SEND UA reply
+  Set [9] Same address
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [12] FCS=D7 calculated for 3 bytes from [9]
+< CONTROL Address:Opcode = 03:73
+      0000  02 0C 00 08 00 04 00 42 - 00 03 73 01 D7 
+> CONTROL Address:Opcode 03:EF
+      0000  02 0C 20 12 00 0E 00 43 - 00 03 EF 15 83 11 02 F0 
+      0010  07 00 EF 03 00 07 70 
+      
+Windows PC is trying to connect on RFCOMM channel 1 frame size 000C
+SEND PN reply
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [22] FCS=AA calculated for 2 bytes from [9]
+  Frame size at [18] = 03EF
+  Set [14] DLCI 02
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0C 00 12 00 0E 00 42 - 00 01 EF 15 81 11 02 F0 
+      0010  07 00 EF 03 00 07 AA 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> RFCOMM Address:Opcode 0B:3F
+      0000  02 0C 20 08 00 04 00 43 - 00 0B 3F 01 59 
+
+GOT open channel 1 (opcode 3F)
+SEND UA reply
+  Set [9] Same address
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [12] FCS=92 calculated for 3 bytes from [9]
+< RFCOMM Address:Opcode = 0B:73
+      0000  02 0C 00 08 00 04 00 42 - 00 0B 73 01 92 
+
+> CONTROL Address:Opcode 03:EF
+      0000  02 0C 20 0C 00 08 00 43 - 00 03 EF 09 E3 05 0B 8D 
+      0010  70 
+GOT MSC E3
+SEND MSC reply
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [16] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0C 00 0C 00 08 00 42 - 00 01 EF 09 E3 05 0B 8D 
+      0010  AA 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+
+> CONTROL Address:Opcode 03:EF
+      0000  02 0C 20 0C 00 08 00 43 - 00 03 EF 09 E1 05 0B 8D 
+      0010  70 
+GOT MSC E1
+SEND MSC reply
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [16] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0C 00 0C 00 08 00 42 - 00 01 EF 09 E1 05 0B 8D 
+      0010  AA 
+
+SEND Top up credits
+  Set [12] credits = C8
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [9] RFCOMM address 09
+  Set [13] FCS=5C calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:FF
+      0000  02 0C 00 09 00 05 00 42 - 00 09 FF 01 C8 5C 
+      
+Connected OK
+Waiting for data from Windows PC
+
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00 
+> RFCOMM Address:Opcode 0B:EF   received serial data
+      0000  02 0C 20 0A 00 06 00 43 - 00 0B EF 05 70 0A 9A 
+      TEXT  p.
+  Has used a credit. Number remaining = 199
+GOT data from Windows PC = p = ping for OK reply
+SEND DATA 3 bytes = OK 0A
+  Set [11] one length byte = 07 (length*2 + 1 to indicate 1 byte)
+  Set [3].. packet lengths 0B 00 07 00
+  Set [12].. 3 data bytes 4F..
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [9] RFCOMM address 09
+  Set [15] FCS=40 calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:EF  Send serial data
+      0000  02 0C 00 0B 00 07 00 42 - 00 09 EF 07 4F 4B 0A 40 
+> Event 13 = 01 0C 00 01 00
+      0000  04 13 05 01 0C 00 01 00 
+      
+> RFCOMM Address:Opcode 0B:EF   received serial data
+      0000  02 0C 20 0A 00 06 00 43 - 00 0B EF 05 44 0A 9A 
+      TEXT  D.
+  Has used a credit. Number remaining = 198
+GOT data from Windows PC = D = instruction to disconnect
+SEND DATA 21 bytes = Server disconnecting...
+  Set [11] one length byte = 2B (length*2 + 1 to indicate 1 byte)
+  Set [3].. packet lengths 1D 00 19 00
+  Set [12].. 21 data bytes 53..
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [9] RFCOMM address 09
+  Set [33] FCS=40 calculated for 2 bytes from [9]
+< RFCOMM Address:Opcode = 09:EF  Send serial data
+      0000  02 0C 00 1D 00 19 00 42 - 00 09 EF 2B 53 65 72 76 
+      0010  65 72 20 64 69 73 63 6F - 6E 6E 65 63 74 69 6E 67 
+      0020  0A 40 
+
+SEND Close RFCOMM request (opcode 53)
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [9] RFCOMM address 09
+  Set [12] FCS=D9 calculated for 3 bytes from [9]
+< RFCOMM Address:Opcode = 09:53
+      0000  02 0C 00 08 00 04 00 42 - 00 09 53 01 D9 
+> Event 13 = 01 0C 00 01 00
+      0000  04 13 05 01 0C 00 01 00 
+> RFCOMM Address:Opcode 09:73
+      0000  02 0C 20 08 00 04 00 43 - 00 09 73 01 F3 
+GOT UA reply (opcode 73)
+
+SEND Close CONTROL request (opcode 53)
+  Set [1][2] handle 0C 00
+  Set [7][8] remote L2CAP channel 42 00
+  Set [12] FCS=FD calculated for 3 bytes from [9]
+< CONTROL Address:Opcode = 03:53
+      0000  02 0C 00 08 00 04 00 42 - 00 03 53 01 FD 
+> Event 13 = 01 0C 00 02 00
+      0000  04 13 05 01 0C 00 02 00
+       
+Expected UA reply - but not received
+
+SEND disconnect L2CAP channel. Choose id 08
+  Set [1][2] handle 0C 00
+  Set [10] id 08
+  Set [13][14] remote L2CAP channel 42 00
+  Set [15][16] local L2CAP channel 43 00
+< L2CAP 0001 Opcode:id = 06:08   Expects reply 07:08
+      0000  02 0C 00 0C 00 08 00 01 - 00 06 08 04 00 42 00 43 
+      0010  00 
+> L2CAP 0001 Opcode:id = 07:08  is reply from 06:08
+      0000  02 0C 20 0C 00 08 00 01 - 00 07 08 04 00 42 00 43 
+      0010  00 
+GOT L2CAP disconnect done reply
+
+SEND Close connection
+  Set [4][5] handle 0C 00
+< HCI OGF=01 OCF=06
+      0000  01 06 04 03 0C 00 13 
+> Event 0F = 00 01 06 04
+      0000  04 0F 04 00 01 06 04 
+> Event 13 = 01 0C 00 01 00
+      0000  04 13 05 01 0C 00 01 00 
+> Event 05 = 00 0C 00 16
+      0000  04 05 04 00 0C 00 16 
+GOT Disconnected OK (Event 05)
+Windows PC disconnected
+
+```
+
+## 5-3-8 SDP database operations
 
 The following procedure shows how to read a remote device's SDP database which
 can then be searched for RFCOMM serial channels. The btlib procedure is more 
@@ -3194,8 +4606,10 @@ This example shows how extra bytes and continue bytes are handled when there
 is too much returned data to fit in one packet.
 The details of decoding the SDP data will not be described here because the documentation
 at Vol 3,Part B,Section 3 is clear enough.
-This is followed by a guide to reading the local device's database via the standard
-bluez mechanism, and registering a new serial service.
+Examples of the other side of the connection (a server responding to SDP data requests) are
+included in the [Classic server simple](#5-3-6-classic-server-simple) and
+[Classic server pair and link key](#5-3-7-classic-server-pair-and-link-key) listings. The SDP
+database of a Mesh Pi set up as a Classic server is listed at the end of this section. 
 
 ```
 Read SDP database of Windows PC
@@ -3253,7 +4667,7 @@ SEND L2 config reply with received id
       0010  00 00 00 01 02 F5 03 
 Connect L2CAP psm 1 now done OK
 
-Read the SDP database
+Read the SDP database entries that contain the UUID 0100
 
 Because there is too much data to fit in one packet, it comes
 back in three packets that illustrate two mechanisms: extra
@@ -3423,6 +4837,7 @@ No continue bytes - done
 The SDP data from the three packets can now be assembled.
 Close the L2CAP channel and then decode the data.
 
+Disconnect psm 1 channel
 SEND disconnect L2CAP channel. Choose id 08
   Set [1][2] handle 0C 00
   Set [10] id 08
@@ -3431,8 +4846,19 @@ SEND disconnect L2CAP channel. Choose id 08
 < L2CAP 0001 Opcode:id = 06:08   Expects reply 07:08
       0000  02 0C 00 0C 00 08 00 01 - 00 06 08 04 00 40 00 44 
       0010  00 
-> Event 13 = 01 0C 00 02 00
-      0000  04 13 05 01 0C 00 02 00 
+> L2CAP 0001 Opcode:id = 06:0B  Must send reply 07:0B
+      0000  02 0C 20 0C 00 08 00 01 - 00 06 0B 04 00 44 00 40 
+      0010  00 
+
+GOT L2CAP disconnect psm 1 request - id 0B
+SEND L2CAP disconnect reply
+  Set [1][2] handle 0C 00
+  Set [10] id 0B
+  Set [13][14] local L2CAP channel 44 00
+  Set [15][16] remote L2CAP channel 40 00
+< L2CAP 0001 Opcode:id = 07:0B   is reply to 06:0B
+      0000  02 0C 00 0C 00 08 00 01 - 00 07 0B 04 00 44 00 40 
+      0010  00 
 > L2CAP 0001 Opcode:id = 07:08  is reply from 06:08
       0000  02 0C 20 0C 00 08 00 01 - 00 07 08 04 00 40 00 44 
       0010  00 
@@ -3466,211 +4892,9 @@ Decode SDP data 1202 bytes start 36 04 AF end 65 6E 74
       01 00 
     aid = 0201
         00 00 00 0A 
- **** RECORD 1 ****
-    aid = 0000
-        Handle 00 01 00 00 
-    aid = 0001
-      UUID 12 00 PnPInformation
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 01 
-        UUID 00 01 SDP
-    aid = 0005
-      UUID 10 02 
-    aid = 0006
-      65 6E 
-      00 6A 
-      01 00 
-    aid = 0100
-        Device ID Service Record
-    aid = 0101
-        Device ID Service Record
-    aid = 0200
-        01 03 
-    aid = 0201
-        00 06 
-    aid = 0202
-        00 01 
-    aid = 0203
-        0A 00 
-    aid = 0204
-        01 
-    aid = 0205
-        00 01 
- **** RECORD 2 ****
-    aid = 0000
-        Handle 00 01 00 01 
-    aid = 0001
-      UUID 11 15 PANU
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 0F 
-        UUID 00 0F BNEP
-        01 00 
-          08 00 
-          86 DD 
-          08 06 
-    aid = 0005
-      UUID 10 02 
-    aid = 0006
-      65 6E 
-      00 6A 
-      01 00 
-    aid = 0009
-        UUID 11 15 PANU
-        01 00 
-    aid = 0100
-        Personal Ad Hoc User Service 
-    aid = 0101
-        Personal Ad Hoc User Service 
-    aid = 030A
-        00 00 
- **** RECORD 3 ****
-    aid = 0000
-        Handle 00 01 00 02 
-    aid = 0001
-      UUID 11 0A AudioSource
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 19 
-        UUID 00 19 AVDTP
-        01 03 
-    aid = 0005
-      UUID 10 02 
-    aid = 0006
-      65 6E 
-      00 6A 
-      01 00 
-    aid = 0009
-        UUID 11 0D AdvancedAudioDist
-        01 03 
-    aid = 0100
-        Audio Source
-    aid = 0311
-        00 01 
- **** RECORD 4 ****
-    aid = 0000
-        Handle 00 01 00 03 
-    aid = 0001
-      UUID 11 0C A/V_RemoteCtrlTarget
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 17 
-        UUID 00 17 AVCTP
-        01 04 
-    aid = 0005
-      UUID 10 02 
-    aid = 0006
-      65 6E 
-      00 6A 
-      01 00 
-    aid = 0009
-        UUID 11 0E A/V_RemoteControl
-        01 06 
-    aid = 000D
-          UUID 01 00 L2CAP
-          00 1B 
-          UUID 00 17 AVCTP
-          01 04 
-    aid = 0100
-        Audio Video Remote Control Profile
-    aid = 0311
-        00 11 
- **** RECORD 5 ****
-    aid = 0000
-        Handle 00 01 00 04 
-    aid = 0001
-      UUID 11 0E A/V_RemoteControl
-      UUID 11 0F A/V_RemoteCtrlController
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 17 
-        UUID 00 17 AVCTP
-        01 04 
-    aid = 0005
-      UUID 10 02 
-    aid = 0009
-        UUID 11 0E A/V_RemoteControl
-        01 06 
-    aid = 000D
-          UUID 01 00 L2CAP
-          00 1B 
-          UUID 00 17 AVCTP
-          01 04 
-    aid = 0311
-        00 02 
- **** RECORD 6 ****
-    aid = 0000
-        Handle 00 01 00 05 
-    aid = 0001
-      UUID 11 0B AudioSink
-    aid = 0004
-        UUID 01 00 L2CAP
-        00 19 
-        UUID 00 19 AVDTP
-        01 03 
-    aid = 0005
-      UUID 10 02 
-    aid = 0006
-      65 6E 
-      00 6A 
-      01 00 
-    aid = 0009
-        UUID 11 0D AdvancedAudioDist
-        01 03 
-    aid = 0100
-        Audio Sink
-    aid = 0311
-        00 02 
- **** RECORD 7 ****
-    aid = 0000
-        Handle 00 01 00 06 
-    aid = 0001
-      UUID 11 1F HandsfreeAudioGateway
-      UUID 12 03 GenericAudio
-    aid = 0004
-        UUID 01 00 L2CAP
-        UUID 00 03 RFCOMM
-        RFCOMM channel = 1
-    aid = 0005
-      UUID 10 02 
-    aid = 0009
-        UUID 11 1E Handsfree
-        01 07 
-    aid = 0301
-        01 
-    aid = 0311
-        00 27 
- **** RECORD 8 ****
-    aid = 0000
-        Handle 00 01 00 07 
-    aid = 0001
-      UUID 11 1E Handsfree
-      UUID 12 03 GenericAudio
-    aid = 0004
-        UUID 01 00 L2CAP
-        UUID 00 03 RFCOMM
-        RFCOMM channel = 2
-    aid = 0005
-      UUID 10 02 
-    aid = 0009
-        UUID 11 1E Handsfree
-        01 07 
-    aid = 0311
-        00 37 
- **** RECORD 9 ****
-    aid = 0000
-        Handle 00 01 00 08 
-    aid = 0001
-      UUID C7 F9 47 13 89 1E 49 6A A0 E7 98 3A 09 46 12 6E 
-    aid = 0004
-        UUID 01 00 L2CAP
-        UUID 00 03 RFCOMM
-        RFCOMM channel = 3
-    aid = 0005
-      UUID 10 02 
-    aid = 0100
-        CDP Proximal Transport
+        
+ **** RECORDs 1-9 removed ****
+
  **** RECORD 10 ****
     aid = 0000
         Handle 00 01 00 09 
@@ -3689,126 +4913,35 @@ Decode SDP data 1202 bytes start 36 04 AF end 65 6E 74
 
 ```
 
-Reading the local SDP database is similar, but bluez is required. Because it uses
-bluez, this code cannot co-exist with btferret/btlib. A local
-file socket must be opened as follows:
+This is the SDP database of a Mesh Pi set up as a classic server. The UUID and
+name of Record 3 can be changed via [register\_serial](#4-2-34-register\_serial).
+Note that all three serial services connect on RFCOMM channel 1.
 
 ```
-To enable access to bluez the following will be necessary:
+ **** RECORD 0 ****  UUID 1200 device info
+    aid = 0000
+        Handle 00 01 00 00 
+    aid = 0001
+      UUID 12 00 PnPInformation
+    aid = 0005
+      UUID 10 02 
+    aid = 0009
+        UUID 12 00 PnPInformation
+        01 03 
+    aid = 0200
+        01 03 
+    aid = 0201
+        1D 6B 
+    aid = 0202
+        02 46 
+    aid = 0203
+        05 2B 
+    aid = 0204
+        01 
+    aid = 0205
+        00 02 
 
-MODIFY service file:
-
-sudo nano /lib/systemd/system/bluetooth.service
-Add -C to the ExecStart line so it reads:
-ExecStart=/usr.....bluetoothd -C
-reboot or restart the bluetooth service to implement the change
-
-If access to /var/run/sdp is denied, change its permissions or
-run the code with root priviledges from root or with sudo.
-
-
-int sock;
-struct sockaddr_un sax;
-     
-sock = socket(PF_UNIX,SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK,0);   
-sax.sun_family = AF_UNIX;
-   // SDP_UNIX_PATH is probably  /var/run/sdp
-strcpy(sax.sun_path,"/var/run/sdp");      
-connect(sock,(struct sockaddr *)&sax,sizeof(sax));    
-  // send packets via:  
-write(sock,packet,packetsize);
-  // read packets via:
-read(sock,buf,sizeof(buf);
- 
-*** NOTE packets do not have the 9-byte HCI header *** 
-
-So an SSA request packet starts with the opcode 06 and the SSA reply
-starts with the opcode 07
-
-To disconnect:
-
-close(sock);
-
-```
-
-Here is code to register two new serial services in the local SDP
-database, and then read the database to see the result. Note that
-the 9-byte HCI headers are absent. 
-
-```
-
-Open local SDP database as above
-
-We have previously determined that channels 1 and 2 are unused.
-
-Register 2-byte UUID=1101 Serial Port as channel 1
-  Set [4]  41 + name length 0B
-  Set [7]  38 + name length 0B
-  Set [14] UUID 1101
-  Set [32] channel 01
-  Set [45] name length 0B
-  Set [46].. name "Serial Port"
-< SDP 75
-      0000  75 00 01 00 34 01 35 31 - 09 00 01 35 03 19 11 01 
-      0010  09 00 04 35 0C 35 03 19 - 01 00 35 05 19 00 03 08 
-      0020  01 09 00 05 35 03 19 10 - 02 09 01 00 25 0B 53 65 
-      0030  72 69 61 6C 20 50 6F 72 - 74 
-> SDP 76
-      0000  76 00 01 00 04 00 01 00 - 01
-      
-    // error reply   01 00 01 00 02 00 03 = error 0003  v3,pB,4.4.1
-    // OK reply      76 00 01 00 04 00 01 00 01 = SDP handle 00010001                 
-   
-Done OK
-
-Register 16-byte UUID My Custom serial as channel 2
-  Set [4]  55 + name length 10
-  Set [7]  52 + name length 10
-  Set [14]..[29] UUID = FC F0 5A FD 67 D8 4F 41 83 F5 7B EE 22 C0 3C DB 
-  Set [46] channel 02
-  Set [59] name length 10
-  Set [60].. name "My Custom serial"
-< SDP 75
-      0000  75 00 01 00 47 01 35 44 - 09 00 01 35 11 1C FC F0 
-      0010  5A FD 67 D8 4F 41 83 F5 - 7B EE 22 C0 3C DB 09 00 
-      0020  04 35 0C 35 03 19 01 00 - 35 05 19 00 03 08 02 09 
-      0030  00 05 35 03 19 10 02 09 - 01 00 25 10 4D 79 20 43 
-      0040  75 73 74 6F 6D 20 73 65 - 72 69 61 6C 
-> SDP 76
-      0000  76 00 01 00 04 00 01 00 - 02 
-         
-Done OK
-
-Read SDP database of Local
-Find all UUID = 0003
-  Set [8][9] UUID
-  Set [17][18] last aid FF FF
-  Set [2] id 01
-  Set [4] length 0F
-  Set [19] continue bytes count = 0
-SEND SSA request all aid
-< SDP 06
-      0000  06 00 01 00 0F 35 03 19 - 00 03 FF FF 35 05 0A 00 
-      0010  00 FF FF 00 
-> SDP 07
-      0000  07 00 01 00 8E 00 8B 35 - 89 35 39 09 00 00 0A 00 
-      0010  01 00 01 09 00 01 35 03 - 19 11 01 09 00 04 35 0C 
-      0020  35 03 19 01 00 35 05 19 - 00 03 08 01 09 00 05 35 
-      0030  03 19 10 02 09 01 00 25 - 0B 53 65 72 69 61 6C 20 
-      0040  50 6F 72 74 35 4C 09 00 - 00 0A 00 01 00 02 09 00 
-      0050  01 35 11 1C FC F0 5A FD - 67 D8 4F 41 83 F5 7B EE 
-      0060  22 C0 3C DB 09 00 04 35 - 0C 35 03 19 01 00 35 05 
-      0070  19 00 03 08 02 09 00 05 - 35 03 19 10 02 09 01 00 
-      0080  25 10 4D 79 20 43 75 73 - 74 6F 6D 20 73 65 72 69 
-      0090  61 6C 00 
-GOT SSA reply
-No continue bytes - done
-
-Disconnect Local SDP as above
-
-Decode SDP info 139 bytes start 35 89 35 end 69 61 6C
-
- **** RECORD 0 ****
+ **** RECORD 1 **** Standard 2-byte serial 1101
     aid = 0000
         Handle 00 01 00 01 
     aid = 0001
@@ -3820,28 +4953,43 @@ Decode SDP info 139 bytes start 35 89 35 end 69 61 6C
     aid = 0005
       UUID 10 02 
     aid = 0100
-        Serial Port
- **** RECORD 1 ****
+        Serial2
+
+ **** RECORD 2 **** Standard 16-byte serial
     aid = 0000
         Handle 00 01 00 02 
+    aid = 0001
+      UUID 00 00 11 01 00 00 10 00 80 00 00 80 5F 9B 34 FB 
+    aid = 0004
+        UUID 01 00 L2CAP
+        UUID 00 03 RFCOMM
+        RFCOMM channel = 1
+    aid = 0005
+      UUID 10 02 
+    aid = 0100
+        Serial16
+
+ **** RECORD 3 **** UUID and name set by register_serial()
+    aid = 0000
+        Handle 00 01 00 03 
     aid = 0001
       UUID FC F0 5A FD 67 D8 4F 41 83 F5 7B EE 22 C0 3C DB 
     aid = 0004
         UUID 01 00 L2CAP
         UUID 00 03 RFCOMM
-        RFCOMM channel = 2
+        RFCOMM channel = 1
     aid = 0005
       UUID 10 02 
     aid = 0100
-        My Custom serial
+        My custom serial
+```
 
-``` 
-
-## 5-3-7 LE Procedures
+## 5-3-9 LE Procedures
 
 This connects to an LE device, writes a 1-byte characteristic with
 no acknowledge, writes a 2-byte characteristic with acknowledge, reads
-the 2-byte characteristic back, and disconnects. The commands use the 
+the 2-byte characteristic back, enables a characteristic notification and
+indication, receives a notify and indicate, and disconnects. The commands use the 
 [L2CAP 0004](#5-2-4-starting-02-channel-0004)  LE packet format. The connect opcode
 is documented at v2,pE,7.8.12, the Event 3E reply at 7.7.65.1. The read 
 opcodes are documented at v3,pF,3.4.4.3 and 3.4.4.4. The write
@@ -3897,7 +5045,49 @@ Read characteristic handle 001C - returns two bytes 34 56
 < L2CAP 0004 Opcode = 0A
       0000  02 40 00 07 00 03 00 04 - 00 0A 1C 00 
 > L2CAP 0004 Opcode = 0B
-      0000  02 40 20 07 00 03 00 04 - 00 0B 34 56    
+      0000  02 40 20 07 00 03 00 04 - 00 0B 34 56   
+      
+      
+Enable notify for characteristic handle 0016
+that has permission byte = 12  (notify + read)
+Do this by writing 2-byte value 1 to the next handle 0017
+(Disable by writing value 0)
+SEND write LE characteristic
+  Set [3][4] [5][6] packet lengths
+  Set [9] opcode 52
+  Set [10][11] characteristic handle 0017
+  Set [12].. 02 data bytes
+  Set [1][2] handle 40 00
+< L2CAP 0004 Opcode = 52
+      0000  02 40 00 09 00 05 00 04 - 00 52 17 00 01 00 
+
+Enable indicate for characteristic handle 0019
+that has permission byte = 22 (indicate + read)
+Do this by writing 2-byte value 1 to the next handle 001A
+(Disable by writing value 0)
+SEND write LE characteristic
+  Set [3][4] [5][6] packet lengths
+  Set [9] opcode 52
+  Set [10][11] characteristic handle 001A
+  Set [12].. 02 data bytes
+  Set [1][2] handle 40 00
+< L2CAP 0004 Opcode = 52
+      0000  02 40 00 09 00 05 00 04 - 00 52 1A 00 01 00 
+
+At any time, characteristic 0016 may send a notification as follows:
+> L2CAP 0004 Opcode = 1B
+      0000  02 40 20 09 00 05 00 04 - 00 1B 16 00 12 34 
+Notify value of 0016 = 12 34
+
+At any time, characteristic 0019 may send an indication as follows:
+> L2CAP 0004 Opcode = 1D
+      0000  02 40 20 09 00 05 00 04 - 00 1D 19 00 12 34 
+Indicate value of 0019 = 12 34
+Then the indication must be acknowledged as follows:
+  Set [1][2] handle 40 00
+< L2CAP 0004 Opcode = 1E
+      0000  02 40 00 05 00 01 00 04 - 00 1E 
+       
       
 SEND Close connection
   Set [4][5] handle 40 00
@@ -3913,7 +5103,7 @@ GOT Disconnected OK (Event 05)
 
 ```
 
-## 5-3-8 Read LE services
+## 5-3-10 Read LE services
 
 This reads a list of characteristic UUIDs and handles from an
 LE device. The read UUID opcode is documented at v3,pF,3.4.4.1 and 
@@ -4031,7 +5221,7 @@ GOT Disconnected OK (Event 05)
 
 ```
 
-## 5-3-9 LE scan
+## 5-3-11 LE scan
 
 This searches for active LE devices and reads their advertising
 data. Information on decoding the advertising data can be found at
@@ -4347,6 +5537,269 @@ MainActivity.java
   mmSocket.close();
   mmServerSocket.close(); 
 
+```
+
+## 5-5 Client Code
+
+The following sections are intended as a brief guide to writing client
+code for other machines from scratch. The listings are not fully workable
+code. They are mostly code fragments, with no error checking, that give an
+indication of how to get started.  
+
+
+## 5-5-1 Windows COM port
+
+Probably the easiest way to program a Windows client because the
+operating system does the work and presents the connection as a
+COM port, which must first be set up as follows:
+
+Start/Settings/Devices/Bluetooth ON
+
+Start/Settings/Devices/More Bluetooth Options/COM Ports/Add..
+
+Select Outgoing/Browse 
+
+The Pi must be listening as a classic server (via classic_server()), it should appear
+as an available device. When selected, the available serial channels Serial2 and
+Serial16 should be reported. Choose one and it will report the assigned
+port e.g, COM3 - this number is needed for the following code.
+
+```c
+
+  HANDLE hCom;
+  COMMTIMEOUTS cto;
+  int comport;
+  static char serport[8] = {"COMx"};
+
+     // connect to server via outgoing COM port = comport
+  
+  comport = 3;    // for example COM3
+         
+     // replace x in serport[] with COM port number
+
+  serport[3] = (char)(comport + '0');
+  
+    // CreateFile connects to listening server
+
+  hCom = CreateFile( serport,
+    GENERIC_READ | GENERIC_WRITE,
+    0,    // exclusive-access 
+    NULL, // no security attributes 
+    OPEN_EXISTING,  
+    0,     // 0=not overlapped I/O  or FILE_FLAG_OVERLAPPED
+    NULL   // hTemplate 
+    );
+
+   // set time outs
+
+  cto.ReadIntervalTimeout = 5; 
+  cto.ReadTotalTimeoutMultiplier=5; 
+  cto.ReadTotalTimeoutConstant=5; 
+  cto.WriteTotalTimeoutMultiplier=5; 
+  cto.WriteTotalTimeoutConstant=5; 
+
+  SetCommTimeouts(hCom,&cto);
+  
+    // hCom is now an open connection to client
+    
+    // Read/write serial data
+    
+  ReadFile(hCom,buf,count,&nread,NULL); 
+  WriteFile(hCom,buf,count,&nwrit,NULL);  
+  
+      // disconnect   
+  CloseHandle(hCom); 
+  
+```
+
+## 5-5-2 Windows Sockets
+
+This code sets up a Bluetooth socket directly rather than going via a 
+COM port, and connects to a listening btferret classic server 
+on RFCOMM channel 1 without the need to use a UUID.
+
+```c
+#include <ws2bth.h>    
+#include <winsock2.h>  
+
+  struct WSAData wsadata;
+  int errnum,retval;
+  unsigned char *dp;
+  SOCKADDR_BTH  remoteadd;  
+  SOCKET LocalSocket;
+  GUID *uuid;
+  u_long arg;
+  fd_set wrset;
+  fd_set exset;
+  struct timeval tv;
+  
+  
+    // Start WSA once only   
+  WSAStartup((WORD)(2 + (2 << 8)), &wsadata);
+  
+    // connect to listening btferret classic server
+ 
+  dp = (char*)&remoteadd.btAddr; // length=8
+                            
+  // connect to Bluetooth board address 11:22:33:44:55:66
+  // set dp[] in reverse order
+  
+  dp[0] = 0x66;
+  dp[1] = 0x55;
+  dp[2] = 0x44;
+  dp[3] = 0x33;
+  dp[4] = 0x22;
+  dp[5] = 0x11;
+  dp[6] = 0;
+  dp[7] = 0;
+        
+  remoteadd.addressFamily = AF_BTH;
+  
+  uuid = &remoteadd.serviceClassId;
+
+  // btferret classic servers listen on channel 1 so there
+  // is no need to go via a UUID
+  
+  remoteadd.port = 1;   // RFCOMM channel 1  
+  uuid->Data1 = 0;  
+  uuid->Data2 = 0;
+  uuid->Data3 = 0;
+  uuid->Data4[0] = 0;
+  uuid->Data4[1] = 0;
+  uuid->Data4[2] = 0;
+  uuid->Data4[3] = 0;
+  uuid->Data4[4] = 0;
+  uuid->Data4[5] = 0;
+  uuid->Data4[6] = 0;
+  uuid->Data4[7] = 0;
+ 
+  LocalSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+  arg = 1;
+  ioctlsocket(LocalSocket,FIONBIO,&arg);  // set non-blocking
+  
+  if(SOCKET_ERROR == connect(LocalSocket,
+          (struct sockaddr *)&remoteadd,sizeof(SOCKADDR_BTH)) )   
+    {
+    errnum = WSAGetLastError();
+    if(errnum == WSAEWOULDBLOCK)
+      {  // connect() non blocking so returns immediately
+         // and it may be necessary to wait for connect to complete
+         // Wait with 30s time out until select() sees connection        
+      FD_ZERO(&wrset);
+      FD_ZERO(&exset);
+
+      FD_SET(LocalSocket, &wrset);
+      FD_SET(LocalSocket, &exset);
+
+      //wait 30 sec for connect to finish
+      tv.tv_sec = 30;
+      tv.tv_usec = 0;
+      retval = select(0, 0, &wrset,0,&tv);
+      if(retval > 0 && retval < 8)
+        errnum = 0;   // OK 
+      }
+    if(errnum != 0)
+      {
+      // Connect fail
+      closesocket(LocalSocket);
+      return;
+      }
+    }
+ 
+   // LocalSocket is now an open serial channel to the server
+
+   // read/write serial data
+   
+  recv(LocalSocket,buf,count,0);   
+  send(LocalSocket,buf,count,0);
+
+   // close connection
+   
+  closesocket(LocalSocket);    
+
+```
+
+
+## 5-5-3 Android
+
+This code connects to a listening btferret classic server via the standard
+16-byte UUID serial service.
+
+```
+AndroidManifest.xml 
+
+  <uses-permission android:name="android.permission.BLUETOOTH" />
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+
+MainActivity.java
+
+  import android.bluetooth.BluetoothAdapter;
+  import android.bluetooth.BluetoothDevice;
+  import android.bluetooth.BluetoothServerSocket;
+  import android.bluetooth.BluetoothSocket;
+  import android.content.BroadcastReceiver;
+  import java.io.File;
+  import java.io.IOException;
+  import java.io.InputStream;
+  import java.io.OutputStream;
+  import java.io.FileOutputStream;
+  import java.util.Set;
+  import java.util.UUID;
+  import java.io.InputStreamReader;
+  import java.io.OutputStreamWriter;
+
+  BluetoothAdapter mBluetoothAdapter;
+  BluetoothDevice bluedev;  
+  BluetoothSocket mmSocket;
+  InputStream instream;
+  OutputStream outstream;  
+
+     // initialise on program start
+
+  mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+  if(!mBluetoothAdapter.isEnabled())
+    {
+    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+    startActivity(enableBtIntent);
+    } 
+  
+  // connect to server address B8:27:EB:F1:50:C3 as client
+  // via standard 16-byte serial service UUID.
+  
+  // bluedev may also be set by finding a device in the paired
+  // devices list via: mBluetoothAdapter.getBondedDevices()
+  // or by scanning for active devices by setting up a BroadcastReceiver
+  // for mBluetoothAdapter.startDiscovery()
+  
+  bluedev =  mBluetoothAdapter.getRemoteDevice("B8:27:EB:F1:50:C3");           
+  mmSocket = bluedev.createInsecureRfcommSocketToServiceRecord(
+                  UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));  
+              
+  // Connect to the remote device through the socket. This call blocks
+  // until it succeeds or throws an exception. 12s time out?
+  
+  mmSocket.connect();                  
+
+  instream = mmSocket.getInputStream();
+  outstream = mmSocket.getOutputStream();  
+
+     // instream/outstream are now open connections to client
+
+     // read/write serial data
+
+  if(instream.available() > 0)
+    data = instream.read();
+
+  outstream.write(data);
+
+     // disconnect
+
+  instream.close();
+  outstream.close();
+  mmSocket.close();             
+    
 ```
 
 ## 6 Documentation References

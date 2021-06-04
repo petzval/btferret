@@ -39,17 +39,20 @@ int clientsend(int fun);
 int server(void);
 int node_callback(int clientnode,char *buf,int nread);
 int mesh_callback(int clientnode,char *buf,int nread);
-int nodeserver(void);
+int notify_callback(int lenode,int cticn,char *buf,int nread);
 void localdisconnect(void);
+void readnotify(void);
 void readle(void);
 void writele(void);
+void notifyle();
 void getstring(char *prompt,char *s,int len);
-
+void readnotify(void);
+void regserial(void);
 
 char termchar = 10;  // terminate char for string sent from client
 char repchar = 10;   // terminate char for reply sent from server
 
- 
+
 int main(int argc,char *argv[])
   { 
   if(init_blue("devices.txt") == 0)
@@ -67,7 +70,7 @@ int main(int argc,char *argv[])
 
 void btlink()
   {
-  int cmd;
+  int cmd,n;
   char cmds[64];
   
   printf("h = help\n");
@@ -154,6 +157,18 @@ void btlink()
       case 'w':
         writele();
         break;
+  
+      case 'j':
+        notifyle();
+        break;
+             
+      case 'g':
+        regserial();
+        break;
+
+      case 'R':
+        readnotify();
+        break;
         
       case 'm':
         mesh_on();
@@ -182,17 +197,18 @@ void btlink()
 void printhelp()
   {
   printf("\n  HELP\n");
-  printf("  a Scan for Classic devices       i Print device info\n");
-  printf("  b Scan for LE/Mesh devices       k Settings\n");   
-  printf("  c Connect to a node              p Ping node server\n");
-  printf("  t Send string to node server     T Send string to mesh\n");
-  printf("  r Read LE characteristic         w Write LE characteristic\n");
-  printf("  d Disconnect                     D Tell server to disconnect\n");  
-  printf("  s Become a listening server      f Send file to node server\n");
-  printf("  v Read node services             y Read node UUID matches\n");
-  printf("  o Save screen output to file    [] Scroll screen back/forward\n"); 
-  printf("  m Mesh transmit on               n Mesh transmit off\n");                     
-  printf("  h Print this help                q Quit \n");
+  printf("  a Scan for Classic devices    i Print device info\n");
+  printf("  b Scan for LE/Mesh devices    k Settings\n");   
+  printf("  c Connect to a node           p Ping server\n");
+  printf("  t Send string to server       T Send string to mesh\n");
+  printf("  r Read LE characteristic      w Write LE characteristic\n");
+  printf("  d Disconnect                  D Tell server to disconnect\n");  
+  printf("  s Become a listening server   f Send file to server\n");
+  printf("  v Read node services          y Read node UUID matches\n");
+  printf("  o Save screen output to file  g Register custom serial UUID\n");  
+  printf("  j LE notify/indicate on       R Read notifications\n");                     
+  printf("  m Mesh transmit on            n Mesh transmit off\n");                     
+  printf("  q Quit                        [] Scroll screen back/forward\n"); 
   }
 
 
@@ -306,38 +322,50 @@ int clientsend(int cmd)
 
 int server()
   {
-  int serverflag;
+  int serverflag,clinode,keyflag;
   
-  printf("\n  0 = mesh server\n  1 = node server\n");
+  printf("\n  0 = mesh server\n  1 = node server\n  2 = classic server\n");
   serverflag = inputint("Input server type 0/1/2");
   if(serverflag < 0)
     return(0);
   if(serverflag == 0)
     mesh_server(mesh_callback);
-  else if(serverflag == 1)
-    nodeserver();
-  else
+  else if(serverflag == 1 || serverflag == 2)
+    {
+    printf("\nInput node of client that will connect\n");
+  
+    clinode = inputnode(BTYPE_ME | BTYPE_CL,0);  
+    if(clinode < 0)
+      {
+      printf("Cancelled\n");
+      return(0);
+      }
+    if(serverflag == 1)
+      node_server(clinode,node_callback,termchar);
+    else
+      {
+      keyflag = inputint("\nUse link key 0=no 1=yes");
+      if(keyflag < 0)
+        {
+        printf("Cancelled\n");
+        return(0);
+        }
+      if(keyflag == 1)
+        keyflag = KEY_ON;
+      else
+        keyflag = KEY_OFF;
+        
+      printf("\nServer will listen on channel 1 and any of the following UUIDs\n");
+      printf("  Standard serial 2-byte 1101\n");
+      printf("  Standard serial 16-byte\n");
+      printf("  Custom serial set via register serial\n");
+      classic_server(clinode,node_callback,termchar,keyflag);
+      }
+    }   
+   else
     printf("Invalid type\n");
   return(0);
   }  
-    
-int nodeserver()
-  {
-  int clinode,retval;
-   
-  printf("\nInput node of mesh client that will connect\n");
-  clinode = inputnode(BTYPE_ME,0);  
-  if(clinode < 0)
-    {
-    printf("Cancelled\n");
-    return(0);
-    }
-  
-  retval = node_server(clinode,node_callback,termchar);
-    
-  return(1);
-  }    
-    
  
 int mesh_callback(int clientnode,char *buf,int nread)
   {
@@ -363,8 +391,9 @@ int node_callback(int clientnode,char *buf,int nread)
   {
   int n,k;
   char firstc;
-   
-  if(buf[0] == termchar || (buf[0] != 0 && buf[1] == termchar) || buf[0] == 'F')
+     
+  if(buf[0] == termchar || (nread == 2 && buf[0] != 0 && buf[1] == termchar) || 
+         (nread == 3 && buf[0] != 0 && buf[1] <= 13 && buf[2] == termchar) || buf[0] == 'F')
     firstc = buf[0];  // is a single char or F receive file 
   else
     firstc = 0;       // more than one char - not a single char command  
@@ -384,8 +413,8 @@ int node_callback(int clientnode,char *buf,int nread)
   // check if received string is a known command 
   // and send reply to client
           
-  if(firstc == termchar)
-    {
+  if(firstc == termchar || firstc == 'p')
+    {    
     printf("Ping\n");
     sendstring(clientnode,"OK",repchar);  // REPLY 2=add repchar   
     }
@@ -419,7 +448,7 @@ int node_callback(int clientnode,char *buf,int nread)
 
 int clientconnect()
   {
-  int node,channel,method,retval;
+  int node,channel,method,retval,contype;
     
      // only disconnected devices
   node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_ME,0);
@@ -430,6 +459,11 @@ int clientconnect()
     return(0);
     }
    
+  if(device_type(node) == BTYPE_ME)
+    contype = inputint("\n  0 = Node server\n  1 = Classic server\nInput listening type of remote device");
+  else
+    contype = 0;
+   
   if(device_type(node) == BTYPE_CL)
     {  // classic server needs channel and method  
     if(inputchan(node,&channel,&method) < 0)
@@ -438,10 +472,28 @@ int clientconnect()
       return(0);
       }   
     }
-  else
-    {  // LE and Mesh devices do not use channel/method
-    channel = 0;
-    method = 0;
+  else if(device_type(node) == BTYPE_ME)
+    {  
+    if(contype == 0)
+      {  // node server
+      channel = 0;
+      method = CHANNEL_NODE;
+      }
+    else if(contype == 1)
+      {  // classic server
+      channel = 1;  // mesh classic listens on channel 1
+      method = CHANNEL_NEW;
+      }
+    else
+      {
+      printf("Invalid listening type\n");
+      return(0);
+      }
+    }
+  else if(device_type(node) != BTYPE_LE)
+    {
+    printf("Invalid device type\n");
+    return(0);
     }
   
   retval = connect_node(node,method,channel);
@@ -495,7 +547,23 @@ void settings()
     }
   }
 
+void readnotify()
+  {
+  int timeout;
+    
+  timeout = inputint("\nRead notifications\nInput time out in s");
+  if(timeout < 0)
+    {
+    printf("Cancelled\n");
+    return;
+    }
 
+  read_notify(timeout*1000);
+  
+  printf("Read notifications finished\n");
+  return;
+  }
+  
   
 /*********** READ SERVICES *************/
 
@@ -506,14 +574,18 @@ void readservices()
   
   printf("\nRead services\n");
   
-  node = inputnode(BTYPE_CL | BTYPE_LE,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME,0);
   if(node < 0)
     return;
  
   if(device_type(node) == BTYPE_LE)
     find_ctics(node);
   else  // CLASSIC
+    {
+    if(device_type(node) == BTYPE_ME)
+      printf("Mesh node must be listening as a classic server\n");
     list_channels(node,LIST_FULL);
+    }
   }
   
   
@@ -524,10 +596,13 @@ void readuuid()
 
   printf("\nList services that contain a specified UUID\n");
   
-  node = inputnode(BTYPE_CL | BTYPE_LE,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME,0);
   if(node < 0)
     return;
-       
+
+  if(device_type(node) == BTYPE_ME)
+    printf("Mesh node must be listening as a classic server\n");
+      
   printf("Input 2-byte UUID in hex e.g. 0100  (x = cancel)\n");
 
   getstring("? ",suuid,32);
@@ -597,7 +672,7 @@ int sendfile()
     nblock = 400;  // node connect max block size
          
     // clear all packets from input buffer
-  read_all_clear();
+  read_node_clear(servernode);
 
   printf("Enter file name e.g.  /home/pi/doc.txt  (x = cancel)\n");
   
@@ -787,7 +862,7 @@ int sendfile()
 
   if(getout != 0)
     {  // error may have left ack in buffer
-    read_all_clear();
+    read_node_clear(servernode);
     printf("Timed out\n");
     return(0);
     }   
@@ -825,7 +900,6 @@ int receivefile(char *fname,int clientnode)
   int n,k,len,key,ntogo,nblock,bn,bcount,nread,getout;
   unsigned char c,lens[8],temps[1024],chksum;
   unsigned short crc,bwd;
-
 
   if(fname[0] == '\0')
     {
@@ -886,7 +960,7 @@ int receivefile(char *fname,int clientnode)
     if(nread == nblock)   // got nblock chars
       {
       for(bn = 0 ; bn < nblock ; ++bn)
-        {
+        { 
         if(ntogo > 2)        // not last 2 crc bytes
           fputc(temps[bn],stream);
         --ntogo;
@@ -919,19 +993,16 @@ int receivefile(char *fname,int clientnode)
   
   fclose(stream);
 
-  if(getout != 0)
+  if(getout != 0 || crc != 0)
     {   // error may have left data in buffer
-    read_all_clear();
-    printf("Timed out\n");
+    read_node_clear(clientnode);
+    if(getout != 0)
+      printf("Timed out\n");
+    else
+      printf("CRC error\n"); 
     return(0);
     }
-    
-  if(crc !=  0)
-    {  
-    printf("CRC error\n");
-    return(0);
-    }
-    
+       
   printf("OK\n");
   return(1);    
   }  
@@ -1001,6 +1072,7 @@ int meshsend()
 void readle()
   {
   int n,k,xn,node,cticn,chand,ascflag,len,maxlen,datlen;
+  int notflag;
   char dat[64];
   
   printf("\nRead an LE characteristic\n");
@@ -1017,12 +1089,11 @@ void readle()
     printf("No readable characteristics. Read services to find\n");
     return;
     }
- 
       
   cticn = inputint("Input ctic index");
   if(cticn < 0)
     return;
-      
+       
   datlen = read_ctic(node,cticn,dat,sizeof(dat));
   
   if(datlen == 0)
@@ -1082,6 +1153,107 @@ void writele()
    
   }
 
+
+void notifyle()
+  {
+  int node,cticn,flag;
+  char *s;
+
+     
+  printf("\nEnable/Disable LE characteristic notify/indicate\n"); 
+  
+  node = inputnode(BTYPE_LE | BTYPE_CONNECTED,0);  // only connected LE devices
+  if(node < 0)
+    {
+    printf("Cancelled\n");
+    return;
+    }
+  
+  if(list_ctics(node,LIST_SHORT | CTIC_NOTIFY) == 0)
+    {
+    printf("No characteristics with notify/indicate permission\n");
+    return;
+    }
+       
+  cticn = inputint("Input ctic index");
+  if(cticn < 0)
+    return; 
+
+  if(ctic_ok(node,cticn) == 0)
+    {
+    printf("Invalid index\n");
+    return;
+    }
+
+  flag = inputint("0=Disable 1=Enable");
+  if(flag < 0)
+    return;
+    
+  if(flag == 1)
+    {
+    flag = NOTIFY_ENABLE;
+    s = "enabled";
+    }
+  else
+    {
+    flag = NOTIFY_DISABLE;
+    s = "disabled";
+    }
+
+  notify_ctic(node,cticn,flag,notify_callback);
+  
+  printf("%s %s %s\n",device_name(node),ctic_name(node,cticn),s);
+ 
+  return;
+  }   
+
+
+int notify_callback(int lenode,int cticn,char *buf,int nread)
+  {
+  int n;
+  
+  // LE device has sent notification or indication enabled by notify_ctic()
+  
+  printf("%s %s notify =",device_name(lenode),ctic_name(lenode,cticn));
+  for(n = 0 ; n < nread ; ++n)
+    printf(" %02X",buf[n]);
+  printf("\n");
+  return(0);
+  }
+
+
+void regserial()
+  {
+  int n;
+  char c,name[128],uuid[64],*newcustom;
+  
+  printf("\nRegister a custom serial service\n");
+  
+  printf("Input 16-byte UUID e.g. 0011-2233-44556677-8899AABBCCDDEEFF (x = cancel)\n");
+  getstring("? ",uuid,64);
+  
+  if(uuid[0] == 'x')
+    return;
+
+  newcustom = strtohex(uuid,&n);
+   
+  if(n != 16)
+    {
+    printf("UUID must be 16 bytes\n");
+    return;
+    }     
+    
+  printf("Input service name (x = cancel)\n");
+  getstring("? ",name,128); 
+
+  if(name[0] == 'x')
+    return;
+    
+  register_serial(newcustom,name);
+  printf("Done\n");
+  }
+
+  
 
 /********** USER INPUT FUNCTIONS *******/
  

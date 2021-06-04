@@ -15,8 +15,9 @@
 #define EXIT_KEY      2 
    
    // RFCOMM channel for connect_node()
-#define CHANNEL_STORED  0  
-#define CHANNEL_NEW     1
+#define CHANNEL_NODE    0
+#define CHANNEL_STORED  1  
+#define CHANNEL_NEW     2
  
    // regservice flags
 #define UUID_2  0
@@ -27,6 +28,7 @@
 #define LIST_FULL  1
 #define CTIC_R       (1 << 4)
 #define CTIC_W       (1 << 5)
+#define CTIC_NOTIFY  (1 << 6)
 
   // callback returns
 #define SERVER_CONTINUE 0
@@ -42,8 +44,19 @@
 #define PRINT_NORMAL  1
 #define PRINT_VERBOSE 2
 
+  // LE notify
+#define NOTIFY_ENABLE  1
+#define NOTIFY_DISABLE 2
+
+  // link key
+#define KEY_OFF 0
+#define KEY_ON  1
+
+
+
 
 void classic_scan(void);
+int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag);
 void close_all(void);
 
 int connect_node(int node,int channelflag,int channel);
@@ -61,6 +74,7 @@ int find_ctics(int node);
 int find_ctic_index(int node,int flag,char *uuid);
 
 int init_blue(char *filename);
+int init_blue_ex(char *filename,int hcin);
 
 void le_scan(void);
 
@@ -76,7 +90,10 @@ void mesh_server(int (*callback)());
 
 int node_server(int clientnode,int (*callback)(),char endchar);
 
+int notify_ctic(int node,int cticn,int notifyflag,int (*callback)());
+
 int output_file(char *filemame);
+
 
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize);
 int read_error(void);
@@ -91,6 +108,9 @@ int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag
 void read_node_clear(int node);
 void read_all_clear(void);
 
+void read_notify(int timeoutms);
+
+void register_serial(char *uuid,char *name);
 
 void scroll_back(void);
 void scroll_forward(void);

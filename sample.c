@@ -71,7 +71,7 @@ int hubnode()
   
   printf("Connect to node 2 as a node server\n");
   
-  if(connect_node(2,0,0) == 0)  // 2nd/3rd parameters 0,0 ignored for mesh nodes
+  if(connect_node(2,CHANNEL_NODE,0) == 0)  // 3rd parameter ignored
     printf("Connect node error\n");
      
   // send node packet to node 2 = 7 5 10
