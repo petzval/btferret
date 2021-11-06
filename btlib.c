@@ -3545,14 +3545,16 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
       k = insdat[n+4];
       if(k > 19)
         k = 0;  // no errorle text
-      NPRINT "  Error %d %s\n",insdat[n+4],errorle[k]); 
-      }
-     
+      NPRINT "  Error %d %s\n",insdat[n+4],errorle[k]);
+      popins();
+      flushprint();
+      return(0); 
+      }  
     }
   
   popins();
   flushprint();     
-  return(0);
+  return(count);
   }
 
 

@@ -92,7 +92,7 @@ btferret/btlib Bluetooth Interface
 
 ## 1 Introduction
 
-This is a Bluetooth interface that has been developed for Raspberry Pis.
+This is a C Bluetooth interface that has been developed for Raspberry Pis.
 
 A Pi running this interface can connect simultaneously to multiple Classic and LE devices,
 and also to a mesh network of other Pis running the same software.
@@ -101,9 +101,10 @@ There is a library of functions ([btlib](#4-btlib-library)) and a sample program
 ([btferret](#3-2-btferret)) that implements most of
 the interface features such as connecting to other devices, operating as a client or server,
 exchanging data (including a file
-transfer routine) and display of information - it is a bit like a super bluetoothctl that won't drive
-you mad. It has a verbose print mode that displays the HCI Bluetooth traffic with details of
-the packets that are exchanged.
+transfer routine) and display of information - it is a bit like bluetoothctl. Many Bluetooth
+operations can
+be run from the btferret command line, and this document describes how the same thing (and more) can
+then be done via your own C code.  
 
 Also included is the code for a simple [mesh network example](#3-8-sample).
 
@@ -112,6 +113,8 @@ of the HCI Bluetooth interface, the packet formats and how they are constructed,
 and the sequence of instructions
 needed to establish connections and exchange data. This information
 is difficult to extract in a coherent form from the Bluetooth specification documents.
+The library functions have a verbose print mode that displays the HCI Bluetooth traffic with details of
+the packets that are exchanged.
 
 There are [server code](#5-4-server-code) and [client code](#5-5-client-code) sections
 that are brief guides to writing code
@@ -164,6 +167,26 @@ network (see the [init_blue](#4-2-15-init\_blue) documentation).
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify the btferret.c or sample.c examples.
+Here is a minimum starting C program, mycode.c.
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
+
+int main()
+  {
+  if(init_blue("devices.txt") == 0)
+    return(0);
+  
+  // your code here
+  
+  close_all();
+  return(0);
+  }
+
+```
+
 Compile and link to the library functions in btlib.c.
 
 ```
