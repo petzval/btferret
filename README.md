@@ -7,7 +7,7 @@ btferret/btlib Bluetooth Interface
 - [1 Introduction](#1-introduction)
 - [2 File list and compile](#2-file-list-and-compile)
 - [3 Interface](#3-interface)
-    - [3.1 Networks](#3-1-networks)
+    - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
     - [3.3 Windows-Android-HC-05 Classic servers](#3-3-windows-android-hc-05-classic-servers) 
     - [3.4 Windows-Android Classic clients](#3-4-windows-android-classic-clients)        
@@ -200,21 +200,33 @@ sudo ./mycode
 ## 3 Interface  
    
 
-## 3-1 Networks
+## 3-1 Bluetooth Connections
 
-A Mesh Pi running btferret/btlib can operate as a client or as three types of server:
-mesh, node (LE) or classic.
+There are two flavours of Bluetooth - Classic and LE (low energy). In the Classic case, a client
+connects to a listening server and the two can then exchange large amounts of serial data. A Pi running btferret/btlib
+can act as a Classic client or server. The connecting server/client can be another Pi running btferret or any Bluetooth-capable
+device such as a PC or Android running a Blueooth app such as a serial terminal.
 
-Any Mesh Pi can connect as a client to multiple Classic and LE servers.
+The original idea behind LE is that the server is a measurement device such as a temperature monitor. An LE client connects
+to the server, reads a value, and then disconnects. The data transferred is just a few bytes.
+The values are called characteristics, and the client can interrogate the server to find what
+services (characteristics) are available. They can
+be readable, writeable or both. A Pi running btferret/btlib
+can act as an LE client and read/write characteristics, but cannot act as an LE server.
+LE characteristics can also have a notify property whereby the value is transmitted when it changes - without being asked
+by the client. The client must enable the characteristic's notification process for this to work.
 
-A Classic client can connect to a Mesh Pi acting as a classic server.
+The use of LE has expanded beyond
+this original concept and now includes LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
+that can be contolled by writing to its characteristics for remote control applications.
 
-Two Mesh Pis can establish a one-to-one node (LE) or classic connection and
-exchange packets. These packets are sent once.
+In addition to the above standard funtionality, btferret has two custom types of connection: mesh and node. These 
+connections can only be made between two Pis running btferret/btlib.
+The mesh functions use Bluetooth advertising data to repeatedly send a small number of bytes to all other Mesh Pis. The node client/server
+functions use an LE connection to exchange large amounts of data, but more slowly than a Classic connection,
+and only between two Pis. Other devices will not recognise a btferret node client/server.
 
-A mesh server receives all mesh packets that
-any other Mesh Pi broadcasts. A broadcasting device sends its packet repeatedly - not just once.
-A receiving device will read each packet once and ignore subsequent repeats.
+Multiple connections of all the above types can be open simultaneously.
 
 Don't expect too much of the speeds here. The mesh packet repeat rate may only be around once per
 second, btferret's file transfer speed is about 2000 bytes/s for a NODE
@@ -2535,7 +2547,9 @@ byte count of the packet.
 ## ***** WARNING ****
 
 Mesh packets are transmitted publically with no encryption and can be read by
-any Bluetooth device in the vicinity, so they are NOT SECURE.
+any Bluetooth device in the vicinity, so they are NOT SECURE. Be aware that a
+rogue device could impersonate one of your Pis by sending the appropriate
+mesh packets. To send secure encrypted data use a Classic client/server connection.
 
 PARAMETERS
 
