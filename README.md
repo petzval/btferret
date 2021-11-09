@@ -217,8 +217,9 @@ LE characteristics can also have a notify property whereby the value is transmit
 by the client. The client must enable the characteristic's notification process for this to work.
 
 The use of LE has expanded beyond
-this original concept and now includes LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
-that can be contolled by writing to its characteristics for remote control applications.
+the original concept and now includes LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
+that can be contolled by writing to its characteristics for remote control applications. This separate document [RN4020.md](RN4020.md)
+describes the use of btlib functions and an RN4020 for motor speed control.
 
 In addition to the above standard funtionality, btferret has two custom types of connection: mesh and node. These 
 connections can only be made between two Pis running btferret/btlib.
