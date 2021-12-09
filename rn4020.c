@@ -10,21 +10,22 @@ int main()
   if(init_blue("rn4020.txt") == 0)
     return(0);
 
-   // connect to RN4020 - LE only needs first parameter node=2
+   // connect to RN4020 - just need node=2
   if(connect_node(2,0,0) == 0)
     return(0);
        
    // RN4020 node = 2
    // Direction = 0  forward
-   // Speed = 16 
-  motorcontrol(2,0,16);
+   // Speed = 20 
+  motorcontrol(2,0,20);
   sleep(4);
-    //  Speed = 24
-  motorcontrol(2,0,24);
+    //  Speed = 30
+  motorcontrol(2,0,30);
   sleep(4);
     //  Speed = 0
   motorcontrol(2,0,0);
-  
+  sleep(1);
+    
     // disconnect RN4020
   disconnect_node(2);
   
@@ -36,43 +37,39 @@ int main()
 /*********** MOTOR CONTROL **************
  node = node of RN4020
  dirn = direction  0=forward   1=back
- speed = 0 to 32
+ speed = 0 to 64
 **********************************/       
 
 int motorcontrol(int node,int dirn,int speed)
   {
-  unsigned char dat;    
+  int ctl;
+  unsigned char dat[16];    
    
-  if(speed < 0 || speed > 32)
+  if(speed < 0 || speed > 64)
     {
     printf("Invalid speed\n");
     return(0);
     }
  
-   // decide Control characteristic (script will send to dirn and enable pins)
   if(speed == 0)         
-    dat = 4;            // STOP      enable hi,  dirn lo
-  else if(dirn == 0)
-    dat = 0;            // FORWARD   enable lo,  dirn lo
+    {
+    dat[0] = 0;   // data byte - ignored
+      // write to Stop characteristic index 1
+    write_ctic(node,1,dat,0);    // calls ?FUNC2 sets enable hi, 
+                                 // dirn lo, and stops PWM signal
+    return(1);
+    }
+    
+  if(dirn == 0)
+    ctl = 0;     // FORWARD   enable lo,  dirn lo
   else
-    dat = 2;            // BACKWARD  enable lo,  dirn hi
+    ctl = 2;     // BACKWARD  enable lo,  dirn hi
 
-    // write Control ctic index 1
-    // the ctic index is determined by the order of listing in rn4020.txt
-    // last parameter can be 0 because rn4020.txt has specified the size=1
-  write_ctic(node,1,&dat,0);
-  
-    // write PWMhi ctic index 2 
-  dat = (unsigned char)speed;
-  write_ctic(node,2,&dat,0);
-  
-    // write PWMlo ctic index 3   
-  dat = (unsigned char)(32-speed);
-  write_ctic(node,3,&dat,0);
-  
-    // write ALERT=2 ctic index 0 to trigger @ALERTH script  
-  dat = 2;          
-  write_ctic(node,0,&dat,0); 
-     
+    // construct 8 byte ascii string for Control data = PWMhi,PWMlo,ctl
+  sprintf(dat,"%02X,%02X,%02X",speed,64-speed,ctl);
+    // write to Control charcteristic index 0 calls ?FUNC1
+    // last parameter can be 0 because rn4020.txt has specified size=1
+  write_ctic(node,0,dat,0);
+       
   return(1);    
   }
