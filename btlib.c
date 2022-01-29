@@ -7211,8 +7211,10 @@ void clscanx()
         for(j = 0 ; j < 6 ; ++j)
           dp->baddr[j] = rp[5-j];
         
+        NPRINT "   Trying to read name..\n");
+        flushprint();
         sendhci(cname,ndevice);      
-        readhci(ndevice,IN_CNAME,0,gpar.timout,gpar.toshort);   
+        readhci(ndevice,IN_CNAME,0,6000,gpar.toshort);   
         j = findhci(IN_CNAME,ndevice,INS_POP);
         if(j < 0)
           {
