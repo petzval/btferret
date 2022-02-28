@@ -6558,63 +6558,69 @@ int leservices(int ndevice,int flag,char *uuid)
                 if(serv[k].handle == serv[chn].handle)
                   cancelflag = 1;  // do not save
                 }
-              serv[chn].perm = insdat[n+n0+2];
-              serv[chn].channel = 0x10000;  // new entry LE marker  not a channel
-              // UUID of value
-              if(len == 7)
-                {         
-                serv[chn].uuidtype = 2;   // 2 or 16
-                serv[chn].uuid[0] = insdat[n+n0+6];
-                serv[chn].uuid[1] = insdat[n+n0+5];
-                }
-              else if(len == 21)
-                {
-                serv[chn].uuidtype = 16;  
-                for(k = 0 ; k < 16 ; ++k)
-                  serv[chn].uuid[k] = insdat[n+n0+20-k];
-                }
-              else
-                {  // MTU too small for full UUID - read handle to find
-                serv[chn].uuidtype = 0;               
-                }
-
-              // probably next handle up - so skip on next info request
-              if(serv[chn].handle == lasth+1)
-                ++lasth;
-
-               // set data to UUID type if known - or UUID
-               
-              serv[chn].data[0] = 0;
-              k = 0;
-              if(serv[chn].uuidtype == 2)
-                k = finduuidtext((serv[chn].uuid[0] << 8) + serv[chn].uuid[1]);
-              if(k == 0)
-                { 
-                if(serv[chn].uuidtype == 0)
-                  strcpy(serv[chn].data,"Unrecognised config format");
-                else
-                  {             
-                  while(k < serv[chn].uuidtype)
-                    {
-                    sprintf(serv[chn].data + 2*k,"%02X",serv[chn].uuid[k]);
-                    ++k;
-                    }
-                  sprintf(serv[chn].data + 2*k," UUID");
+                
+                
+              if(cancelflag == 0)
+                {  
+                serv[chn].perm = insdat[n+n0+2];
+                serv[chn].channel = 0x10000;  // new entry LE marker  not a channel
+                // UUID of value
+                if(len == 7)
+                  {         
+                  serv[chn].uuidtype = 2;   // 2 or 16
+                  serv[chn].uuid[0] = insdat[n+n0+6];
+                  serv[chn].uuid[1] = insdat[n+n0+5];
                   }
+                else if(len == 21)
+                  {
+                  serv[chn].uuidtype = 16;  
+                  for(k = 0 ; k < 16 ; ++k)
+                    serv[chn].uuid[k] = insdat[n+n0+20-k];
+                  }
+                else
+                  {  // MTU too small for full UUID - read handle to find
+                  serv[chn].uuidtype = 0;               
+                  }
+
+                // probably next handle up - so skip on next info request
+                if(serv[chn].handle == lasth+1)
+                  ++lasth;
+
+                 // set data to UUID type if known - or UUID
+               
+                serv[chn].data[0] = 0;
+                k = 0;
+                if(serv[chn].uuidtype == 2)
+                  k = finduuidtext((serv[chn].uuid[0] << 8) + serv[chn].uuid[1]);
+                if(k == 0)
+                  { 
+                  if(serv[chn].uuidtype == 0)
+                    strcpy(serv[chn].data,"Unrecognised config format");
+                  else
+                    {             
+                    while(k < serv[chn].uuidtype)
+                      {
+                      sprintf(serv[chn].data + 2*k,"%02X",serv[chn].uuid[k]);
+                      ++k;
+                      }
+                    sprintf(serv[chn].data + 2*k," UUID");
+                    }
+                  }
+                else
+                  strcpy(serv[chn].data,uuidlist+k);            
                 }
-              else
-                strcpy(serv[chn].data,uuidlist+k);            
-                                                               
-              if(cancelflag == 0 && chn < SERVDAT-2)
-                {
-                ++chn;
-                serv[chn].channel = 0;
-                }
-              else
+                
+                                                                 
+              if(chn >= SERVDAT-2)
                 {
                 VPRINT "Run out of service memory\n");  
                 getout = 2;
                 }        
+              else if(cancelflag == 0)
+                {
+                ++chn;
+                serv[chn].channel = 0;
+                }
               } // end target permissions
             }  // end SRVC_FIND saving characteristics to chan
           else
