@@ -1,12 +1,15 @@
      ; semicolon is comment char
      ; This file must list all network devices - here are some examples
-DEVICE = My Pi         TYPE=MESH node=1  ADDRESS = B9:27:EB:F1:50:C3
+DEVICE = My Pi         TYPE=MESH node=1  ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = My Other Pi   TYPE=mesh NODE=2  ADDRESS = DC:A6:32:04:DB:56
+  ; LE characteristics when acting as an LE server
+  LECHAR = Control  PERMIT=06 SIZE=8   HANDLE=0005            ; index 0
+  LECHAR = Info     PERMIT=06 SIZE=1   HANDLE=0007            ; index 1
+  LECHAR = Name     PERMIT=06 SIZE=16  HANDLE=0009 UUID=2A00  ; index 2
 DEVICE = Windows PC    TYPE=classic node=4   address=00:1A:7D:DA:71:13
-DEVICE = Android phone TYPE=CLASSIC node=10  ADDRESS = 4C:4E:03:83:CE:B9
+DEVICE = Android phone TYPE=CLASSIC node=10  ADDRESS = 98:80:EE:75:4D:EB
 DEVICE = LE device     TYPE=LE      NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
-    ; characteristics of the above LE device
-  LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2  ; LE characteristic index 0
-  LECHAR=Name    UUID=2A00                     ;                   index 1
-                                               ; ...etc for further characteristics
+  ; characteristics of the above LE server device
+  LECHAR=Test    HANDLE=000B PERMIT=06 SIZE=1  ; LE characteristic index 0
+  LECHAR=Name    PERMIT=06 UUID=2A00           ;                   index 1                                            
 DEVICE = HC-05   TYPE=CLASSIC node=9 PIN=1234 channel=1 ADDRESS = 98:D3:32:31:59:84

@@ -99,21 +99,25 @@ int hubnode()
     {   
     printf("Got name from node 2 = %s\n",name);
      
-    printf("Connect to classic server node 4 to find UUID=1101 serial channel\n"); 
+    printf("Connect to classic server node 4 to find standard UUID serial channel\n"); 
    
-    channel = find_channel(4,UUID_2,strtohex("1101",NULL));
+    channel = find_channel(4,UUID_16,strtohex("0000-1101-0000-1000-8000-00805F9B34FB",NULL));
+       
+       // for a Windows COM port, use the standard 2-byte UUID instead:
+       // channel = find_channel(4,UUID_2,strtohex("1101",NULL));
+   
     if(channel <= 0)
-      printf("Failed to find 1101 channel\n");
+      printf("Failed to find channel\n");
     else
       { 
-      // connect to classic server node 6 on found channel
+      // connect to classic server node 4 on found channel
       printf("Connecting on found channel = %d\n",channel);
   
       if(connect_node(4,CHANNEL_NEW,channel) == 0)
         printf("Connect failed\n");
       else
         {
-        // send name to node 6 with its termination char 10
+        // send name to node 4 with its termination char 10
         printf("Send name to node 4\n");
   
         if(write_node(4,name,len) != len)

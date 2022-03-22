@@ -1,0 +1,2 @@
+DEVICE = Pi server          TYPE=MESH     NODE=1  ADDRESS = 11:11:11:11:11:11
+DEVICE = Blue Dot Android   TYPE=CLASSIC  NODE=2  ADDRESS = 22:22:22:22:22:22

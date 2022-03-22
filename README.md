@@ -1,20 +1,22 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 2*
+*Version 3*
 
 ## Contents
 - [1 Introduction](#1-introduction)
-- [2 File list and compile](#2-file-list-and-compile)
+- [2 File list. Compile. Hello world](#2-file-list.-compile.-hello-world)
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
     - [3.3 Windows-Android-HC-05 Classic servers](#3-3-windows-android-hc-05-classic-servers) 
     - [3.4 Windows-Android Classic clients](#3-4-windows-android-classic-clients)        
-    - [3.5 LE devices](#3-5-le-devices) 
-    - [3.6 Pi-Pi client-server connection](#3-6-pi-pi-client-server-connection) 
-    - [3.7 Broadcast to all mesh servers](#3-7-broadcast-to-all-mesh-servers) 
-    - [3.8 sample.c](#3-8-sample)
+    - [3.5 LE client](#3-5-le-client) 
+    - [3.6 LE server](#3-6-le-server) 
+    - [3.7 Pi-Pi client-server connection](#3-7-pi-pi-client-server-connection) 
+    - [3.8 Broadcast to all mesh servers](#3-8-broadcast-to-all-mesh-servers) 
+    - [3.9 sample.c](#3-9-sample)
+    - [3.10 Blue Dot server](#3-10-blue-dot-server)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
     - [4.2 Functions](#4-2-functions)    
@@ -23,7 +25,7 @@ btferret/btlib Bluetooth Interface
         - [4.2.3 close\_all](#4-2-3-close\_all)
         - [4.2.4 connect\_node](#4-2-4-connect\_node)
         - [4.2.5 ctic\_name](#4-2-5-ctic\_name)
-        - [4.2.6 ctic\_ok](#4-2-6-ctic\_ok)
+        - [4.2.6 ctic\_ok](#4-2-6-ctic\_ok)      
         - [4.2.7 device\_connected](#4-2-7-device\_connected)
         - [4.2.8 device\_info](#4-2-8-device\_info)
         - [4.2.9 device\_name](#4-2-9-device\_name)
@@ -34,31 +36,33 @@ btferret/btlib Bluetooth Interface
         - [4.2.14 find\_ctic\_index](#4-2-14-find\_ctic\_index)
         - [4.2.15 init\_blue](#4-2-15-init\_blue)
         - [4.2.16 le\_scan](#4-2-16-le\_scan)
-        - [4.2.17 list\_channels](#4-2-17-list\_channels)
-        - [4.2.18 list\_ctics](#4-2-18-list\_ctics)
-        - [4.2.19 list\_uuid](#4-2-19-list\_uuid)       
-        - [4.2.20 localnode](#4-2-20-localnode)
-        - [4.2.21 mesh\_on](#4-2-21-mesh\_on)
-        - [4.2.22 mesh\_off](#4-2-22-mesh\_off)
-        - [4.2.23 mesh\_server](#4-2-23-mesh\_server)
-        - [4.2.24 node\_server](#4-2-24-node\_server)
-        - [4.2.25 notify\_ctic](#4-2-25-notify\_ctic)
-        - [4.2.26 output\_file](#4-2-26-output\_file)
-        - [4.2.27 read\_ctic](#4-2-27-read\_ctic)
-        - [4.2.28 read\_error](#4-2-28-read\_error)
-        - [4.2.29 read\_mesh](#4-2-29-read\_mesh)
-        - [4.2.30 read\_node\_count](#4-2-30-read\_node\_count)
-        - [4.2.31 read\_node-all\_endchar](#4-2-31-read\_node-all\_endchar)
-        - [4.2.32 read\_node-all\_clear](#4-2-32-read\_node-all\_clear)
-        - [4.2.33 read\_notify](#4-2-33-read\_notify)
-        - [4.2.34 register\_serial](#4-2-34-register\_serial)
-        - [4.2.35 scroll\_back-forward](#4-2-35-scroll\_back-forward)
-        - [4.2.36 set\_print\_flag](#4-2-36-set\_print\_flag)
-        - [4.2.37 strtohex](#4-2-37-strtohex)
-        - [4.2.38 wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect)
-        - [4.2.39 write\_ctic](#4-2-39-write\_ctic)
-        - [4.2.40 write\_mesh](#4-2-40-write\_mesh)
-        - [4.2.41 write\_node](#4-2-41-write\_node) 
+        - [4.2.17 le\_server](#4-2-17-le\_server)       
+        - [4.2.18 list\_channels](#4-2-18-list\_channels)
+        - [4.2.19 list\_ctics](#4-2-19-list\_ctics)
+        - [4.2.20 list\_uuid](#4-2-20-list\_uuid)       
+        - [4.2.21 localnode](#4-2-21-localnode)
+        - [4.2.22 mesh\_on](#4-2-22-mesh\_on)
+        - [4.2.23 mesh\_off](#4-2-23-mesh\_off)
+        - [4.2.24 mesh\_server](#4-2-24-mesh\_server)
+        - [4.2.25 node\_server](#4-2-25-node\_server)
+        - [4.2.26 notify\_ctic](#4-2-26-notify\_ctic)
+        - [4.2.27 output\_file](#4-2-27-output\_file)
+        - [4.2.28 read\_ctic](#4-2-28-read\_ctic)
+        - [4.2.29 read\_error](#4-2-29-read\_error)
+        - [4.2.30 read\_mesh](#4-2-30-read\_mesh)
+        - [4.2.31 read\_node\_count](#4-2-31-read\_node\_count)
+        - [4.2.32 read\_node-all\_endchar](#4-2-32-read\_node-all\_endchar)
+        - [4.2.33 read\_node-all\_clear](#4-2-33-read\_node-all\_clear)
+        - [4.2.34 read\_notify](#4-2-34-read\_notify)
+        - [4.2.35 register\_serial](#4-2-35-register\_serial)
+        - [4.2.36 scroll\_back-forward](#4-2-36-scroll\_back-forward)
+        - [4.2.37 set\_le\_wait](#4-2-37-set\_le\_wait)
+        - [4.2.38 set\_print\_flag](#4-2-38-set\_print\_flag)
+        - [4.2.39 strtohex](#4-2-39-strtohex)
+        - [4.2.40 wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect)
+        - [4.2.41 write\_ctic](#4-2-41-write\_ctic)
+        - [4.2.42 write\_mesh](#4-2-42-write\_mesh)
+        - [4.2.43 write\_node](#4-2-43-write\_node) 
 - [5 Reference](#5-reference)
     - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids)
     - [5.2 Packet formats](#5-2-packet-formats)
@@ -106,7 +110,8 @@ operations can
 be run from the btferret command line, and this document describes how the same thing (and more) can
 then be done via your own C code.  
 
-Also included is the code for a simple [mesh network example](#3-8-sample).
+Also included is the code for a simple [mesh network example](#3-9-sample), and
+a [Blue Dot server](#3-10-blue-dot-server) that is probably the easiest way of controlling a Pi from a phone.
 
 In the [reference](#5-reference) section there is a detailed description
 of the HCI Bluetooth interface, the packet formats and how they are constructed,
@@ -123,7 +128,7 @@ for other machines to act as servers/clients for btferret/btlib.
 This interface is programmed at the HCI level and bypasses higher-level bluez functions,
 so it does not use the Pi's Bluetooth service, which can be stopped.
 
-## 2 File list and compile
+## 2 File list. Compile. Hello world
 
 ### DOWNLOAD
 
@@ -148,6 +153,10 @@ Run with devices.txt in the same directory
 ```
 
 No additional libraries or installs are required, the code is self-contained.
+To customise btferret.c for your devices, an essential first step is to
+edit the devices.txt file to list all the devices in the
+network (see the [init_blue](#4-2-15-init\_blue) documentation).
+
 It does not use higher-level bluez functions, so if desired the Pi's Bluetooth service can be
 stopped as follows:
 
@@ -159,17 +168,31 @@ Check result via:
 service bluetooth status
 ```
 
-### CODE
+When btferret/btlib code is running, it monopolises the adapter, so Bluetooth devices
+such as keyboards and audio will not work.
 
-To customise btferret.c for your devices, an essential first step is to
-edit the devices.txt file to list all the devices in the
-network (see the [init_blue](#4-2-15-init\_blue) documentation).
+
+### HELLO WORLD
+
+This is how to send the message "Hello world" from one Pi to another - firstly via btferret operations,
+and then via C code.
+
+```
+Using btferret on both devices:
+
+1. Edit client and server Pi devices.txt files to list both devices and their addresses.
+2. On server, s to start server, choose NODE SERVER, choose node of client.
+3. On client, c to connect, choose node of server, choose NODE SERVER.
+4. On client, t to send string, enter Hello world, enter 10 as terminate char.
+5. Hello world appears on server - it will complain that it is an unknown command.
+6. On client, D to disconnect both devices.
+```
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify the btferret.c or sample.c examples.
 Here is a minimum starting C program, mycode.c.
 
-```
+```c
 #include <stdio.h>
 #include <stdlib.h>
 #include "btlib.h"
@@ -197,6 +220,96 @@ Run via:
 sudo ./mycode
 ```
 
+The following codes send "Hello world" from a Pi client to a Pi server. Compile and 
+run the client and server codes as follows.
+
+
+```
+
+gcc client.c btlib.c -o client
+gcc server.c btlib.c -o server
+
+Edit hellodev.txt with the addresses of client and server.
+
+Run server
+sudo ./server
+
+Run client
+sudo ./client
+
+Hello
+world
+
+  should appear on the server's display
+
+```
+
+This is the device info file hellodev.txt
+
+```
+DEVICE= Client Pi  TYPE=MESH NODE=1 ADDRESS=11:11:11:11:11:11
+DEVICE= Server Pi  TYPE=MESH NODE=2 ADDRESS=22:22:22:22:22:22
+```
+
+This is the client code client.c
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "btlib.h"
+
+int main()
+  {
+  char *s;
+  
+  if(init_blue("hellodev.txt") == 0)
+    return(0);
+  
+  connect_node(2,CHANNEL_NODE,0);
+  s = "Hello\n";
+  write_node(2,s,strlen(s));
+  s = "world\n";
+  write_node(2,s,strlen(s));
+     // sending "world" causes server to initiate disconnect
+  wait_for_disconnect(2,5000);  // time out 5000ms
+  
+  close_all();
+  return(0);
+  }
+```
+
+This is the server code server.c
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
+
+int callback(int clientnode,unsigned char *dat,int count);
+
+int main()
+  {
+  if(init_blue("hellodev.txt") == 0)
+    return(0);
+  
+  node_server(1,callback,10);  // 10 = \n termination char
+  
+  close_all();
+  return(0);
+  }
+
+
+int callback(int clientnode,unsigned char *dat,int count)
+  {
+  printf("%s",dat);  
+  if(dat[0] == 'w')         // "world" triggers server exit
+    return(SERVER_EXIT);    // initiates disconnection 
+  return(SERVER_CONTINUE);  // waits for another write_node
+  }
+
+```
+
 ## 3 Interface  
    
 
@@ -206,18 +319,18 @@ There are two flavours of Bluetooth - Classic and LE (low energy). In the Classi
 connects to a listening server and the two can then exchange large amounts of serial data. A Pi running btferret/btlib
 can act as a Classic client or server. The connecting server/client can be another Pi running btferret or any Bluetooth-capable
 device such as a PC or Android running a Blueooth app such as a serial terminal.
+The [Blue Dot app](#3-10-blue-dot-server) uses a classic connection to control a Pi from a phone.  
 
 The original idea behind LE is that the server is a measurement device such as a temperature monitor. An LE client connects
 to the server, reads a value, and then disconnects. The data transferred is just a few bytes.
 The values are called characteristics, and the client can interrogate the server to find what
 services (characteristics) are available. They can
-be readable, writeable or both. A Pi running btferret/btlib
-can act as an LE client and read/write characteristics, but cannot act as an LE server.
+be readable, writeable or both. A Pi running btferret/btlib can act as an LE client or server.
 LE characteristics can also have a notify property whereby the value is transmitted when it changes - without being asked
 by the client. The client must enable the characteristic's notification process for this to work.
 
-The use of LE has expanded beyond
-the original concept and now includes LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
+The use of LE goes beyond this simple read operation and there are
+LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
 that can be contolled by writing to its characteristics for remote control applications. This separate document [RN4020.md](RN4020.md)
 describes the use of btlib functions and an RN4020 for motor speed control.
 
@@ -227,7 +340,11 @@ The mesh functions use Bluetooth advertising data to repeatedly send a small num
 functions use an LE connection to exchange large amounts of data, but more slowly than a Classic connection,
 and only between two Pis. Other devices will not recognise a btferret node client/server.
 
-Multiple connections of all the above types can be open simultaneously.
+Multiple connections of all the above types can be open simultaneously. When acting as a client, connections can
+be made to multiple node/classic/LE servers. The node and classic servers can only be connected by
+one specified client, but can also act a client for multiple connections at the same time.
+An LE server can be connected by multiple clients simultaneously. A mesh
+transmission sends to all listening mesh servers.
 
 Don't expect too much of the speeds here. The mesh packet repeat rate may only be around once per
 second, btferret's file transfer speed is about 2000 bytes/s for a NODE
@@ -252,7 +369,7 @@ a - Scan for Classic Bluetooth devices
 b - Scan for LE and Mesh Pi Bluetooth devices
 i - Print device information
 v - Read services (Classic serial channels or LE characteristics)
-c - Connect to a classic/LE/Mesh node (can be multiple)
+c - Connect to a classic/LE/mesh/node server (can be multiple)
 d - Disconnect a node (use D instead for btferret servers)
 t - Transmit ascii string to a connected node
 T - Transmit (broadcast) ascii string to mesh
@@ -263,14 +380,14 @@ R - Read LE characteristic notifications
 k - Settings (inc. verbose print option to print HCI traffic)
 [] - Scroll screen output back/forward
 o - Save all recent screen output to a text file
-s - Become a mesh/node(LE)/classic server and listen for remote client
-y - List services that contain a specified UUID
+s - Become a mesh/node/classic/LE server and listen for remote client
+y - Find services that contain a specified UUID
 g - Register a custom UUID serial service
 h - Print help
 
 ```
 
-These commands only work when connected to another Mesh Pi running
+The following commands only work when connected to another Mesh Pi running
 btferret set up as a node or classic server (via s).
 
 ```
@@ -280,7 +397,8 @@ D - Tell a server (or all mesh servers) to disconnect
 ```
 
 The following sections describe how to use these commands to 
-establish connections and exchange data.
+establish connections and exchange data. They also show how to do the
+same thing with your own C code rather than via btferret.c.
 
 
 ## 3-3 Windows-Android-HC-05 Classic servers
@@ -290,7 +408,10 @@ Bluetooth terminal program set up as a server (via a "Make discoverable" option 
 Guidance on writing server code for other machines is in the [server code](#5-4-server-code) section.
 With the server waiting for a connection, btferret must first find
 the [RFCOMM channel](#5-1-what-gives-with-uuids) on which
-the server is listening.
+the server is listening. The remote server may require that the two devices are paired first. The
+Pi cannot do this - it must be done from the remote device before connection is attempted, with
+the Pi listening as a server, as described in the next 
+section [Windows-Android Classic clients](#3-4-windows-android-classic-clients).   
 
 ```
 devices.txt 
@@ -299,6 +420,9 @@ DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
 
 
 btferret commands
+
+    Does the remote device insist on pairing first?
+    If so, see next section 3.4 for instructions
 
 i - Print device info. If server is already in device info via devices.txt
     the following step is not necessary
@@ -328,7 +452,7 @@ DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
 DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
 */
 
-int channel,len;
+int channel;
 char buf[16],inbuf[64];
 
    // The serial channel might be known. For example an HC-05 has just one
@@ -342,13 +466,8 @@ channel = find_channel(4,UUID_16,strtohex("00001101-0000-1000-8000-00805F9B34FB"
    // if channel > 0 then the serial channel has been found 
 connect_node(4,CHANNEL_NEW,channel);
    
-strcpy(buf,"hello");
-len = strlen(buf);
-         // replace term zero with termination char 10 for server
-buf[len] = 10;
-++len;   // len will now be 6
-
-write_node(4,buf,len);  // send len chars to node 4
+strcpy(buf,"hello\n");          // must have termination char expected by server \n = 10
+write_node(4,buf,strlen(buf));  // send 6 chars to node 4
 
    // if the server is expected to reply:
    // wait for 1 second for a reply with a 10 termination char
@@ -361,18 +480,29 @@ disconnect_node(4);
 
 ## 3-4 Windows-Android Classic clients
 
-A Mesh Pi can be set up as a classic server and receive connections from remote
+A Mesh Pi can be set up as a classic server and receive pairing requests or
+connections from remote
 clients (running a Bluetooth terminal program for example).
-(See [Pi-Pi client-server connection](#3-6-pi-pi-client-server-connection) for 
+(See [Pi-Pi client-server connection](#3-7-pi-pi-client-server-connection) for 
 classic connections between two Mesh Pis).
-Sometimes a client will require a link key and some experimentation is required to
-determine whether to set link key on or off. Some terminal programs
+The client will have security requirements - usually a passkey to pair initially,
+and then a link key for subsequent connections.
+Some experimentation is required to find which link key and passkey options to use. Normally
+the "use link key, print passkey locally here" option will work for pairing and connection.
+Some terminal programs
 require the server to be paired before attempting to connect, some will pair during 
-connection, and some do not need to be paired, or may even have to be unpaired.
-If pairing is required, the server must be waiting for a connection when the client attempts to
-pair, and a link key will almost certainly be needed.
-Otherwise, trial and error will determine what combination of pairing and link key 
-will work. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
+connection, and some do not need to be paired, or may even have to be unpaired. To pair from
+the remote device, first start the Pi as a classic server with the "use link key/passkey here" option.
+Sometimes
+the remote device will ask to confirm that the Pi has displayed a passkey, and you have ten seconds
+to respond before the Pi gives up on the connection. If the remote client asks for a PIN number, enter
+0000 - it will not be used because btferret will not ask the client for a PIN (not the same as a passkey).
+If a device has been previously paired using software other than btferret, unpair it first
+because the pairing information is not inherited from bluez.
+If pairing is required, the Pi server must be waiting for a connection when the remote client attempts to
+pair.
+Trial and error will determine what combination of un-pairing, pairing and link/pass key 
+will work - the ways of Bluetooth pairing are many and wondrous. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
 in Android: Settings/Bluetooth. A brief guide to writing [Client Code](#5-5-client-code)
 for Windows/Android devices is in the Reference section.
  
@@ -388,8 +518,9 @@ i - Print device info. If client is already in device info via devices.txt
 a - Scan for classic devices if not already set in devices.txt.
     This should find the client device. 
 s - Become a server. Select Classic server. Enter node of client that will connect.
-    Choose link key on or off. The Pi will then wait for a connection, listening
-    on channel 1 and two standard serial UUID services called Serial2 and Serial16.
+    Choose link key and passkey options. The Pi will then wait for a pairing 
+    request or a connection. For connections it will listen on channel 1 via two 
+    standard serial UUID services called Serial2 and Serial16 and a custom UUID.
     The server can be terminated with the x key.
 
 Initiate connection from the client. If there is an option for line ending, choose
@@ -409,9 +540,9 @@ DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
 // CLASSIC SERVER code
 // Wait for connection (and/or pairing) from node 4
 // Termination char for packets = 10 (line feed)
-// Use a link key
+// Use a link key and print passkey on the screen
 
-classic_server(4,classic_callback,10,KEY_ON);
+classic_server(4,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
 
 
 // This classic_callback routine receives packets sent by the client.
@@ -434,6 +565,7 @@ int classic_callback(int clientnode,char *data,int datlen)
     }
   else if(data[0] == 'D')  // 'D' programmed as exit command   
     return(SERVER_EXIT);   // server initiates disconnection
+                           // client may or may not see the disconnect 
   
   return(SERVER_CONTINUE);  // wait for another packet
   }  
@@ -442,44 +574,54 @@ int classic_callback(int clientnode,char *data,int datlen)
 ```
 
 
-## 3-5 LE devices
+## 3-5 LE client
 
-Connect to an LE device and read/write characteristics as follows:
+Connect to an LE server and read/write characteristics. Sometimes a device will have
+a fixed Bluetooth address for Classic connections, but a random changeable address for LE connections
+(Android devices running [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile)
+as an advertiser for example). In this case, it is not possible to set the address
+in the devices.txt file, so the LE device and its current address must be found by scanning
+via b in btferret or [le\_scan()](#4-2-16-le\_scan), and the characteristics must be found via v in
+btferret or [find\_ctics()](#4-2-13-find\_ctics). Some LE servers need to be given time to complete the
+connection, or they will connect, but then disconnect soon after. When using the btferret c command, you will
+be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-37-set\_le\_wait) function
+sets this time. Zero may work, otherwise find the shortest time that prevents disconnection.
 
 ```
-devices.txt
-DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2     ; index 0
-  LECHAR=Name    UUID=2A00                        ; index 1
-
-
 btferret commands
 
 i - Print device info. If the LE device is already in device info via
     devices.txt, the following step is not necessary.
-b - Scan for LE devices if not already set in devices.txt
-c - Connect. Enter node number of LE device.
+b - Scan for LE devices if not already set in devices.txt or if the LE device
+    uses random addresses.
+c - Connect. Enter node number of LE device, and connection wait time.
     If the device's characteristics are already known by device info
     the following step is not necessary.
 v - Read services. The characteristic info will be read from the device
 r - Read a characteristic - enter its characteristic index from the list
 w - Write a characteristic
+j - Enable/disable characteristic notifications
+R - Read notifications
 d - Disconnect
 
 ```
 LE read/writes are programmed via btlib funtions as follows:
 
 ```c
-/* devices.txt
+/* devices.txt for an LE device that has a fixed address
 DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Name    UUID=2A00                        ; index 0
-  LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2     ; index 1
+  LECHAR=Test    HANDLE=001C PERMIT=06 SIZE=2     ; index 1
+  LECHAR=Detector  HANDLE=001E PERMIT=16 SIZE=2   ; index 2 notify capable
 */ 
 
 
 char buf[32];
 
-connect_node(7,0,0);     // 2nd/3rd parameters 0,0 not needed for LE devices
+le_scan();       // Find listening LE devices
+
+set_le_wait(750);              // LE connection completion time 750ms
+connect_node(7,CHANNEL_LE,0);  // 3rd parameter 0 not needed for LE devices
 
 read_ctic(7,1,buf,sizeof(buf));   // read Test (index 1) from node 7
                                   // buf[0] and buf[1] will have the data
@@ -490,16 +632,209 @@ printf("Name = %s\n",buf);
 buf[0] = 0x12;
 buf[1] = 0x34;
 write_ctic(7,1,buf,0);  // device info knows the size of Test is 2
-                        // so set the last parameter count=0
+                        // so can set the last parameter count=0
+
+     // Enable notifications sent when Detector value (index 2) changes
+     // Call notify_callback when a notification is received
+notify_ctic(7,2,NOTIFY_ENABLE,notify_callback);
+
+read_notify(30*1000);  // read notifications for 30 seconds
 
 disconnect_node(7);
 
+
+int notify_callback(int lenode,int cticn,char *buf,int nread)
+  { 
+  // LE device lenode has sent notification of characteristic index cticn
+  // data in buf[0] to buf[nread-1]
+    
+  printf("%s has sent %s\n",device_name(lenode),ctic_name(lenode,cticn));
+  
+  return(0);
+  }  
+  
+
+
 ```
 
-## 3-6 Pi-Pi client-server connection
+## 3-6 LE server
+
+
+Become an LE server and wait for connections from LE clients. The client may be another
+Pi acting as an LE client, or a phone app such
+as [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile).
+The other types of server (CLASSIC and NODE) can only connect to one client at a time, but an LE
+server can connect to multiple clients simultaneously.
+
+```
+
+btferret commands
+
+i - Print device info. The local device should list
+    the characteristics defined in the devices.txt file.
+v - Read services. The characteristic info will be listed
+r - Read a characteristic - enter its characteristic index from the list
+w - Write a characteristic
+s - Become a server and wait for clients to connect, select LE server option.
+d - Disconnect
+
+```
+
+The server's characteristics are defined in the devices.txt file, full details
+in [init\_blue](#4-2-15-init\_blue) and [le\_server](#4-2-17-le\_server).
+
+Starting the server and reading/writing the local characteristics are programmed via btlib funtions as follows:
+
+```c
+/* devices.txt file:
+
+DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
+  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes
+  LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable
+  LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte
+*/  
+  
+// C code:
+
+char buf[32];
+
+read_ctic(localnode(),2,buf,sizeof(buf));   // read Status (index 2) 
+                                            // buf[0] will have the data
+
+                                  // write 56 to Status (index 2)
+buf[0] = 0x56;
+write_ctic(localnode(),2,buf,0);  // local device is allowed to write to its own
+                                  // characteristic Status. Remote devices are
+                                  // not allowed because it is read only.
+                                  // Size is known from devices.txt, so last
+                                  // parameter (count) can be 0           
+
+         // write 12 34 to Detector (index 1)
+buf[0] = 0x12;
+buf[1] = 0x34;
+write_ctic(localnode(),1,buf,0);  
+           // If a connected client has enabled notifications for Detector, this
+           // write will also trigger a notification that will be sent to the client.
+
+
+le_server(le_callback,100);
+                   // Become an LE server and wait for clients to connect.   
+                   // when a client performs an operation such as connect, or
+                   // write a characteristic, call the function le_callback()
+                   // Call LE_TIMER in le_callback every 100 deci-seconds (10 seconds)
+
+
+int le_callback(int clientnode,int operation,int cticn)
+  {
+  if(operation == LE_CONNECT)
+     // clientnode has just connected
+  else if(operation == LE_READ)
+     // clientnode has just read local characteristic cticn
+  else if(operation == LE_WRITE)
+     // clientnode has just written local characteristic cticn
+  else if(operation == LE_DISCONNECT)
+     // clientnode has just disconnected
+     // uncomment next line to stop LE server when client disconnects
+     // return(SERVER_EXIT);
+     // otherwise LE server will continue and wait for another connection
+     // or operation from other clients that are still connected
+  else if(operation == LE_TIMER)
+    // The server timer calls here every timerds deci-seconds 
+       
+  return(SERVER_CONTINUE);
+  }
+
+```
+
+
+Here is client and server code that illustrates the use of notifications. The server
+reads the time and sends a notification to the client every ten seconds. The client
+then displays the time. Add the following code to the [base C code](#hello-world). Run the server
+to start it listening, then run the client. 
+
+```c
+/* devices.txt file for both Pis:
+
+DEVICE= Client Pi  TYPE=MESH NODE=1 ADDRESS=11:11:11:11:11:11
+DEVICE= Server Pi  TYPE=MESH NODE=2 ADDRESS=22:22:22:22:22:22
+  LECHAR=Min/Sec PERMIT=16 HANDLE=0005 SIZE=2
+*/
+
+// C code for Server Pi:
+  
+#include <time.h>   
+
+   // wait for client to connect and then
+   // call LE_TIMER twice per second (5 deci-seconds)
+le_server(le_callback,5);  
+
+
+int le_callback(int clientnode,int operation,int cticn)
+  {
+  struct tm tm; 
+  time_t tim;
+  static unsigned char minsec[2] = {0,0};
+      
+  if(operation == LE_TIMER)
+    {  // every timerds deci-seconds (from le_server(callback,timerds)) 
+       // read the system time and convert to local time
+    time(&tim);
+    localtime_r(&tim,&tm);
+    minsec[0] = tm.tm_min;
+    minsec[1] = tm.tm_sec;
+    
+    if((minsec[1] % 10) == 0)
+      {   // every 10 seconds of local time
+          // write two-byte minsec to local characteristic index 0 (Min/Sec)
+      write_ctic(localnode(),0,minsec,2);
+          // if the client has enabled notifications
+          // via notify_ctic() this write will also trigger
+          // a notification that will be sent to the client.
+          // It will appear on the client's screen if it is
+          // running read_notify() or any other read operation
+      }
+    }
+  else if(operation == LE_DISCONNECT)
+    return(SERVER_EXIT);
+    
+  return(SERVER_CONTINUE);
+  }  
+
+  
+// C code for Client Pi:
+
+    // connect to Server Pi node 2 which must be listening via le_server() 
+connect_node(2,CHANNEL_LE,0);  
+
+    // enable notifications for node=2 device, characteristic index 0
+notify_ctic(2,0,NOTIFY_ENABLE,notify_callback);
+
+    // read notifications for 2 minutes (or stop via x key press)
+    // when a notification is received, the notify_callback function is called
+    // and so prints Min/Sec every 10 seconds
+read_notify(2*60*1000);
+
+    // disconnect and trigger LE_DISCONNECT operation in server
+disconnect_node(2);
+
+
+int notify_callback(int lenode,int cticn,char *buf,int nread)
+  { 
+  // LE device lenode has sent notification of characteristic index cticn
+    
+  printf("%s %s Min=%d  Sec=%d\n",device_name(lenode),ctic_name(lenode,cticn),buf[0],buf[1]);
+  
+  return(0);
+  }  
+  
+  
+```
+
+
+## 3-7 Pi-Pi client-server connection
 
 Two Mesh Pis connected as a client/server pair. There must be two Pis
-listed as MESH type in devices.txt. The connection can be NODE (LE) or CLASSIC.
+listed as MESH type in devices.txt. The connection can be NODE or CLASSIC.
 The NODE type connects quickly but has slow transfer speeds (2000 bytes/s), 
 while the CLASSIC type has a more convoluted connection procedure, but much
 faster speeds (50,000 bytes/s).
@@ -550,6 +885,7 @@ DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 // NODE SERVER - node 1
 // Set up node 1 as a node server listening for node 2 to connect
 // Specify 10 as end char for packets sent by client
+
 node_server(2,node_callback,10);
    
 // *** OR ***
@@ -557,7 +893,9 @@ node_server(2,node_callback,10);
 // CLASSIC SERVER - node 1
 // Set up node 1 as a classic server listening for node 2 to connect
 // Specify 10 as end char for packets sent by client
-classic_server(2,node_callback,10);
+// Pi-Pi connections do not require a link key or passkey
+
+classic_server(2,node_callback,10,KEY_OFF | PASSKEY_OFF);
 
 
 // This node_callback routine receives packets sent by the client.
@@ -580,7 +918,8 @@ int node_callback(int clientnode,char *data,int datlen)
     }
   else if(data[0] == 'D')  // 'D' programmed as exit command   
     return(SERVER_EXIT);   // server initiates disconnection
-  
+                           // client should be running wait_for_disconnect()
+                             
   return(SERVER_CONTINUE);  // wait for another packet
   }  
 
@@ -612,14 +951,15 @@ printf("Reply %s\n",inbuf);
 outbuf[0] = 'D';
 outbuf[1] = 10;
 write_node(1,outbuf,2);
-    // no reply programmed  
-    // wait for disconnection procedure initiated by server
+    // no reply programmed, so nothing to read  
+    // Wait for disconnection procedure initiated by server
+    // because it returned SERVER_EXIT from its callback
 wait_for_disconnect();
 
 ```
 
 
-## 3-7 Broadcast to all mesh servers
+## 3-8 Broadcast to all mesh servers
 
 There must be at least two Pis listed as MESH type in devices.txt. 
 
@@ -688,15 +1028,16 @@ write_mesh(buf,2);
 write_mesh("D",1);
 ```
 
-## 3-8 sample
+## 3-9 sample
 
 The sample.c code is an illustration of a procedure using mesh, node and
 Classic connections on the following mesh network.
 
 ![picture](image2.png)
 
-The Classic server might be a Windows PC with Bluetooth set up as an
-incoming [COM port](#5-4-1-windows-com-port) that presents as a UUID=1101 channel.
+The Classic server might be a Windows PC with a Bluetooth terminal set up as an
+incoming server listening on the standard 16-byte UUID. (The Windows
+[COM port](#5-4-1-windows-com-port) listens on the standard 2-byte UUID=1101).
 All three mesh Pis run the same sample.c code that executes the following sequence:
 
 ```
@@ -704,7 +1045,7 @@ sampledev.txt:
 DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2     ; index 0
   LECHAR=Name    UUID=2A00                        ; index 1
-DEVICE = Windows PC  type = classic node = 4 address=00:1A:7D:DA:71:13
+DEVICE = Windows PC  type=classic  node=4  address=00:1A:7D:DA:71:13
 DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 DEVICE = Mesh Pi 3  TYPE=mesh node=3 ADDRESS = 00:15:83:EF:24:3D
@@ -718,14 +1059,15 @@ DEVICE = Mesh Pi 3  TYPE=mesh node=3 ADDRESS = 00:15:83:EF:24:3D
 7. Node 2 connects to the LE server node 7 and reads its name
 8. Node 2 sends the name to node 1
 9. Node 2 disconnects node 7
-10. Node 1 connects to the classic server node 4
-11. Node 1 sends the name to node 4
-12. Node 1 disconnects node 4
-13. Node 1 sends node packet to node 2 telling it disconnect as a 
+10. Node 1 reads the classic server node 4 info to find the channel
+11. Node 1 connects to the classic server node 4 on the channel
+12. Node 1 sends the name to node 4
+13. Node 1 disconnects node 4
+14. Node 1 sends node packet to node 2 telling it disconnect as a 
            node server and revert to a mesh server
-14. Node 1 broadcasts a mesh packet telling all mesh servers (2,3) to close
-15. Nodes 2 and 3 mesh servers close and exit their programs
-16. Node 1 exits
+15. Node 1 broadcasts a mesh packet telling all mesh servers (2,3) to close
+16. Nodes 2 and 3 mesh servers close and exit their programs
+17. Node 1 exits
 ```
 
 None of these mesh and node packet commands are part of the btlib interface - they are all
@@ -752,6 +1094,44 @@ Run with sampledev.txt in the same directory
 ```
 
 
+## 3-10 Blue Dot Server
+
+A simple way to control a Pi from an Android device is
+the [Blue Dot app](https://bluedot.readthedocs.io). It connects as a
+classic client to a Pi listening as a classic server, and displays a pattern of dots. Tapping
+the dots sends command messages to the Pi. No programming is needed at the Android end. There is
+sample code for a dedicated Blue Dot server that is compiled as follows:
+
+
+```
+DOWNLOAD
+
+bluedot.c
+bluedot.txt
+btlib.c
+btlib.h
+
+COMPILE
+
+gcc bluedot.c btlib.c -o bluedot
+
+RUN (with bluedot.txt in the same directory)
+
+sudo ./bluedot
+
+```
+
+The bluedot.txt file must be edited first to set the Pi and Android device addresses. Find the
+Android address by turning Bluetooth on via Settings/Bluetooth, then
+Settings/Device info/Status. When bluedot is run on the Pi, it will report the Pi address and indicate
+how it should be listed in bluedot.txt. The Pi (running bluedot) must be paired from the Android device
+before starting the Blue Dot app. Run bluedot and follow the help instructions. Once connected,
+the Pi will display the commands as the buttons are tapped, and the bdotserver() code in bluedot.c
+may be customised for the desired application.
+
+
+
+
 ## 4 btlib Library 
 
 These library functions are in btlib.c/btlib.h.       
@@ -764,42 +1144,44 @@ These library functions are in btlib.c/btlib.h.
 [device\_info](#4-2-8-device\_info) - Print device information<br/>
 [classic\_scan](#4-2-1-classic\_scan) - Scan for classic devices<br/>
 [le\_scan](#4-2-15-le\_scan) - Scan for LE devices<br/>
-[localnode](#4-2-20-localnode) - Return node number of local device<br/>
-[list\_channels](#4-2-17-list\_channels) - List serial data channels of a Classic device<br/>
-[list\_ctics](#4-2-18-list\_ctics) - List characteristics of an LE device<br/>
-[list\_uuid](#4-2-19-list\_uuid) - List node services that contain a specified UUID<br/>
-[register\_serial](#4-2-34-register\_serial) - Register a custom UUID serial service<br/>
+[localnode](#4-2-21-localnode) - Return node number of local device<br/>
+[list\_channels](#4-2-18-list\_channels) - List serial data channels of a Classic device<br/>
+[list\_ctics](#4-2-19-list\_ctics) - List characteristics of an LE device<br/>
+[list\_uuid](#4-2-20-list\_uuid) - List node services that contain a specified UUID<br/>
+[register\_serial](#4-2-35-register\_serial) - Register a custom UUID serial service<br/>
 [connect\_node](#4-2-4-connect\_node) - Connect to a server node as a client<br/>
-[classic\_server](#4-2-2-classic\_server) - Become a classic server. Listen for connection<br/>
-[node\_server](#4-2-24-node\_server) - Become a node (LE) server. Listen for connection<br/>
-[mesh\_server](#4-2-23-mesh\_server) - Listen for broadcast mesh packets<br/>
+[classic\_server](#4-2-2-classic\_server) - Become a classic server. Listen for pair/connect<br/>
+[le\_server](#4-2-17-le\_server) - Become an LE server. Listen for connection<br/>
+[node\_server](#4-2-25-node\_server) - Become a node server. Listen for connection<br/>
+[mesh\_server](#4-2-24-mesh\_server) - Listen for broadcast mesh packets<br/>
 [find\_channel](#4-2-12-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
 [find\_ctics](#4-2-13-find\_ctics) - Read all characteristic info from LE device<br/>
 [find\_ctic\_index](#4-2-14-find\_ctic\_index) - Find characteristic index of UUID<br/>
-[write\_ctic](#4-2-39-write\_ctic) - Write characteristic to an LE device<br/>
-[read\_ctic](#4-2-27-read\_ctic) - Read characteristic from an LE device<br/>
-[notify\_ctic](#4-2-25-notify\_ctic) - Enable/disable LE characterisitc notifications<br/>
-[write\_node](#4-2-41-write\_node) - Write serial data to connected node device<br/>
-[write\_mesh](#4-2-40-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
-[read\_mesh](#4-2-29-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
-[read\_node\_count](#4-2-30-read\_node\_count) - Read a specified byte count from specified node<br/>
-[read\_node/all\_endchar](#4-2-31-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
-[read\_node/all\_clear](#4-2-32-read\_node-all\_clear) - Clear data in input buffer<br/>
-[read\_notify](#4-2-33-read\_notify) - Read LE notifications<br/>
-[read\_error](#4-2-28-read\_error) - Return error code of last read<br/>
+[write\_ctic](#4-2-41-write\_ctic) - Write characteristic to an LE device<br/>
+[read\_ctic](#4-2-28-read\_ctic) - Read characteristic from an LE device<br/>
+[notify\_ctic](#4-2-26-notify\_ctic) - Enable/disable LE characterisitc notifications<br/>
+[write\_node](#4-2-43-write\_node) - Write serial data to connected node device<br/>
+[write\_mesh](#4-2-42-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
+[read\_mesh](#4-2-30-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
+[read\_node\_count](#4-2-31-read\_node\_count) - Read a specified byte count from specified node<br/>
+[read\_node/all\_endchar](#4-2-32-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
+[read\_node/all\_clear](#4-2-33-read\_node-all\_clear) - Clear data in input buffer<br/>
+[read\_notify](#4-2-34-read\_notify) - Read LE notifications<br/>
+[read\_error](#4-2-29-read\_error) - Return error code of last read<br/>
 [device\_type](#4-2-10-device\_type) - Return device type (Classic/LE/Mesh/Local)<br/>
 [device\_name](#4-2-9-device\_name) - Return device name string<br/>
 [device\_connected](#4-2-7-device\_connected) - Return device connection state<br>
 [ctic\_ok](#4-2-6-cti\c_ok) - Return LE characteristic valid flag<br/>
 [ctic\_name](#4-2-5-ctic\_name) - Return LE characteristic name string<br/>
 [disconnect\_node](#4-2-11-disconnect\_node) - Disconnect initiated by client<br/>
-[wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
-[scroll\_back/forward](#4-2-35-scroll\_back-forward) - Scroll screen back/forward<br/>
-[set\_print\_flag](#4-2-36-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
-[output\_file](#4-2-26-output\_file) - Save all recent screen output to a file<br/>
-[strtohex](#4-2-37-strtohex) - Convert ascii string to array of hex values<br/>
-[mesh\_on](#4-2-21-mesh\_on) - Turn mesh transmission on<br/>
-[mesh\_off](#4-2-22-mesh\_off) - Turn mesh transmission off<br/>
+[wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
+[scroll\_back/forward](#4-2-36-scroll\_back-forward) - Scroll screen back/forward<br/>
+[set\_le\_wait](#4-2-37-set\_le\_wait) - Set LE server connection wait time<br/>
+[set\_print\_flag](#4-2-38-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
+[output\_file](#4-2-27-output\_file) - Save all recent screen output to a file<br/>
+[strtohex](#4-2-39-strtohex) - Convert ascii string to array of hex values<br/>
+[mesh\_on](#4-2-22-mesh\_on) - Turn mesh transmission on<br/>
+[mesh\_off](#4-2-23-mesh\_off) - Turn mesh transmission off<br/>
 
 
 ### QUICK REFERENCE
@@ -807,14 +1189,15 @@ These library functions are in btlib.c/btlib.h.
 ```
 classic_scan()
 classic_server(node,classic_callback,endchar,keyflag)
-    keyflag = KEY_ON, KEY_OFF
+    keyflag = KEY_ON,KEY_OFF  or  PASSKEY_OFF,PASSKEY_LOCAL,PASSKEY_REMOTE
     classic_callback(node,data[],datlen)
 close_all()
 connect_node(node,flag,channel)
-    flag = 0, CHANNEL_NODE, CHANNEL_NEW, CHANNEL_STORED
+    flag = CHANNEL_NODE, CHANNEL_NEW, CHANNEL_STORED, CHANNEL_LE
 *ctic_name(node,cticn)
 ctic_ok(node,cticn)
 device_connected(node)
+    return = NO_CONN, NODE_CONN, CLASSIC_CONN, LE_CONN
 device_info(mask)
     mask = BTYPE_LO, BTYPE_ME, BTYPE_CL, BTYPE_LE,
            BTYPE_CONNECTED, BTYPE_DISCONNECTED, BTYPE_SHORT  
@@ -829,6 +1212,8 @@ find_ctic_index(node,flag,uuid[])
     flag =  UUID_2, UUID_16
 init_blue("filename")
 le_scan()
+le_server(le_callback,timerds)
+    le_callback(clientnode,operation,cticn)
 list_channels(node,flag)
     flag = LIST_SHORT, LIST_FULL 
 list_ctics(node,flag)
@@ -847,7 +1232,7 @@ notify_ctic(node,cticn,notifyflag,notify_callback)
 output_file("filename")
 read_ctic(node,cticn,inbuf[],bufsize)
 read_error()
-    return = 0, ERROR_TIMEOUT, ERROR_KEY, ERROR_FATAL
+    return = 0, ERROR_TIMEOUT, ERROR_KEY, ERROR_FATAL, ERROR_DISCONNECT
 read_mesh(&node,inbuf[],bufsize,exitflag,timeoutms)
 read_node_count(node,inbuf[],count,exitflag,timeoutms)
 read_node_endchar(node,inbuf[],bufsize,endchar,exitflag,timeoutms)
@@ -859,6 +1244,7 @@ read_notify(timeoutms)
 register_serial(uuid[],"name")
 scroll_back()
 scroll_forward()
+set_le_wait(waitms)
 set_print_flag(flag)
      flag = PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
 *strtohex("ascii string",&nbytes)
@@ -886,15 +1272,15 @@ int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag)
 ```
 
 Sets up the local device as a classic server that waits for 
-a specified client (clientnode) to connect, then spends all its time listening
+a specified client (clientnode) to pair or connect, then spends all its time listening
 for packets sent from that client. The client may be a Windows/Android/.. device (maybe
 running a Bluetooth terminal program), or another Mesh Pi acting as a classic client
 and connecting via [connect\_node()](#4-2-4-connect\_node). The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 1000 bytes.
 When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling classic\_server to continue
-or exit. The classic\_server function only completes when it receives this exit return or the
-x key is pressed.
+or exit. The classic\_server function only completes when it receives this SERVER\_EXIT
+return or the x key is pressed.
 When operating as a classic\_server, there is a 1:1 connection between the client and
 this server - the other mesh devices do not participate.
 
@@ -907,7 +1293,7 @@ UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB  channel=1 name=My Custom Serial
 ```
 
 The UUID and name of this last custom serial service can be changed via
-[register\_serial](#4-2-34-register\_serial).
+[register\_serial](#4-2-35-register\_serial).
 
 
 PARAMETERS
@@ -916,20 +1302,66 @@ PARAMETERS
 clientnode = Node number of the client that will connect
 callback() = Callback function that deals with the received packets
 endchar = termination character of packets sent by the client
-keyflag = Flag to specify whether a link key is used:
-   KEY_OFF   Do not use a link key
-   KEY_ON    Use a link key
+keyflag = Flags to specify the security requirements of the connecting client:
+
+One of these:
+
+   KEY_OFF   Do not use a link key - use when the connecting client is
+             another Mesh Pi, or to force the remote device to re-pair.
+   KEY_ON    Use a link key - for Android/Windows/.. devices that want to pair
+   
+OR'ed with one of these:
+
+   PASSKEY_OFF    Do not use a pass key. Most convenient option if the connecting
+                  client does not require pass key confirmation. No user action needed.
+   PASSKEY_LOCAL  Display a pass key on the local server. The connecting client may
+                  pop up a box asking if the number has appeared, and the user must
+                  tap OK to proceed. The most convenient option if the connecting
+                  client requires pass key confirmation.
+   PASSKEY_REMOTE  Display a pass key on the remote connecting client, and the user
+                   must then enter the number on this local server device. The most
+                   inconvenient option.
+                   
+Recommended keyflags:
+  
+  KEY_OFF | PASSKEY_OFF    Use if the connecting client is a Mesh Pi
+  
+  KEY_ON  | PASSKEY_LOCAL  Use for Android/Windows.. clients that need 
+                           pass key confirmation for pairing or connection. 
+                            
+  KEY_ON  | PASSKEY_OFF    Might work for Android/Windows.. clients when pairing or
+                           connecting. They may connect without needing a pass key,
+                           in which case, no user action is needed.
+                           
+  KEY_OFF | PASSKEY_LOCAL  Try this for pairing if the above methods will not work,
+                           maybe because the client does not like the current
+                           link key. This forces the client to re-pair. Once
+                           successfully paired, use KEY_ON for subsequent connections.
+                            
+  KEY_ON  | PASSKEY_REMOTE  Use for Android/Windows.. clients. Inconvenient because
+                            the pass key appears on the remote client connecting
+                            device and must be entered on the local device.                                                  
+                               
+                    
+                    
 ```
 
-When connecting two Mesh Pis, use KEY\_OFF. When the client is a Windows/Android/.. device,
-some experimentation is required to determine whether to use a link key. Some terminal programs
+When connecting two Mesh Pis, use KEY\_OFF | PASSKEY\_OFF.
+When the client is a Windows/Android/.. device,
+some experimentation is required to determine whether to use a link key and pass key.
+Some terminal programs
 require the server to be paired before attempting to connect, some will pair during 
 connection, and some do not need to be paired, or may even have to be unpaired.
 If pairing is required, the server must 
 be running classic\_server() during the pairing process and KEY\_ON will almost certainly be
 needed. Otherwise, trial and error will determine what combination of pairing and keyflag 
 will work. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
-in Android Settings/Bluetooth.
+in Android Settings/Bluetooth. If a device has been previously paired using
+other (non-btferret) software on the Pi, it
+must be un-paired first because btferret does not inherit pairing information from bluez.
+If the connecting client asks for confirmation that a passkey has appeared on the
+server's screen, tap OK or Pair. If the connecting client asks for a PIN number,
+enter 0000. It will not be used because classic\_server will not ask for a PIN number.
 
 
 RETURN
@@ -947,6 +1379,16 @@ int callback(int clientnode,char *data,int datlen)
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
 datlen = number of bytes in data[] - max 400
+
+RETURN one of the following
+
+SERVER_CONTINUE = Wait for another packet
+SERVER_EXIT     = Stop server and disconnect.
+                  If the client is another Mesh Pi it
+                  should be running wait_for_disconnect().
+                  If the client is a Windows/Android.. device
+                  it may or may not respond to the
+                  disconnection immediately.
 ```
 
 SAMPLE CODE
@@ -955,14 +1397,23 @@ This a minimal classic server callback that simply prints a message, and exits
 when the first data byte is an ascii 'D'. It can also be stopped by
 pressing the x key. See btferret.c or sample.c for other examples. Note that the
 callback function is effectively identical to the node callback listed in 
-[node\_server](#4-2-24-node\_server), so the same code can be used for classic and node callbacks.
+[node\_server](#4-2-25-node\_server), so the same code
+can be used for classic and node callbacks.
+See the sample code in [read\_node\_count](#4-2-31-read\_node\_count) for
+an example of data exchange inside the callback function, and sending an
+"OK" reply to the client.
 
 ```c
-   // listen for packets from node 4 with termination character 10
-   // do not use a link key
-classic_server(4,classic_callback,10,KEY_OFF);
 
+   // listen for packets from node 4 (another Mesh Pi) with termination character 10
+   // do not use a link key or passkey for Pi-Pi connections
+classic_server(4,classic_callback,10,KEY_OFF | PASSKEY_OFF);
 
+      // listen for pairing or connection requests from node 2, an
+      // Android/Windows.. device. The remote device may pop up a box
+      // asking if the passkey has appeared on the local server screen.
+classic_server(2,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
+   
 int classic_callback(int clientnode,char *data,int datlen)
   {
   
@@ -970,8 +1421,9 @@ int classic_callback(int clientnode,char *data,int datlen)
   
   printf("Classic packet from %s\n",device_name(clientnode));
   if(data[0] == 'D')      // 'D' programmed as exit command
-    return(SERVER_EXIT);
-  return(SERVER_CONTINUE);
+    return(SERVER_EXIT);  // A Mesh Pi client should be
+                          // running wait_for_disconnect()
+  return(SERVER_CONTINUE);  // wait for another packet
   }  
 ```
 
@@ -1002,21 +1454,23 @@ node = Node number
  
 flag = one of the following
     CHANNEL_NODE      Connect to Mesh Pi listening as a node server
-    CHANNEL_NEW       Connect to classic server listening on specified channel
-    CHANNEL_STORED    Reconnect to classic server using previous/stored channel
-    Ignored for LE servers
+    CHANNEL_NEW       Connect to classic server or Mesh Pi listening as classic server
+                      on channel specified in parameters
+    CHANNEL_STORED    Connect to classic server or Mesh Pi listening as classic server
+                      using previous/stored/specified in device.txt CHANNEL=
+    CHANNEL_LE        Connect to LE server or Mesh Pi listening as LE server
     
-channel = RFCOMM channel
-          Ignored if flag = CHANNEL_NODE or CHANNEL_STORED
+channel = RFCOMM channel for CHANNEL_NEW only
+          Ignored if flag = CHANNEL_NODE or CHANNEL_STORED or CHANNEL_LE
           always 1 if the server is a Mesh Pi listening as a classic server.
-          Ignored for LE servers.                  
+                           
     
 ```
 
 The RFCOMM channel must be the serial channel on which the remote device (acting as a
 server) is listening (see [UUIDs](#5-1-what-gives-with-uuids)).
 Remote device channels can be found
-by calling [find\_channel](#4-2-12-find\_channel) or [list\_channels](#4-2-17-list\_channels).
+by calling [find\_channel](#4-2-12-find\_channel) or [list\_channels](#4-2-18-list\_channels).
 Use
 CHANNEL\_NEW to specify the channel in the parameters. CHANNEL\_STORED uses the channel stored
 in device information that can be set in two ways:
@@ -1028,6 +1482,9 @@ all subsequent reconnections.
 
 Some devices have fixed RFCOMM channels which are permanent and known, while others allocate
 them as needed and can only be found by reading the remote device services at connection time.
+
+When connecting to an LE server (CHANNEL_LE) a waiting delay is sometimes required as explained
+in [set\_le\_wait](#4-2-37-set\_le\_wait).
 
 RETURN
 
@@ -1048,15 +1505,18 @@ DEVICE = Pictail  TYPE=LE NODE=3  ADDRESS = 00:1E:C0:2D:17:7C
 DEVICE = My other Pi  TYPE=MESH NODE=9 ADDRESS = B8:27:EB:F1:50:C3
 */
 
-int channel;
-
-connect_node(3,0,0);  // connect to Pictail LE server node 3
 connect_node(9,CHANNEL_NODE,0);  // connect to My other Pi Mesh device node 9
                                  // listening as a node server
+                                 
+connect_node(9,CHANNEL_LE,0);   // connect to My other Pi Mesh device node 9
+                                // listening as an LE server
                                  
 connect_node(9,CHANNEL_NEW,1);  // connect to My other Pi Mesh device node 9
                                 // listening as a classic server on channel 1
                                 // (all Mesh Pis listen on channel 1)
+                                
+set_le_wait(500);              // some LE connections fail if the wait is too small 
+connect_node(3,CHANNEL_LE,0);  // connect to Pictail LE server node 3                                
                                             
 connect_node(6,CHANNEL_STORED,0); // connect to HC-05 classic server node 6
                                   // via channel 1 specified in devices.txt                       
@@ -1068,6 +1528,8 @@ connect_node(7,CHANNEL_NEW,4);  // connect to Windows PC Classic server node 7
 connect_node(7,CHANNEL_STORED,0);  // reconnect to Windows PC classic server node 7
                                    // using stored channel 4 set by the previous
                                    // CHANNEL_NEW connection  
+
+int channel;
                                   
       // find Classic server channel number from its 2 or 16-byte UUID               
 channel = find_channel(7,UUID_2,strtohex("1101",NULL));
@@ -1130,6 +1592,7 @@ RETURN
 See [device\_type](#4-2-10-device\_type) for sample code.
 
 
+
 ## 4-2-7 device\_connected
 
 ```c
@@ -1147,8 +1610,11 @@ node = Node number
 RETURN
 
 ```
-0 = Not connected
-1 = Connected
+NO_CONN      = Not connected
+CLASSIC_CONN = Classic client or server
+LE_CONN      = LE client or server 
+NODE_CONN    = Node client or server
+
 ```
 
 
@@ -1206,8 +1672,14 @@ pointer to a zero terminated string containing device name or
 "Invalid node"
 ```
 
-See [device\_type](#4-2-10-device\_type) for sample code.
+SAMPLE CODE
 
+```c
+
+  // print name of node 5
+printf("Node 5 name = %s\n",device_name(5));
+
+```
 
 ## 4-2-10 device\_type
 
@@ -1242,6 +1714,8 @@ and [ctic\_name](#4-2-5-ctic\_name).
 
 ```c
 int k;
+
+  // print characteristic info for node 7
 
 printf("Node 7 name = %s\n",device_name(7));
 if(device_type(7) == BTYPE_LE)
@@ -1292,24 +1766,26 @@ disconnected.
 The solution is to send the server a message that it interprets as an instruction
 to disconnect. The server then initiates
 the disconnection and the client must wait for a disconnection sequence from the server to 
-complete the process gracefully - and [wait\_for\_disconnect](#4-2-38-wait\_for\_disconnect)
+complete the process gracefully - and [wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
-[node client/server connection](#3-6-pi-pi-client-server-connection).
+[node client/server connection](#3-7-pi-pi-client-server-connection).
 
 ```c
-   // Send a serial data message to node 3 that it interprets as
+   // Send a serial data message to node 4 that it interprets as
    // a disconnect instruction - in this case a single 'D' character
 
 char buf[4];
 
 buf[0] = 'D';  
-write_node(3,buf,1);   
+write_node(4,buf,1);   
    // Server has been programmed to initiate disconnection
-   // in response to this message.
-   // Wait 3s for the disconnect procedure packets sent back 
+   // in response to this message. If it is another Mesh PI
+   // this is done by returning SERVER_EXIT from its callback function.
+   // Wait 3s (3000ms) for the disconnect procedure packets sent back 
    // by the server and complete the disconnection properly
-wait_for_disconnect(3,3000);
+   
+wait_for_disconnect(4,3000);
    // If the function times out, the local device
    // initiates and completes the disconnection.
    // So disconnection is guaranteed at this point. 
@@ -1410,8 +1886,8 @@ conveniently via devices.txt in [init\_blue](#4-2-15-init\_blue)),
 call [find\_ctics](#4-2-13-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
-Use the characteristic index in [read\_ctic](#4-2-27-read\_ctic)
-and [write\_ctic](#4-2-39-write\_ctic).
+Use the characteristic index in [read\_ctic](#4-2-28-read\_ctic)
+and [write\_ctic](#4-2-41-write\_ctic).
 
 
 PARAMETERS
@@ -1463,7 +1939,9 @@ file with information about devices in the network (btferret assumes devices.txt
 The list should include the local device itself. All Pis in the network
 should be MESH type, while other devices will be CLASSIC or LE. If there is only one
 Bluetooth adapter it will be hci0 (as reported by hciconfig), and init\_blue should be used.
-For other hci device numbers, use init\_blue\_ex.
+For other hci device numbers, use init\_blue\_ex. If the local device is going to be
+an LE server, see [le\_server()](#4-2-17-le\_server) for more information about setting
+characteristics in the devices.txt file.
 
 PARAMETERS
 
@@ -1493,6 +1971,9 @@ devices txt file example:
   ; This file must list all network devices
 DEVICE = My Pi        TYPE=MESH NODE=1 ADDRESS=B6:15:EB:F5:50:53
 DEVICE = My other Pi  TYPE=MESH NODE=2 ADDRESS=B8:27:EB:F1:50:C3
+  ; characteristics when acting as an LE server - see le_server() documentation
+  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=8   ; index 0 r/w no ack 8 bytes 
+  LECHAR=Detector HANDLE=0007  PERMIT=06  SIZE=2   ; index 1 r/w no ack 2 bytes
 DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; characteristic index 0
   LECHAR=Control handle=000E PERMIT=06 SIZE=1   ;                index 1
@@ -1531,13 +2012,13 @@ UUID = 2A00       Not needed if HANDLE specified
 PERMIT permissions should be one of the following bit combinations:
 
 ```
-02 = r   Read
+02 = r   Read only
 04 = w   Write no acknowledge
 08 = wa  Write with acknowledge
 06 = rw  Read/Write no ack
 0A = rwa Read/Write ack
 10 = n   Notify capable
-20 = n   Indicate (notify+acknowledge) capable
+16 = rwn Read/Write no ack/Notify capable
 ```
 
 If PERMIT is not known, find_ctics will
@@ -1572,7 +2053,221 @@ unknown, they can be found via [find\_ctics](#4-2-13-find\_ctics),
 and they will also be added to the device
 information. 
 
-## 4-2-17 list\_channels
+
+## 4-2-17 le\_server
+
+```c
+int le_server(int callback(),int timerds)
+```
+
+
+Sets up the local device as an LE server that waits for 
+LE clients to connect, then spends all its time listening
+for operations sent from those clients. When a remote device connects,
+reads/writes a characteristic, or disconnects, a callback function is called, and this can
+be used to trigger code execution by the server, allowing the server to be controlled by
+the LE client. The characteristics are defined in the devices.txt file, details below.
+
+
+The connecting device may be another Pi acting as an LE client, or a phone app such
+as [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile).
+
+PARAMETERS
+
+```
+callback() = Callback function that is called when a remote client connects,
+             read/writes, disconnects, or every timerds deci-seconds.
+           
+timerds = Timer interval in deci (0.1) seconds.
+          0 = No LE_TIMER calls
+         >0 = Call callback() with operation=LE_TIMER every timerds deci-seconds
+         
+          e.g. timerds = 100  call LE_TIMER every 10 seconds           
+
+```
+
+The callback function is defined as follows:
+
+```c
+
+int le_callback(int clientnode,int operation,int cticn);
+
+
+int le_callback(int clientnode,int operation,int cticn)
+  {
+  if(operation == LE_CONNECT)
+    {
+    // clientnode has just connected
+    }
+  else if(operation == LE_READ)
+    {
+    // clientnode has just read local characteristic index cticn
+    }
+  else if(operation == LE_WRITE)
+    {
+    // clientnode has just written local characteristic index cticn
+    }
+  else if(operation == LE_DISCONNECT)
+    {
+    // clientnode has just disconnected
+    // uncomment next line to stop LE server when client disconnects
+    // return(SERVER_EXIT);
+    // otherwise LE server will continue and wait for another connection
+    // or operations from other clients that are still connected
+    }
+  else if(operation == LE_TIMER)
+    {
+    // The server timer calls here every timerds deci-seconds 
+    }
+    
+  return(SERVER_CONTINUE);
+  }
+```
+
+No restriction is placed on the connecting devices, so any nearby device can connect. If this is a 
+security problem, check the device's identity using clientnode in the callback
+LE\_CONNECT operation, and if it is not welcome, disconnect it immediately with disconnect\_node(clientnode).
+If a device is not in the devices.txt info list, it will be assigned a client node number of 1000 or higher,
+so this can be used to identify an unknown device.
+Multiple LE clients can
+connect simultaneously. The clients may be Windows/Android/.. devices running
+an LE client app or other Pis running btferret/btlib.
+
+The local device's characteristics are
+defined in the devices.txt file read by [init_blue](#4-2-15-init\_blue). The local device reads and writes them
+by using [read\_ctic](#4-2-28-read\_ctic) and [write\_ctic](#4-2-41-write\_ctic) with
+[localnode()](#4-2-21-localnode) as follows:
+
+```
+char buf[32];
+
+read_ctic(localnode(),2,buf,sizeof(buf));  // read characteristic index 2 
+write_ctic(localnode(),2,buf,1);           // write one byte to characteristic index 2
+write_ctic(localnode(),2,buf,0);           // write SIZE= number of bytes  
+```
+
+They can also be read and written by a connected LE client.
+In the devices.txt file, the characteristic handles can be specified or not.
+If not, the system will allocate them automatically.
+The advantage of choosing the handles is that they can be listed in all
+mesh Pi devices.txt files
+and connecting Pis do not need to read the services to find the handles. Connecting Android/Windows devices
+will read the services to find the handles.
+If the handles are specified, the first available one is 0005, and
+each characteristic also uses one other handle, or two others if notification is enabled.
+So if handle=0005 is chosen,
+it also uses the previous handle 0004, and if it has notify enabled it also uses the following
+handle 0006. So for a sequence of characteristics
+without notify capability, use:
+
+```
+0005   (also uses 0004)
+0007   (also uses 0006)
+0009   (also uses 0008)
+000B   (also uses 000A)
+
+```
+
+For a sequence, all with notify capability, use
+
+```
+0005  (also uses 0004 and 0006)
+0008  (also uses 0007 and 0009)
+000B  (also uses 000A and 000C)
+
+```
+
+The characteristic UUIDs can be specified or not. If not, the system will allocate them automatically and 
+the last four bytes will be the handle and the characteristic index. The UUID can be one of the
+standard defined [16-bit UUID Numbers](https://www.bluetooth.com/specifications/assigned-numbers/), and the
+connecting device will recognise it as such. 
+
+Here is a sample devices.txt entry for a mesh Pi that will act as an LE server. There is more information
+about devices.txt LE characteristic entries in [init\_blue](#4-2-15-init\_blue).
+
+```
+DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
+  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes 
+  LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable (uses 3 handles)
+  LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte         (uses 2 handles)
+  LECHAR=Message  HANDLE=000C  PERMIT=06  SIZE=8 UUID=00112233445566778899AABBCCDDEEFF   ; r/w 8 bytes
+  LECHAR=Name     PERMIT=06  SIZE=16 UUID=2A00     ; 2A00 is the standard UUID for Device Name                                                 
+  LECHAR=Control  PERMIT=06  SIZE=2                ; index 5 Handle and UUID will be assigned automatically 
+                                                     (but other Mesh Pis will report this as an error in 
+                                                      their devices.txt file - they need a handle or a UUID.)
+```
+
+
+SAMPLE CODE
+
+
+```c
+/* devices.txt file:
+DEVICE= Server Pi  TYPE=MESH NODE=2 ADDRESS=22:22:22:22:22:22
+  LECHAR=Status PERMIT=06 HANDLE=0005 SIZE=1
+  LECHAR=Test   PERMIT=06 HANDLE=0007 SIZE=2
+*/
+
+unsigned char buf[2];
+
+read_ctic(localnode(),0,buf,sizeof(buf));  // read Status characteristic index 0
+
+buf[0] = 12;
+buf[1] = 34;
+write_ctic(localnode(),1,buf,0);           // write Test characteristic index 1
+                                           // which has SIZE=2 in devices.txt
+
+    // become an LE server
+    // wait for clients to connect
+    // If client is another mesh Pi: connect by btferret c or
+    //    connect_node(this device node,CHANNEL_LE,0);    
+    // no LE_TIMER calls to le_callback
+le_server(le_callback,0);
+   
+   // wait for clients to connect and then
+   // call LE_TIMER once per 10 seconds (100 deci-seconds)
+le_server(le_callback,100);  
+
+
+int le_callback(int clientnode,int operation,int cticn)
+  {  
+  int nread;
+  char dat[32];
+  
+  if(operation == LE_CONNECT)
+    {
+    printf("%s has connected\n",device_name(clientnode));
+    if(clientnode >= 1000)
+      {
+      printf("Unknown device - disconnecting\n");
+      disconnect_node(clientnode);
+      }
+    }
+  else if(operation == LE_TIMER) // every timerds deci-seconds 
+    printf("Timer\n");
+  else if(operation == LE_WRITE)
+    {
+    printf("%s written by %s\n",ctic_name(clientnode,cticn),device_name(clientnode));
+      // read data just written to cticn
+    nread = read_ctic(localnode(),cticn,dat,sizeof(dat));
+      // execute code depending on data
+    if(cticn == 2 && dat[0] == 4)
+      printf("Value 4 written to first byte of characteristic index 2\n");
+    }
+  else if(operation == LE_READ)
+    printf("%s read by %s\n",ctic_name(clientnode,cticn),device_name(clientnode));  
+  else if(operation == LE_DISCONNECT)
+    {
+    if(clientnode == 3)
+      return(SERVER_EXIT);  // stop server when node 3 disconnects  
+    }
+  return(SERVER_CONTINUE);
+  }  
+  
+```
+
+
+## 4-2-18 list\_channels
 
 ```c
 int list_channels(int node,int flag)
@@ -1604,7 +2299,7 @@ list_channels(5,LIST_FULL);   // full info about node 5 serial channels
 ```
 
 
-## 4-2-18 list\_ctics
+## 4-2-19 list\_ctics
 
 ```c
 int list_ctics(int node,int flag)
@@ -1643,7 +2338,7 @@ list_ctics(3,LIST_FULL);   // full characteristic info of node 3
                            // known by device info
 ```
                            
-## 4-2-19 list\_uuid
+## 4-2-20 list\_uuid
 
 ```c
 int list_uuid(int node,char *uuid)
@@ -1683,7 +2378,7 @@ list_uuid(5,strtohex("0100",NULL));
 
 ```
 
-## 4-2-20 localnode
+## 4-2-21 localnode
 
 ```c
 int localnode(void)
@@ -1699,7 +2394,7 @@ printf("Local device node number = %d\n",localnode());
 ```
 
 
-## 4-2-21 mesh\_on
+## 4-2-22 mesh\_on
 
 ```c
 void mesh_on(void)
@@ -1707,13 +2402,13 @@ void mesh_on(void)
 
 Turn on mesh transmission. The local device will continuously send the last
 mesh packet set via write\_mesh. Mesh transmission is automatically enabled
-by calling [write\_mesh](#4-2-40-write\_mesh), or [read\_mesh](#4-2-29-read\_mesh),
-or [mesh\_server](#4-2-23-mesh\_server), or [node\_server](#4-2-24-node\_server),
+by calling [write\_mesh](#4-2-42-write\_mesh), or [read\_mesh](#4-2-30-read\_mesh),
+or [mesh\_server](#4-2-24-mesh\_server), or [node\_server](#4-2-25-node\_server),
 so it is usually not necessary to call mesh\_on explicitly. Mesh must be on for
 another mesh device to connect.
 
 
-## 4-2-22 mesh\_off
+## 4-2-23 mesh\_off
 
 ```c
 void mesh_off(void)
@@ -1723,14 +2418,14 @@ Turn off mesh transmission. The local device will stop continuously sending
 the last mesh packet set via write_mesh. The purpose is to reduce the load on the 
 system when mesh functions are no longer needed, or to make the device invisible.
 
-## 4-2-23 mesh\_server
+## 4-2-24 mesh\_server
 
 ```c
 void mesh_server(int (*callback)())
 ```
 
 Sets up the local device as a mesh server which spends all its time listening
-for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-40-write\_mesh).
+for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-42-write\_mesh).
 The packets are limited to a maximum size of
 25 bytes. When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling mesh\_server to continue
@@ -1773,24 +2468,26 @@ int mesh_callback(int clientnode,char *data,int datlen)
   }  
 ```
 
-## 4-2-24 node\_server
+## 4-2-25 node\_server
 
 ```c
 int node_server(int clientnode,int (*callback)(),char endchar)
 ```
 
-Sets up the local device as a node (LE) server that waits for 
+Sets up the local device as a node server that waits for 
 a specified client (clientnode) to connect, then spends all its time listening
-for node packets sent from that client via [write\_node](#4-2-41-write\_node).
+for node packets sent from that client via [write\_node](#4-2-43-write\_node).
 The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 400 bytes.
 When a packet is received,
 it is despatched to the callback
 function. The callback function returns a flag telling node\_server to continue
-or exit. The node\_server function only completes when it receives this exit return or the
-x key is pressed.
+or exit. The node\_server function only completes when it receives the SERVER\_EXIT
+return or the x key is pressed.
 When operating as a node\_server, there is a 1:1 connection between the client and
-this server - the other mesh devices do not participate. 
+this server - the other mesh devices do not participate. See the sample code
+in [read\_node\_count](#4-2-31-read\_node\_count) for an example of data exchange
+inside the callback function, and sending an "OK" reply to the client.
 
 PARAMETERS
 
@@ -1815,6 +2512,13 @@ int callback(int clientnode,char *data,int datlen)
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
 datlen = number of bytes in data[] - max 400
+
+RETURN one of the following
+
+SERVER_CONTINUE = Wait for another packet
+SERVER_EXIT     = Stop server and disconnect
+                  Client should be running wait_for_disconnect()
+
 ```
 
 SAMPLE CODE
@@ -1834,12 +2538,12 @@ int node_callback(int clientnode,char *data,int datlen)
   {
   printf("Node packet from %s\n",device_name(clientnode));
   if(data[0] == 'D')      // 'D' programmed as exit command
-    return(SERVER_EXIT);
-  return(SERVER_CONTINUE);
+    return(SERVER_EXIT);  // client should be running wait_for_disconnect()
+  return(SERVER_CONTINUE);  // wait for another packet
   }  
 ```
 
-## 4-2-25 notify\_ctic
+## 4-2-26 notify\_ctic
 
 ```c
 int notify_ctic(int node,int cticn,int notifyflag,int (*callback)())
@@ -1851,9 +2555,9 @@ LE device sends it to the client device without being asked. In addition to the 
 bit (that is set by the LE device), notifications must also be enabled by the client
 via this function. Once enabled, when a notification is received, the callback
 function is called. The client must be listening for
-input via: [read\_node\_count](#4-2-30-read\_node\_count),
-[read\_node-all\_endchar](#4-2-31-read\_node-all\_endchar),
-[read\_notify](#4-2-33-read\_notify), or any other function that reads incoming packets.
+input via: [read\_node\_count](#4-2-31-read\_node\_count),
+[read\_node-all\_endchar](#4-2-32-read\_node-all\_endchar),
+[read\_notify](#4-2-34-read\_notify), or any other function that reads incoming packets.
 
 PARAMETERS
 
@@ -1873,6 +2577,20 @@ RETURN
 1 = OK
 ```
 
+
+
+The callback function is defined as follows:
+
+```
+void callback(int lenode,int cticn,char *data,int datlen)
+
+lenode = Node number of the device that sent the notification
+cticn = Characteristic index in device info
+data = array of packet data bytes
+datlen = number of bytes in data[] - max 25
+```
+
+
 SAMPLE CODE
 
 ```c
@@ -1887,7 +2605,7 @@ DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
 */
 
 
-int notify_callback(int lenode,int cticn,char *buf,int nread);
+void notify_callback(int lenode,int cticn,char *buf,int nread);
 
   // enable notifications for characteristic index 0 from LE node 4
   
@@ -1895,7 +2613,7 @@ notify_ctic(4,0,NOTIFY_ENABLE,notify_callback);
 
 
   
-int notify_callback(int lenode,int cticn,char *buf,int nread)
+void notify_callback(int lenode,int cticn,char *buf,int nread)
   {
   int n;
   
@@ -1906,13 +2624,13 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
   for(n = 0 ; n < nread ; ++n)
     printf(" %02X",buf[n]);
   printf("\n");
-  return(0);
+  return;
   }
 
 ```
 
 
-## 4-2-26 output\_file
+## 4-2-27 output\_file
 
 ```c
 int output_file(char *filemame)
@@ -1942,7 +2660,7 @@ output_file("/home/pi/output.txt");
 ```
 
 
-## 4-2-27 read\_ctic
+## 4-2-28 read\_ctic
 
 ```c
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize)
@@ -1995,7 +2713,7 @@ char data[32];
 int nread,cticn;
 
   // connect to LE device Pictail node 4
-connect_node(4,0,0); 
+connect_node(4,CHANNEL_LE,0); 
 
   // read Pictail (node 4) characteristic Test (index 1)
 
@@ -2012,16 +2730,16 @@ nread = read_ctic(4,cticn),data,sizeof(data));
 disconnect_node(4);
 ```
 
-## 4-2-28 read\_error
+## 4-2-29 read\_error
 
 ```c
 int read_error(void)
 ```
 
 Return error state following a read via
-[read\_node/all\_endchar](#4-2-31-read\_node-all\_endchar), or
-[read\_node\_count](#4-2-30-read\_node\_count), or
-[read\_ctic](#4-2-27-read\_ctic).
+[read\_node/all\_endchar](#4-2-32-read\_node-all\_endchar), or
+[read\_node\_count](#4-2-31-read\_node\_count), or
+[read\_ctic](#4-2-28-read\_ctic).
 
 RETURN
 
@@ -2029,11 +2747,13 @@ RETURN
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
+  ERROR_DISCONNECT = Remote device has disconnected  
   ERROR_FATAL = some other error such as device not connected
+
 ```
 
 
-## 4-2-29 read\_mesh
+## 4-2-30 read\_mesh
 
 ```c
 int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
@@ -2042,7 +2762,7 @@ int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
 Reads a mesh packet sent by any other trasmitting mesh device. The maximum size
 of a mesh packet is 25 bytes. Mesh reads do not look for a termination character,
 they read the full byte count in the packet. The most convenient way to wait for
-mesh packets as a server is to use [mesh\_server](#4-2-23-mesh\_server).
+mesh packets as a server is to use [mesh\_server](#4-2-24-mesh\_server).
 
 PARAMETERS
 
@@ -2073,6 +2793,7 @@ The read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
+  ERROR_DISCONNECT = Remote device disconnected
   ERROR_FATAL = some other error       
         
 ```        
@@ -2100,18 +2821,29 @@ while(read_error() == 0);
 ```
 
 
-## 4-2-30 read\_node\_count
+## 4-2-31 read\_node\_count
 
 ```c
 int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
-Read node packet from a specified connected node until a specified 
-number of bytes (count) is received (sent via [write\_node](#4-2-41-write\_node)).
+Read node packet from a specified node connected as CLASSIC or NODE until a specified 
+number of bytes (count) is received (sent via [write\_node](#4-2-43-write\_node)).
 If no such packet is received, the
-function terminates via a time out or x key press. The [read\_error](#4-2-28-read\_error)
+function terminates via a time out or x key press. The [read\_error](#4-2-29-read\_error)
 function returns
 the error state. Node packets have a maximum size of 400 bytes.
+
+The read\_node\_count and read\_node\_endchar functions are used when exchanging data
+between a client and a server's callback function, and their use can be unnecessary.
+When a client calls write\_node (with the server's termination character at the end of
+the packet), the data is delivered
+to the server's callback function. If the desired operation can be
+completed with this data, and no reply is sent to the client, the read\_node functions
+will never be needed.
+Otherwise, the sample code below shows a data exchange using read\_node.   
+
+
 
 PARAMETERS
 
@@ -2144,41 +2876,114 @@ The read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
+  ERROR_DISCONNECT = Remote device has disconnected  
   ERROR_FATAL = some other error such as device not connected
 
 ```
 
 SAMPLE CODE
 
-```c
-int nread;
-char buff[64];
+This is an example of using read\_node functions to exchange data between a client and
+a server's callback function. This is necessary, for example, when the server
+sends data back to the client or when the client needs to send binary data that
+includes the server's termination character. The callback function is first triggered when
+the client calls write\_node with the server's termination character. Then, the client and
+server must agree on the data exchange that happens inside the callback code. In this case, the
+client sends 8 bytes to the server, the server sends 20 bytes back, and then an "OK" text message.
 
-  // Read 8 bytes from node 3. Time out after 1 second
-nread = read_node_count(3,buff,8,EXIT_TIMEOUT,1000);
-  // Read 8 bytes from node 6, If not done, exit on x key press
-nread = read_node_count(6,buff,8,EXIT_KEY,0);
+
+```c
+***** CLIENT CODE *****
+
+char dat[32];
+
+connect_node(2,CHANNEL_NODE,0);
+
+  // client triggers server's callback by sending
+  // a single termination character 10
+
+dat[0] = 10;
+write_node(2,dat,1);  
+
+  // the server's callback function is now running
+  // and expects a packet of 8 bytes
+
+write_node(2,dat,8);  
+
+  // we expect the server to send 20 bytes back
+
+read_node_count(2,dat,20,EXIT_TIMEOUT,1000);
+  
   // check
+
 if(read_error() != 0)
   printf("Read failed\n");
+  
+  // we expect the server to send "OK" with 10 (\n) termination char
+  
+read_node_endchar(2,dat,sizeof(dat),10,EXIT_TIMEOUT,1000);
+printf("%s",dat);  
+  
+  // The server's callback function has now terminated with SERVER_EXIT
+  // The server has stopped and has initiated disconnect.
+  // Wait for the disconnection to complete with 5s time out
+  
+wait_for_disconnect(2,5000);
 
+ 
+***** SERVER CODE ******
+
+node_server(1,callback,10);   // termination char = 10
+
+int callback(int clientnode,unsigned char *dat,int count)
+  {
+  char *s,buf[20];
+  
+     // the client has sent a single termination char
+     // count should be 1 and dat[0] should be 10
+  
+     // we expect the client to send a packet of 8 bytes
+     // read it to buf[]
+  
+  read_node_count(clientnode,buf,8,EXIT_TIMEOUT,1000);  // 1 sec timeout 
+  
+     // the client now expects a packet of 20 bytes
+     // send buf[] data
+     
+  write_node(clientnode,buf,20);
+   
+     // client now expects ascii "OK" with 10 termination char
+     
+  s = "OK\n";
+  write_node(clientnode,s,strlen(s));
+
+    // this return stops the server (node_server() returns)
+    // and intiates disconnection
+    // The client must be running wait_for_disconnect()
+  
+  return(SERVER_EXIT);
+  }
 ```
 
-## 4-2-31 read\_node-all\_endchar
+
+
+## 4-2-32 read\_node-all\_endchar
 
 ```c
 int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
 int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
 ```
 
-Read node packet from a specified connected node, or all connected nodes, until a specified 
-termination character (endchar) is received (sent via [write\_node](#4-2-41-write\_node)).
+Read node packet from a specified node (connected as CLASSIC or NODE), or all connected nodes,
+until a specified 
+termination character (endchar) is received (sent via [write\_node](#4-2-43-write\_node)).
 If no such packet is received, the function terminates via a time out or x key press.
-The [read\_error](#4-2-28-read\_error) function returns
+The [read\_error](#4-2-29-read\_error) function returns
 the error state. The read\_all\_node function listens to all connected nodes and
 returns the first packet received. Node packets have a maximum size of 400 bytes.
-The most convenient way to wait for node packets as a server is to
-use [node\_server](#4-2-24-node\_server).
+This function is used when exchanging data between a
+client and a server's callback code, and is not always needed as explained
+in [read\_node\_count](#4-2-31-read\_node\_count).
 
 PARAMETERS
 
@@ -2219,6 +3024,7 @@ The read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
+  ERROR_DISCONNECT = Remote device has disconnected    
   ERROR_FATAL = some other error such as device not connected
                 or buffer size exceeded
 
@@ -2250,7 +3056,7 @@ if(read_error() != 0)
 
 ```
 
-## 4-2-32 read\_node-all\_clear
+## 4-2-33 read\_node-all\_clear
 
 ```c
 void read_node_clear(int node)
@@ -2275,18 +3081,18 @@ read_all_clear();     // clear all node packets
                       // from the input buffer
 ```
  
-## 4-2-33 read\_notify
+## 4-2-34 read\_notify
 
 ```c
 void read_notify(int timeoutms)
 ```
 
-Waits for input from all devices and returns if a notification is received from an LE
-device. An LE device characteristic must have been enabled for notifications via
-[notify\_ctic](#4-2-25-notify\_ctic). If a notification is received, its callback function
+Waits for input from all devices and reads any notifications from LE devices.
+An LE device characteristic must have been enabled for notifications via
+[notify\_ctic](#4-2-26-notify\_ctic). If a notification is received, its callback function
 is called. All other functions that read input will also do this, so it is only necessary
-to use this function if there is no other activity.
-If no notifications are received, the function times out after the specified time. 
+to use this function if there is no other activity. The function exits after the
+specified time out, or can be stopped by an x key press. 
 
 PARAMETERS
 
@@ -2294,10 +3100,19 @@ PARAMETERS
 timeoutms = Time out in ms
 ```
 
+SAMPLE CODE
+
+```c
+int tos;
+
+tos = 10;   // time out 10 seconds
+printf("Reading notifications for %d seconds (x = stop)\n",tos);
+read_notify(tos*1000);
+
+```
 
 
-
-## 4-2-34 register\_serial
+## 4-2-35 register\_serial
 
 ```c
 void register_serial(char *uuid,char *name)
@@ -2329,7 +3144,7 @@ SAMPLE CODE
 register_serial(strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL),"My custom serial");  
 ```
 
-## 4-2-35 scroll\_back-forward
+## 4-2-36 scroll\_back-forward
 
 ```c
 void scroll_back(void)
@@ -2338,8 +3153,8 @@ void scroll_forward(void)
 
 Screen prints performed by btlib.c funtions are saved in a buffer. These functions
 scroll the screen backwards and forwards through this buffer. Screen prints can
-be controlled via [set\_print\_flag](#4-2-36-set\_print\_flag).
-The buffer can be saved to a file via [output\_file](#4-2-26-output\_file).
+be controlled via [set\_print\_flag](#4-2-38-set\_print\_flag).
+The buffer can be saved to a file via [output\_file](#4-2-27-output\_file).
 
 SAMPLE CODE
 
@@ -2348,7 +3163,54 @@ scroll_back();      // scroll screen back through print buffer
 scroll_forward();   // scroll screen forwards through print buffer
 ```
 
-## 4-2-36 set\_print\_flag
+## 4-2-37 set\_le\_wait
+
+```c
+int set_le_wait(int waitms)
+```
+
+Set the wait time in ms when connecting to an LE server. Some LE servers will
+just connect and not attempt to obtain information from the client, 
+in which case the wait can be zero and the connection will complete quickly.
+Some servers will try to read the client's attributes - but the client has no
+attributes. It can take some time to persuade the server to give up its
+foolish request, and if the time is too short, the server will disconnect. Trial and
+error will determine the shortest wait time that will allow the connection to complete.
+The defualt value is 750ms, but sometimes it needs to be several seconds. 
+
+PARAMETERS
+
+```
+waitms = wait time in ms
+         or
+         READ_WAIT
+             to return the current value
+             and leave it unchanged 
+         
+```
+
+RETURN 
+
+```
+current value of wait in ms
+```
+
+SAMPLE CODE
+
+```c
+int wait;
+
+   // read the current wait time
+wait = set_le_wait(READ_WAIT);  
+
+   // set the wait time to 2000 ms
+set_le_wait(2000);
+connect_node(3,CHANNEL_LE,0);  // connect to LE server node 3       
+
+```
+
+
+## 4-2-38 set\_print\_flag
 
 ```c
 int set_print_flag(int flag)
@@ -2358,8 +3220,8 @@ The print flag controls how btlib.c functions print to the screen. The verbose
 mode prints all Bluetooth HCI traffic with details of how the packets are
 constructed, the replies expected and explanations of what is going on. This will often
 scroll off the top of the screen, but can be seen via
-[scroll\_back/forward](#4-2-35-scroll\_back-forward), or the
-square bracket keys in btferret, or saved to a file via [output\_file](#4-2-26-output\_file).
+[scroll\_back/forward](#4-2-36-scroll\_back-forward), or the
+square bracket keys in btferret, or saved to a file via [output\_file](#4-2-27-output\_file).
 
 PARAMETERS
 
@@ -2390,7 +3252,7 @@ savflag = set_print_flag(PRINT_VERBOSE);
 set_print_flag(savflag);  // restore original setting
 ```
 
-## 4-2-37 strtohex
+## 4-2-39 strtohex
 
 ```c
 char *strtohex(char *s,int *nbytes)
@@ -2441,7 +3303,7 @@ channel = find_channel(5,strtohex("1101",NULL));
 
 ```
 
-## 4-2-38 wait\_for\_disconnect
+## 4-2-40 wait\_for\_disconnect
 
 ```c
 int wait_for_disconnect(int node,int timout)
@@ -2466,7 +3328,7 @@ RETURN
 1 = OK
 ```
 
-## 4-2-39 write\_ctic
+## 4-2-41 write\_ctic
 
 ```c
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
@@ -2506,7 +3368,7 @@ int cticn;
 char data[8];
 
   // connect to LE device Pictail node 4
-connect_node(4,0,0); 
+connect_node(4,CHANNEL_LE,0); 
 
   // write two bytes 12 34 to Pictail (node 4) 
   // characteristic Test (index 1) - size 2 known by device info
@@ -2528,7 +3390,7 @@ write_ctic(4,cticn,data,1);
 disconnect_node(4);
 ```
 
-## 4-2-40 write\_mesh
+## 4-2-42 write\_mesh
 
 ```c
 int write_mesh(char *outbuf,int count)
@@ -2536,16 +3398,16 @@ int write_mesh(char *outbuf,int count)
 
 Broadcast a mesh packet. This packet will be transmitted repeatedly until another
 write_mesh changes the data, or mesh transmission is turned off via
-[mesh\_off](#4-2-22-mesh\_off).
+[mesh\_off](#4-2-23-mesh\_off).
 All other mesh devices can read the
-packet via [read\_mesh](#4-2-29-read\_mesh).
-Other mesh devices running a [mesh\_server](#4-2-23-mesh\_server) will read the 
+packet via [read\_mesh](#4-2-30-read\_mesh).
+Other mesh devices running a [mesh\_server](#4-2-24-mesh\_server) will read the 
 packet and pass it to their callback function. The maximum size of a mesh packet is
 25 bytes. Mesh reads do not look for a termination character, they read the full
 byte count of the packet.
 
 
-## ***** WARNING ****
+### ***** WARNING ****
 
 Mesh packets are transmitted publically with no encryption and can be read by
 any Bluetooth device in the vicinity, so they are NOT SECURE. Be aware that a
@@ -2581,14 +3443,17 @@ write_mesh(data,3);
 ```
 
 
-## 4-2-41 write\_node
+## 4-2-43 write\_node
 
 ```c
 int write_node(int node,unsigned char *outbuf,int count)
 ```
 
 Write a data packet to the specified connected node. The remote node
-must have been connected via [connect\_node](#4-2-4-connect\_node).
+must have been connected via [connect\_node](#4-2-4-connect\_node) as CLASSIC
+or NODE.
+See the sample code in [read\_node\_count](#4-2-31-read\_node\_count)
+for a complete data exchange example.
 
 PARAMETERS
 
@@ -2617,13 +3482,12 @@ buf[0] = 0x00;
 buf[1] = 0x11;
 buf[2] = 0x22;
     
-  // connect node 7 which is a mesh device
-connect_node(7,0,0);
+  // connect node 7 which is a mesh Pi listening as a node server
+connect_node(7,CHANNEL_NODE,0);
   // send 3 bytes to node 7
 write_node(7,buf,3);
 
-  // connect to node 5 which is a classic server
-  // on RFCOMM channel 4
+  // connect on RFCOMM channel 4 to node 5 which is a classic server
 connect_node(5,CHANNEL_NEW,4);
   // send 3 bytes to node 5
 write_node(5,buf,3);
@@ -2686,12 +3550,12 @@ The UUID is in the aid=1 entry. The aid=4 entry identifies this record as an RFC
 A channel can be specified in the device information via the devices.txt
 file passed to [init\_blue](#4-2-15-init\_blue). 
 BTlib also has functions for reading a remote device's SDP
-database [list\_channels](#4-2-17-list\_channels),
+database [list\_channels](#4-2-18-list\_channels),
 finding the RFCOMM channel of a specified UUID [find\_channel](#4-2-12-find\_channel).
 Connecting to a classic device [connect\_node](#4-2-4-connect\_node)
 needs the RFCOMM channel number.
 To see full SDP database records as above, set verbose print mode
-during [list\_channels](#4-2-17-list\_channels) or use [list\_uuid](#4-2-19-list\_uuid).      
+during [list\_channels](#4-2-18-list\_channels) or use [list\_uuid](#4-2-20-list\_uuid).      
 
 The situation with LE devices is similar. LE devices hold characteristics that are values 
 that can be read and sometimes written (e.g. Heart rate). Each characteristic is identified
@@ -2716,13 +3580,13 @@ passed to [init\_blue](#4-2-15-init\_blue).
 BTlib also has functions for reading an LE device's characteristic/UUID list
 [find\_ctics](#4-2-13-find\_ctics) which
 adds the list to the device information, listing it
-[list\_ctics](#4-2-18-list\_ctics), and subsequently
+[list\_ctics](#4-2-19-list\_ctics), and subsequently
 [find\_ctic\_index](#4-2-14-find\_ctic\_index)
 to find the characteristic
 index of a specified UUID in the device information. Functions to
 read and write characteristics
-[read\_ctic](#4-2-27-read\_ctic),
-[write\_ctic](#4-2-39-write\_ctic)
+[read\_ctic](#4-2-28-read\_ctic),
+[write\_ctic](#4-2-41-write\_ctic)
 need this index. 
 
  
@@ -2733,7 +3597,7 @@ These are the formats of packets exchanged at the HCI level.
 ## 5-2-1 Starting 01 HCI Commands
 
 HCI commands to read information, connect to a remote device, etc..
-Reference Vol 2 Part E Section 7
+Reference Vol 4 Part E Section 7
 
 ```
 Example packet
@@ -2755,7 +3619,7 @@ bits 0000 0100 0000 0110
 OGF = top 6 bits 000001 = 1
 OCF = bottom 10 bits 0000000110 = 6
 
-OGF OGF*4   Reference Vol 2 Part E Section
+OGF OGF*4   Reference Vol 4 Part E Section
 1    04     7.1 Link control
 2    08     7.2 Link policy
 3    0C     7.3 Control
@@ -2768,7 +3632,7 @@ Each of these OGF reference sections is a list of OCF commands.
 
 ## 5-2-2 Starting 04 HCI Events
 
-Mostly replies from HCI commands. Reference Vol 2 Part E Section 7.7
+Mostly replies from HCI commands. Reference Vol 4 Part E Section 7.7
 
 ```
 Example packet
@@ -2846,7 +3710,7 @@ The relevant opcodes for LE commands are
 ```
 
 This packet format is also used for data packets sent via
-[write\_node](#4-2-41-write\_node) to a connected mesh device acting as a node
+[write\_node](#4-2-43-write\_node) to a connected mesh device acting as a node
 server (it is an LE connection and the data is sent as LE packets). 
 In this case there is no opcode - just data as shown in
 the multiple packets example next.
@@ -3085,6 +3949,7 @@ Event 31 does not require a PIN
 
 SEND IO capability request reply
   Set [4].. board address reversed 56..DC
+  Set [10] = 03 no input/output for pass key display/entry
 < HCI OGF=01 OCF=2B
       0000  01 2B 04 09 56 DB 04 32 - A6 DC 03 00 00 
 > Event 0E = 01 2B 04 00 56 DB 04 32 A6 DC
@@ -3094,7 +3959,7 @@ SEND IO capability request reply
 > Event 33 = 56 DB 04 32 A6 DC 1E 22 0A 00
       0000  04 33 0A 56 DB 04 32 A6 - DC 1E 22 0A 00 
 GOT confirmation request (Event 33)
-
+    with pass key 1E 22 0A 00
 SEND confirmation request reply
   Set [4].. board address reversed 56..DC
 < HCI OGF=01 OCF=2C
@@ -3795,8 +4660,13 @@ GOT IO capability request (Event 31)
 Event 31 does not require a PIN
 SEND IO capability request reply
   Set [4].. board address reversed 13..00
+  Set [10] = 01 display y/n - Pi can display a passkey, and remote
+                device may ask to confirm that it has appeared
+           = 02 keyboard - Pi has keyboard to enter passkey
+                that remote device may display
+           = 03 no display or keyboard for passkey
 < HCI OGF=01 OCF=2B
-      0000  01 2B 04 09 13 71 DA 7D - 1A 00 03 00 00 
+      0000  01 2B 04 09 13 71 DA 7D - 1A 00 01 00 00 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
 > L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
@@ -3808,6 +4678,7 @@ SEND IO capability request reply
       0000  04 33 0A 13 71 DA 7D 1A - 00 C2 A6 0E 00 
 
 GOT User confirm request (Event 33)
+    with passkey C2 A6 0E 00 - print on display
 SEND User confirm reply
   Set [4].. board address reversed 13..00
 < HCI OGF=01 OCF=2C
@@ -3824,7 +4695,7 @@ SEND User confirm reply
       0010  CC DE 80 57 FF C6 18 2C - 6D 04 
 GOT link key (Event 18)
 This is the link key, but it is not needed because Event 32 above
-has reported Authentication=0
+has reported Authentication=0. 
 
 > Event 08 = 00 0B 00 01
       0000  04 08 04 00 0B 00 01 
@@ -4169,8 +5040,13 @@ GOT IO capability request (Event 31)
 Event 31 does not require a PIN
 SEND IO capability request reply
   Set [4].. board address reversed 13..00
+  Set [10] = 01 display y/n - Pi can display a passkey, and remote
+                device may ask to confirm that it has appeared
+           = 02 keyboard - Pi has keyboard to enter passkey
+                that remote device may display
+           = 03 no display or keyboard for passkey  
 < HCI OGF=01 OCF=2B
-      0000  01 2B 04 09 13 71 DA 7D - 1A 00 03 00 00 
+      0000  01 2B 04 09 13 71 DA 7D - 1A 00 01 00 00 
 > Event 0E = 01 2B 04 00 13 71 DA 7D 1A 00
       0000  04 0E 0A 01 2B 04 00 13 - 71 DA 7D 1A 00 
 > Event 13 = 01 0B 00 01 00
@@ -4179,6 +5055,7 @@ SEND IO capability request reply
       0000  04 33 0A 13 71 DA 7D 1A - 00 C7 AA 02 00 
 
 GOT User confirm request (Event 33)
+    with pass key C7 AA 02 00 - print on display
 SEND User confirm reply
   Set [4].. board address reversed 13..00
 < HCI OGF=01 OCF=2C
@@ -4952,7 +5829,7 @@ Decode SDP data 1202 bytes start 36 04 AF end 65 6E 74
 ```
 
 This is the SDP database of a Mesh Pi set up as a classic server. The UUID and
-name of Record 3 can be changed via [register\_serial](#4-2-34-register\_serial).
+name of Record 3 can be changed via [register\_serial](#4-2-35-register\_serial).
 Note that all three serial services connect on RFCOMM channel 1.
 
 ```
@@ -5029,11 +5906,11 @@ no acknowledge, writes a 2-byte characteristic with acknowledge, reads
 the 2-byte characteristic back, enables a characteristic notification and
 indication, receives a notify and indicate, and disconnects. The commands use the 
 [L2CAP 0004](#5-2-4-starting-02-channel-0004)  LE packet format. The connect opcode
-is documented at v2,pE,7.8.12, the Event 3E reply at 7.7.65.1. The read 
+is documented at v4,pE,7.8.12, the Event 3E reply at 7.7.65.1. The read 
 opcodes are documented at v3,pF,3.4.4.3 and 3.4.4.4. The write
 opcodes at v3,pF,3.4.5. A characteristic with no
 acknowledge permission must be sent a write command 3.4.5.3, and one with
-acknowledge permission a write request 3.4.5.1. The close opcode at v2,pE,7.1.6.  
+acknowledge permission a write request 3.4.5.1. The close opcode at v4,pE,7.1.6.  
 
 ```
 
@@ -5259,11 +6136,69 @@ GOT Disconnected OK (Event 05)
 
 ```
 
+### LE SERVER ATTRIBUTES
+
+Here is an example of the attribute data when a mesh Pi is acting as an LE server.
+
+```
+
+devices.txt 
+
+DEVICE = My Pi  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
+  LECHAR=first  permit=06  handle=0005 size=8
+  LECHAR=second permit=16  handle=0007 size=1
+  LECHAR=Name   permit=06  handle=000A UUID=2A00  size=7
+
+The values are written as follows:
+
+  char buf[8];
+  buf[0] = 0x11;
+  ... [1] to [6]
+  buf[7] = 0x88;
+  write_ctic(localnode(),0,buf,8);
+  buf[0] = 0x99;
+  write_ctic(localnode(),1,buf,1);
+  write_ctic(localnode(),2,"abcdef",7); 
+       but UUID 2A00 is automatically set to the device name "My Pi" by init_blue()
+
+
+Opcode 05/09/11 packet data returned in reply to request opcodes 04/08/10
+The 11 packets are the same as the 09 packets, but with an end of group (eog) handle
+inserted as 4th/5th bytes. So the 11 reply for handle 0007 would be:
+      03 07 00 FF FF 99
+UUID16 = unique 16-byte numbers automatically allocated by init_blue() - the last
+4 bytes will be the handle and characteristic index.
+The request opcode packets (08/10) must specify the valueUUID returned by opcode 05
+
+handle  opcode 05 reply   opcode 09/11 reply (first byte = number of following bytes)            
+0001    01 01 00 00 28    04 01 00 00 18           empty service UUID=2800 valueUUID=1800 Generic Access eog=0001
+0002    01 02 00 00 28    04 02 00 01 18           empty service UUID=2800 valueUUID=1801 Generic Attribute eog=0002
+0003    01 03 00 00 28    12 03 00 FF...11         private characteristics service UUID=2800 eog=FFFF
+                                                   valueUUID = 112233445566778899AABBCCDDEEFFFF              
+0004    01 04 00 03 28    15 04 00 06 05 00 UUID16           first characteristic info UUID=2803
+                                                             permit=06 value handle=0005 valueUUID=UUID16 eog=0005 
+0005    02 05 00 UUID16   0A 05 00 11 22 33 44 55 66 77 88   first characteristic value 
+                                                             8-byte value = 11 22 33 44 55 66 77 88  eog=FFFF
+0006    01 06 00 03 28    15 06 00 16 07 00 UUID16           second characteristic info - notify capable  UUID=2803
+                                                             permit=16  value handle=0007 valueUUID=UUID16 eog=0008  
+0007    02 07 00 UUID16   03 07 00 99                        second characteristic value
+                                                             1-byte value = 99  eog=FFFF
+0008    01 08 00 02 29    04 08 00 01 00                     second characteristic notify control UUID=2902 eog=FFFF
+                                                             2-byte value = 01 00  (notify enabled)
+                                                                          = 00 00  (notify disabled)
+0009    01 09 00 03 28    07 09 00 06 0A 00 00 2A            third characteristic info UUID=2803  eog=000A
+                                                             permit=06 value handle=000A valueUUID=2A00
+                                                             valueUUID=2A00 (standard UUID for Device Name)
+000A    01 0A 00 00 2A    09 0A 00 61 62 63 64 65 66 00      third characteristic value  UUID=2A00  (Device Name)                                                                
+                                                             7-byte value = "abcdef" plus terminate zero
+
+```
+
 ## 5-3-11 LE scan
 
 This searches for active LE devices and reads their advertising
 data. Information on decoding the advertising data can be found at
-Vol 2,Part E,Section 7.7.65.2 and Vol 3,Part C,Section 11. Also
+Vol 4,Part E,Section 7.7.65.2 and Vol 3,Part C,Section 11. Also
 [Data type codes](https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/)
 and
 [Manufacturer codes](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/).
@@ -5345,16 +6280,17 @@ find the RFCOMM channel (which is not the same as the COM number).
   HANDLE hCom;
   COMMTIMEOUTS cto;
   int comport;
-  static char serport[8] = {"COMx"};
+  static char serport[16] = {"\\\\.\\COMxx"};   // sets to  \\.\COMxx
 
      // set up server with incoming COM port = comport
   
   comport = 3;    // for example COM3
          
-     // replace x in serport[] with COM port number
+     // replace xx in serport[] with COM port number
 
-  serport[3] = (char)(comport + '0');
-  
+  serport[7] = (char)(comport + '0');
+  serport[8] = 0;
+    
     // CreateFile waits for a client to connect
 
   hCom = CreateFile( serport,
@@ -5607,16 +6543,17 @@ port e.g, COM3 - this number is needed for the following code.
   HANDLE hCom;
   COMMTIMEOUTS cto;
   int comport;
-  static char serport[8] = {"COMx"};
+  static char serport[16] = {"\\\\.\\COMxx"};  // sets to  \\.\COMxx
 
-     // connect to server via outgoing COM port = comport
+     // set up client with outgoing COM port = comport
   
   comport = 3;    // for example COM3
          
-     // replace x in serport[] with COM port number
+     // replace xx in serport[] with COM port number
 
-  serport[3] = (char)(comport + '0');
-  
+  serport[7] = (char)(comport + '0');
+  serport[8] = 0;  
+ 
     // CreateFile connects to listening server
 
   hCom = CreateFile( serport,
@@ -5842,14 +6779,12 @@ MainActivity.java
 
 ## 6 Documentation References
 
-References of the type v2,pE,7.7.14 (Vol 2 Part E Section 7.7.14) refer to the pdf 
-document in the CS (Core Specification 5.2) section at
-[Bluetooth Core Specification](https://www.bluetooth.com/specifications/specs/)
-
+References of the type v4,pE,7.7.14 (Vol 4 Part E Section 7.7.14) refer to the pdf 
+document [Bluetooth Core Specification 5.3](https://www.bluetooth.com/specifications/specs/core-specification/)
 See the [RFCOMM](https://www.bluetooth.com/specifications/protocol-specifications/) section here for
 bewildering details of serial connections.
 
-HCI commands Vol 2, Part E, Section 7
+HCI commands Vol 4, Part E, Section 7
 
 L2CAP 0001 commands Vol 3, Part A, Section 4
 
@@ -5862,7 +6797,7 @@ LE characteristic UUIDs in a pdf document called "16-bit UUID Numbers Document"
 
 SDP database decode Vol 3,Part B,Section 3
 
-LE advertising decode Vol 2,Part E,Section 7.7.65.2 and Vol 3,Part C,Section 11. Also
+LE advertising decode Vol 4,Part E,Section 7.7.65.2 and Vol 3,Part C,Section 11. Also
 [Data type codes](https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/)
 and
 [Manufacturer codes](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/).

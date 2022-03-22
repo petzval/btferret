@@ -1,7 +1,7 @@
 DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2     ; index 0
-  LECHAR=Name    UUID=2A00                        ; index 1
-DEVICE = Windows PC  type = classic node = 4 address=00:1A:7D:DA:71:13
+  LECHAR=Test    HANDLE=001C PERMIT=0A SIZE=2    ; index 0
+  LECHAR=Name    UUID=2A00                       ; index 1
+DEVICE = Windows PC  type=classic  node=4 address=00:1A:7D:DA:71:13
 DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
 DEVICE = Mesh Pi 3  TYPE=mesh node=3 ADDRESS = 00:15:83:EF:24:3D

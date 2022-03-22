@@ -34,7 +34,7 @@ int main()
   return(0);
   }
 
-/*********** MOTOR CONTROL **************
+/*********** MOTOR CONTROL ************
  node = node of RN4020
  dirn = direction  0=forward   1=back
  speed = 0 to 64
