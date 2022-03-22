@@ -5,7 +5,7 @@ btferret/btlib Bluetooth Interface
 
 ## Contents
 - [1 Introduction](#1-introduction)
-- [2 File list. Compile. Hello world](#2-file-list.-compile.-hello-world)
+- [2 File list. Compile. Hello world](#2-file-list-compile-hello-world)
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
@@ -128,7 +128,7 @@ for other machines to act as servers/clients for btferret/btlib.
 This interface is programmed at the HCI level and bypasses higher-level bluez functions,
 so it does not use the Pi's Bluetooth service, which can be stopped.
 
-## 2 File list. Compile. Hello world
+## 2 File list Compile Hello world
 
 ### DOWNLOAD
 
