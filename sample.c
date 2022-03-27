@@ -65,6 +65,14 @@ int hubnode()
 
   if(write_mesh(buf,3) != 3)
     printf("Write mesh error\n");
+
+    // For write_mesh, the packet will not be sent immediately
+    // because the advertising repeat rate is only about 3 per second.
+    // Always allow for this possible delay.
+    // Do not call another write_mesh until you are sure this one has
+    // been sent - by adding a delay for example. 
+     
+  sleep(2);  // 2 second delay
    
   // node 2 should now be listening for a connection from this device 
   // connect to it as a node server
@@ -163,6 +171,7 @@ int hubnode()
   
   buf[0] = 'D';
   write_mesh(buf,1);
+  sleep(1);   // allow time for mesh packet to transmit before exit                          
   
   // return and exit program
   return(1);

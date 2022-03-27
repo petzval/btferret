@@ -1022,10 +1022,24 @@ char buf[4];
 
 buf[0] = 0x12;
 buf[1] = 0x34;
+
    // broadcast two-byte mesh packet
 write_mesh(buf,2);
+sleep(1);  // 1 second delay to allow packet to be sent
+
    // broadcast D disconnect command
 write_mesh("D",1);
+sleep(1);  // 1 second delay to allow packet to be sent
+
+     // A write_mesh packet is not sent immediately because
+     // the repeat rate is about 3 per second.
+     // Always allow for this possible delay when using write_mesh     
+     // The sleep delays are necessary if another
+     // mesh packet is going to be sent immediately,
+     // or if the program is going to terminate
+     // and shut down Bluetooth.
+
+
 ```
 
 ## 3-9 sample
@@ -3397,14 +3411,17 @@ int write_mesh(char *outbuf,int count)
 ```
 
 Broadcast a mesh packet. This packet will be transmitted repeatedly until another
-write_mesh changes the data, or mesh transmission is turned off via
+write\_mesh changes the data, or mesh transmission is turned off via
 [mesh\_off](#4-2-23-mesh\_off).
 All other mesh devices can read the
 packet via [read\_mesh](#4-2-30-read\_mesh).
 Other mesh devices running a [mesh\_server](#4-2-24-mesh\_server) will read the 
 packet and pass it to their callback function. The maximum size of a mesh packet is
 25 bytes. Mesh reads do not look for a termination character, they read the full
-byte count of the packet.
+byte count of the packet. A mesh packet is not sent immediately after the call
+to write\_mesh. The repeat rate at which packets are sent should be about 3 per second, so
+there may be this much delay before it is sent. Do not send another packet, or terminate
+the program, within this time. Always allow for this possible delay when using write\_mesh.
 
 
 ### ***** WARNING ****
@@ -3440,6 +3457,13 @@ data[2] = 0x22;
   // start transmitting a 3-byte mesh packet
   
 write_mesh(data,3);
+sleep(1);  // 1 second delay to allow packet to be sent
+   
+     // a delay is only necessary if another mesh packet
+     // is going to be sent immediately after this one,
+     // or if the program is going to terminate and
+     // shut down Bluetooth  
+
 ```
 
 
