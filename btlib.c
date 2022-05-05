@@ -1217,7 +1217,8 @@ int init_blue_ex(char *filename,int hcin)
    
   if(hcisock() == 0)    
     {   
-    NPRINT "HCI socket ERROR - no Bluetooth?\n");   // same as command hciconfig hci0 piscan
+    NPRINT "** ERROR ** Must run with root permission via sudo as follows:\n"); 
+    NPRINT "sudo ./btferret\n");
     flushprint();
     return(0);
     }
@@ -2117,9 +2118,6 @@ int devalloc()
   
 void le_scan()
   {
-  if(hcisock() == 0)
-    return;
-   
   lescanx();
   flushprint();
  
@@ -2323,13 +2321,18 @@ int lescanx()
       if(ndevice >= 0)
         {
         NPRINT "    Known device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+        if(dev[ndevice]->type == BTYPE_ME && dev[ndevice]->node >= 1000)
+          NPRINT "    Add to devices.txt with node < 1000 to authorise mesh packets\n");
         if(dev[ndevice]->type != BTYPE_LE && dev[ndevice]->type != BTYPE_ME)
           NPRINT "    But not listed as LE or Mesh\n");
         }
-      else if(type == BTYPE_ME)  // disable auto detect mesh devices
-        NPRINT "    Unknown = security risk. Add to devices.txt list to access\n");
       else
         {  // not already stored
+        if(type == BTYPE_ME)  // auto detect mesh device
+          {
+          NPRINT "    SECURITY NOTE - To receive mesh packets from this device\n");
+          NPRINT "                    add to devices.txt with node < 1000\n");
+          }
         // find next free entry
         ndevice = devalloc();
         if(ndevice < 0)  // failed
@@ -2663,7 +2666,9 @@ int device_info(int mask)
         NPRINT " Channel=%d",dp->rfchan);
       
       NPRINT "\n");
-                 
+    
+      if(dp->type == BTYPE_ME && dp->node >= 1000)
+        NPRINT "      Add to devices.txt with node < 1000 to authorise mesh packets\n");             
       flushprint();
       
       if(dp->type != BTYPE_CL)
@@ -5956,56 +5961,68 @@ void leserver(int ndevice,int count,unsigned char *dat)
           notflag = 1;
 
         if(dat[0] == 0x52 || dat[0] == 0x12)
-          {  // write
-          if((cp->perm & 0x0C) == 0)
+          {  // write  12 ack  52 no ack
+          if(notflag == 0)
             {
-            VPRINT "Write not permitted\n");
-            errcode = 3;  // write not permit
-            }
-          else if(notflag == 0)
-            {
-            VPRINT "Received characteristic %s\n",cp->name);
-            write_ctic(node,cticn,dat+3,count-3);
-            if(dat[0] == 0x12 && (cp->perm & 8) != 0)
-              {
-              VPRINT "Send acknowledgement\n");
-              sendhci(leack,ndevice);  // send ack
+            if((cp->perm & 0x0C) == 0)
+              {   // 8 ack  4 no ack
+              VPRINT "Write not permitted\n");
+              errcode = 3;  // write not permit
               }
-            cmd[0] = LE_WRITE;
+            else
+              {
+              VPRINT "Received characteristic %s\n",cp->name);
+              write_ctic(node,cticn,dat+3,count-3);
+              if(dat[0] == 0x12)
+                {  // no check cp->perm & 8 write with ack
+                VPRINT "Send acknowledgement\n");
+                sendhci(leack,ndevice);  // send ack
+                }
+              cmd[0] = LE_WRITE;
+              }
             }
-          else
+          else  // notify descriptor
             {
             cp->notify = dat[3];
             if(cp->notify == 0)
               VPRINT "%s notify disable\n",cp->name);
             else
               VPRINT "%s notify enable\n",cp->name);
+            if(dat[0] == 0x12)
+              {
+              VPRINT "Send acknowledgement\n");
+              sendhci(leack,ndevice);  // send ack
+              }
             }
           }
         else
           {  // read
-          if((cp->perm & 2) == 0)
+          if(notflag == 0)
             {
-            VPRINT "Read not permitted\n");
-            errcode = 2;  // read not permit
-            }
-          else if(notflag == 0)
-            {
-            n = 0;
-            while(n < cp->size && n < LEDATLEN)
+            if((cp->perm & 2) == 0)
               {
-              lereadreply[PAKHEADSIZE+10+n] = cp->value[n];
-              ++n;
+              VPRINT "Read not permitted\n");
+              errcode = 2;  // read not permit
               }
-            size = n;
-            cmd[0] = LE_READ;
-            }
-          else
+            else
+              {
+              n = 0;
+              while(n < cp->size && n < LEDATLEN)
+                {
+                lereadreply[PAKHEADSIZE+10+n] = cp->value[n];
+                ++n;
+                }
+              size = n;
+              cmd[0] = LE_READ;
+              }
+            }  
+          else   // notify descriptor
             {
             size = 2;
             lereadreply[PAKHEADSIZE+10] = cp->notify;
             lereadreply[PAKHEADSIZE+11] = 0;
             }
+            
           if(errcode == 0)
             {            
             lereadreply[0] = 10 + size;
@@ -6556,12 +6573,12 @@ int meshpacket(char *s)
       // compare board address with known mesh devices
               
       ndevice = devnfrombadd(rp+2,BTYPE_ME,DIRN_REV);
-      if(ndevice < 0)
+      if(ndevice < 0 || dev[ndevice]->node >= 1000)
         {  // not known - reject
         if(rejflag == 0)
           {  // print only once 
-          NPRINT "GOT mesh packet from unknown device %s - rejected\n",baddstr(rp+2,1));
-          NPRINT "    for security. Add to devices.txt information to authorise\n");
+          NPRINT "GOT mesh packet from unknown device %s - rejected for\n",baddstr(rp+2,1));
+          NPRINT "    security. Add to devices.txt with node < 1000 to authorise\n");
           rejflag = 1;
           }
         return(1);
@@ -6919,7 +6936,7 @@ int hcisock()
 
   if(dd < 0)
     {
-    NPRINT "Socket open error\n");
+    VPRINT "Socket open error\n");
     flushprint();
     return(0);
     }
@@ -6942,19 +6959,19 @@ int hcisock()
         
   if(setsockopt(dd, SOL_HCI, HCI_FILTER, &flt, sizeof(flt)) < 0)
     {
-    NPRINT "HCI filter setup failed\n");
+    VPRINT "HCI filter setup failed\n");
     close(dd);
     }   
  
-  VPRINT "Bind to Bluetooth device 0 user channel\n");
+  VPRINT "Bind to Bluetooth devid user channel\n");
 
   sa.hci_family = 31;   // AF_BLUETOOTH;
-  sa.hci_dev = gpar.devid;     // hci0
+  sa.hci_dev = gpar.devid;    // hci0/1/2...
   sa.hci_channel = 1;   // HCI_CHANNEL_USER    
   
   if(bind(dd,(struct sockaddr *)&sa,sizeof(sa)) < 0)
     {
-    NPRINT "Bind failed\n");
+    VPRINT "Bind failed\n");
     close(dd);
     flushprint();
     return(0);
@@ -7121,11 +7138,6 @@ so ready for psm=1 control or psm=3 data channel request
 int clconnect0(int ndevice)
   {
   int retval,savto;
-
-
-  if(hcisock() == 0)
-    return(0);
-
 
   clearins(0);  // clear input stack 
    
@@ -8527,10 +8539,6 @@ void classic_scan()
   {
   int n,savto;
 
-
-  if(hcisock() == 0)
-    return;
- 
   clscanx();
   flushprint();
   } 
