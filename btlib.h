@@ -93,7 +93,7 @@ int init_blue(char *filename);
 int init_blue_ex(char *filename,int hcin);
 
 void le_scan(void);
-int le_server(int(*callback)(),int timerds);
+int le_server(int(*callback)(),int timerds, void *pvParameter);
 
 int list_channels(int node,int flag);
 int list_ctics(int node,int flag);
