@@ -2817,7 +2817,7 @@ void mesh_server(int(*callback)())
 /*********** LE SERVER ***********/
 
 
-int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds)
+int le_server(int(*callback)(int clientnode,int operation,int cticn, void* pvParameter),int timerds, void *pvParameter)
   {
   int n,nread,key,ndevice,retval,timecount,oldkm,op,cticn;
   unsigned char ledat[2];
@@ -2855,7 +2855,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       popins();     
         
       if(callback != NULL)   
-        retval = callback(dp->node,op,cticn);
+        retval = callback(dp->node,op,cticn, pvParameter);
      
       if(op == LE_DISCONNECT)
         {  // clear all operations from this device 
@@ -2875,7 +2875,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       if(timecount >= timerds)
         {
         if(callback != NULL)
-           retval = callback(localnode(),LE_TIMER,0);
+           retval = callback(localnode(),LE_TIMER,0,pvParameter);
         timecount = 0;
         }
       }
