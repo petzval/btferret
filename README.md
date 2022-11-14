@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 3*
+*Version 4*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -9,14 +9,16 @@ btferret/btlib Bluetooth Interface
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
-    - [3.3 Windows-Android-HC-05 Classic servers](#3-3-windows-android-hc-05-classic-servers) 
-    - [3.4 Windows-Android Classic clients](#3-4-windows-android-classic-clients)        
-    - [3.5 LE client](#3-5-le-client) 
-    - [3.6 LE server](#3-6-le-server) 
-    - [3.7 Pi-Pi client-server connection](#3-7-pi-pi-client-server-connection) 
-    - [3.8 Broadcast to all mesh servers](#3-8-broadcast-to-all-mesh-servers) 
-    - [3.9 sample.c](#3-9-sample)
-    - [3.10 Blue Dot server](#3-10-blue-dot-server)
+    - [3.3 devices.txt file](#3-3-devices-file)    
+    - [3.4 Windows-Android-HC-05 Classic servers](#3-4-windows-android-hc-05-classic-servers) 
+    - [3.5 Windows-Android Classic clients](#3-5-windows-android-classic-clients)        
+    - [3.6 LE client](#3-6-le-client) 
+    - [3.7 LE server](#3-7-le-server) 
+    - [3.8 Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection) 
+    - [3.9 Broadcast to all mesh servers](#3-9-broadcast-to-all-mesh-servers) 
+    - [3.10 sample.c](#3-10-sample)
+    - [3.11 BeetleIN server](#3-11-beetlein-server)
+    - [3.12 Blue Dot server](#3-12-blue-dot-server)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
     - [4.2 Functions](#4-2-functions)    
@@ -110,8 +112,12 @@ operations can
 be run from the btferret command line, and this document describes how the same thing (and more) can
 then be done via your own C code.  
 
-Also included is the code for a simple [mesh network example](#3-9-sample), and
-a [Blue Dot server](#3-10-blue-dot-server) that is probably the easiest way of controlling a Pi from a phone.
+The library includes support for [BeetleIN](#3-11-beetlein-server), which is an app that
+allows an Android phone/tablet to be
+used as a touch screen input/output device for a Pi without doing any Android programming.
+
+Also included is the code for a simple [mesh network example](#3-10-sample), and
+a [Blue Dot server](#3-12-blue-dot-server) that is another way of controlling a Pi from a phone.
 
 In the [reference](#5-reference) section there is a detailed description
 of the HCI Bluetooth interface, the packet formats and how they are constructed,
@@ -155,7 +161,7 @@ Run with devices.txt in the same directory
 No additional libraries or installs are required, the code is self-contained.
 To customise btferret.c for your devices, an essential first step is to
 edit the devices.txt file to list all the devices in the
-network (see the [init_blue](#4-2-15-init\_blue) documentation).
+network (see the [devices file](#3-3-devices-file) documentation).
 
 It does not use higher-level bluez functions, so if desired the Pi's Bluetooth service can be
 stopped as follows:
@@ -319,7 +325,7 @@ There are two flavours of Bluetooth - Classic and LE (low energy). In the Classi
 connects to a listening server and the two can then exchange large amounts of serial data. A Pi running btferret/btlib
 can act as a Classic client or server. The connecting server/client can be another Pi running btferret or any Bluetooth-capable
 device such as a PC or Android running a Blueooth app such as a serial terminal.
-The [Blue Dot app](#3-10-blue-dot-server) uses a classic connection to control a Pi from a phone.  
+The [Blue Dot app](#3-12-blue-dot-server) uses a classic connection to control a Pi from a phone.  
 
 The original idea behind LE is that the server is a measurement device such as a temperature monitor. An LE client connects
 to the server, reads a value, and then disconnects. The data transferred is just a few bytes.
@@ -331,12 +337,14 @@ by the client. The client must enable the characteristic's notification process 
 
 The use of LE goes beyond this simple read operation and there are
 LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
-that can be contolled by writing to its characteristics for remote control applications. This separate document [RN4020.md](RN4020.md)
+that can be contolled by writing to its characteristics for remote control applications.
+This separate document [RN4020.md](RN4020.md)
 describes the use of btlib functions and an RN4020 for motor speed control.
 
 In addition to the above standard funtionality, btferret has two custom types of connection: mesh and node. These 
 connections can only be made between two Pis running btferret/btlib.
-The mesh functions use Bluetooth advertising data to repeatedly send a small number of bytes to all other Mesh Pis. The node client/server
+The mesh functions use Bluetooth advertising data to repeatedly send a small number of bytes to all other Mesh Pis.
+The node client/server
 functions use an LE connection to exchange large amounts of data, but more slowly than a Classic connection,
 and only between two Pis. Other devices will not recognise a btferret node client/server.
 
@@ -401,7 +409,112 @@ establish connections and exchange data. They also show how to do the
 same thing with your own C code rather than via btferret.c.
 
 
-## 3-3 Windows-Android-HC-05 Classic servers
+
+## 3-3 Devices file
+
+The devices.txt file supplies information about devices in the network, and must include the 
+local device. The file name
+(which can be something other than devices.txt) is passed to init\_blue.
+Additional devices can be found and added to the device information 
+via [classic\_scan](#4-2-1-classic\_scan)
+or [le\_scan](#4-2-16-le\_scan). Additional
+characteristics are found via [find\_ctics](#4-2-13-find\_ctics).
+One tricky point is that some LE servers have a random address which changes (e.g. Android - every
+ten minutes), so it is not possible to list them in the devices file, and le\_scan must be used.
+
+
+```
+if(init_blue("devices.txt") == 0)
+  return(0);
+```
+  
+Devices file example:
+
+```
+  ; semi colon is comment character - everything beyond ignored
+  ; This file must list the local device, and all Pis should be type=MESH
+  ; Text can be upper or lower case
+
+DEVICE = My Pi        TYPE=MESH NODE=1 ADDRESS=B6:15:EB:F5:50:53
+
+DEVICE = My other Pi  TYPE=MESH NODE=2 ADDRESS=B8:27:EB:F1:50:C3
+  ; characteristics when acting as an LE server - see le_server() documentation
+  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=8   ; index 0 r/w no ack 8 bytes 
+  LECHAR=Detector HANDLE=0007  PERMIT=06  SIZE=2   ; index 1 r/w no ack 2 bytes
+                                                   ; the UUID will be allocated automatically
+  LECHAR=Control  permit=06 size=4 UUID=11223344-5566-7788-99AA-BBCCDDEEFF00
+                                       ; UUID only - the handle will be allocated automatically 
+  
+DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C
+  LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; characteristic index 0
+  LECHAR=Control handle=000E PERMIT=06 SIZE=1   ;                index 1
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ;                index 2
+  LECHAR=Name    UUID=2A00                      ;                index 3  
+
+DEVICE = Windows PC  TYPE=classic node=10 address=00:1A:7D:DA:71:13
+
+DEVICE = HC-05 TYPE=CLASSIC NODE=7 PIN=1234 CHANNEL=1 ADDRESS = 98:D3:32:31:59:84
+
+DEVICE = Android phone TYPE=CLASSIC NODE=4 ADDRESS = 4C:4E:03:83:CE:B9
+```
+
+These are the parameters that can be set for each device.
+
+```
+DEVICE = Device name of your choice (don't use any of the key words
+                  such as TYPE/NODE/ADDRESS.. or chaos will follow) 
+                  
+TYPE   = MESH     all Pis running btferret/btlib which can then
+                  act as CLASSIC/NODE/LE servers and clients
+         CLASSIC  classic servers such as Windows/Android/HC05
+         LE       LE servers
+ 
+NODE = 4                      Node number in decimal - you choose this
+ADDRESS = 00:1E:C0:2D:17:7C   6-byte Bluetooth address
+CHANNEL = 4                   RFCOMM channel for CLASSIC servers (optional)
+PIN = 1234                    PIN code for CLASSIC servers (optional)
+```
+
+LE device entries can be followed by any number of characteristic entries as follows. If the local device
+will be an LE server (but still type=MESH) see [le server](#4-2-17-le\_server) for full details of handle and UUID settings.
+
+```
+LECHAR = Characteristic name of your choice
+HANDLE = 000B     2-byte handle in hex - can be automatically allocated
+PERMIT = 06       Permissions in hex
+SIZE = 1          Number of bytes in decimal. Only used for writes - not needed for reads
+UUID = 2A00       Not needed if HANDLE specified - can be automatically allocated
+UUID = 11223344-5566-7788-99AA-BBCCDDEEFF00    16-byte UUID
+```
+
+PERMIT permissions should be one of the following bit combinations:
+
+```
+02 = r   Read only
+04 = w   Write no acknowledge
+08 = wa  Write with acknowledge
+06 = rw  Read/Write no ack
+0A = rwa Read/Write ack
+10 = n   Notify capable
+16 = rwn Read/Write no ack/Notify capable
+20 = i   Indicate capable
+```
+
+If PERMIT is not known, find_ctics will
+find it and save it in the device information. 
+
+If HANDLE is not known, the UUID can be specified instead.
+
+```
+LECHAR=Name  UUID=11223344-5566-7788-99AABBCCDDEEFF00
+```
+
+With this minimum information, when the characteristic is read via
+read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
+
+
+
+## 3-4 Windows-Android-HC-05 Classic servers
 
 The btferret/btlib code can connect to a Windows/Android/HC-05 Classic server. This might be a
 Bluetooth terminal program set up as a server (via a "Make discoverable" option for example).
@@ -411,7 +524,7 @@ the [RFCOMM channel](#5-1-what-gives-with-uuids) on which
 the server is listening. The remote server may require that the two devices are paired first. The
 Pi cannot do this - it must be done from the remote device before connection is attempted, with
 the Pi listening as a server, as described in the next 
-section [Windows-Android Classic clients](#3-4-windows-android-classic-clients).   
+section [Windows-Android Classic clients](#3-5-windows-android-classic-clients).   
 
 ```
 devices.txt 
@@ -478,12 +591,12 @@ disconnect_node(4);
     // see the discussion in disconnect_node() section 4.2.10 
 ```
 
-## 3-4 Windows-Android Classic clients
+## 3-5 Windows-Android Classic clients
 
 A Mesh Pi can be set up as a classic server and receive pairing requests or
 connections from remote
 clients (running a Bluetooth terminal program for example).
-(See [Pi-Pi client-server connection](#3-7-pi-pi-client-server-connection) for 
+(See [Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection) for 
 classic connections between two Mesh Pis).
 The client will have security requirements - usually a passkey to pair initially,
 and then a link key for subsequent connections.
@@ -502,7 +615,8 @@ because the pairing information is not inherited from bluez.
 If pairing is required, the Pi server must be waiting for a connection when the remote client attempts to
 pair.
 Trial and error will determine what combination of un-pairing, pairing and link/pass key 
-will work - the ways of Bluetooth pairing are many and wondrous. In Windows pre-pair via Settings/Devices/Add Bluetooth or other device,
+will work - the ways of Bluetooth pairing are many and wondrous. In Windows pre-pair via
+Settings/Devices/Add Bluetooth or other device,
 in Android: Settings/Bluetooth. A brief guide to writing [Client Code](#5-5-client-code)
 for Windows/Android devices is in the Reference section.
  
@@ -574,7 +688,7 @@ int classic_callback(int clientnode,char *data,int datlen)
 ```
 
 
-## 3-5 LE client
+## 3-6 LE client
 
 Connect to an LE server and read/write characteristics. Sometimes a device will have
 a fixed Bluetooth address for Classic connections, but a random changeable address for LE connections
@@ -657,7 +771,7 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
 
 ```
 
-## 3-6 LE server
+## 3-7 LE server
 
 
 Become an LE server and wait for connections from LE clients. The client may be another
@@ -681,7 +795,7 @@ d - Disconnect
 ```
 
 The server's characteristics are defined in the devices.txt file, full details
-in [init\_blue](#4-2-15-init\_blue) and [le\_server](#4-2-17-le\_server).
+in [devices file](#3-3-devices-file) and [le\_server](#4-2-17-le\_server).
 
 Starting the server and reading/writing the local characteristics are programmed via btlib funtions as follows:
 
@@ -692,6 +806,7 @@ DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes
   LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable
   LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte
+  LECHAR=Control  HANDLE=000C  PERMIT=06  SIZE=2  UUID=11223344-5566-7788-99AA-BBCCDDEEFF00   
 */  
   
 // C code:
@@ -830,8 +945,50 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
   
 ```
 
+### SERVICES CHANGED
 
-## 3-7 Pi-Pi client-server connection
+There is a special characteristic that signals to the client that the characteristic services have changed
+(not the characteristic values, but the handles, permissions, UUIDs, sizes). This should prompt the client
+to re-read all the characteristic info. However, many systems don't respond in this way, and sending a
+Service Changed message is a fool's errand.
+
+One situation where this might be needed is when the client is an Android or Apple device. When an Android
+first connects to a Bluetooth LE server, it reads the characteristics (like find\_ctics) and stores the
+information in a cache. Next time it connects, it assumes that the characteristics are still the same, and
+instead of reading the characteristics again it gets the information from its cache. So, if your Pi LE server
+has a new set of characteristics, the Android will not see them. Sending a Service Changed message should fix
+this, but it often doesn't. Clearing the Android's cache fixes it, but it's messy to code, and turning the Android's
+Bluetooth off and on may be the only method. The problem seems to have been fixed with Android 12.
+
+
+For what it's worth, send a Service Changed message to the client as follows: 
+  
+```
+In the devices.txt file, define a Service Changed characteristic
+with a UUID of 2A05, permission 20 and size 4
+It makes sense to declare this first, so it has an index of 0
+
+
+DEVICE = My Pi  TYPE=Mesh  node=1  ADDRESS=11:22:33:44:55:66
+  LECHAR=Serv change   permit=20  size=4  UUID=2A05    ; index 0
+  
+ 
+Somewhere in your le_callback code, write to the local characteristic
+(index 0) to signal that all handles from 0x0001 to 0xFFFF have changed. 
+An indication (permission 20) will be sent to the client.
+
+
+unsigned char dat[4];
+
+dat[0] = 1;   // start handle
+dat[1] = 0;
+dat[2] = 0xFF;  // end handle
+dat[3] = 0xFF;
+write_ctic(localnode(),0,dat,0);
+
+```
+
+## 3-8 Pi-Pi client-server connection
 
 Two Mesh Pis connected as a client/server pair. There must be two Pis
 listed as MESH type in devices.txt. The connection can be NODE or CLASSIC.
@@ -959,7 +1116,7 @@ wait_for_disconnect();
 ```
 
 
-## 3-8 Broadcast to all mesh servers
+## 3-9 Broadcast to all mesh servers
 
 There must be at least two Pis listed as MESH type in devices.txt. 
 
@@ -1042,7 +1199,7 @@ sleep(1);  // 1 second delay to allow packet to be sent
 
 ```
 
-## 3-9 sample
+## 3-10 sample
 
 The sample.c code is an illustration of a procedure using mesh, node and
 Classic connections on the following mesh network.
@@ -1108,9 +1265,27 @@ Run with sampledev.txt in the same directory
 ```
 
 
-## 3-10 Blue Dot Server
 
-A simple way to control a Pi from an Android device is
+## 3-11 BeetleIN Server
+
+BeetleIN is a simple way of using an Android phone or tablet as a touch screen input/output device
+for a Raspberry Pi without doing any Android programming. All the coding is done on the
+Raspberry Pi in Python or C. The connection is made from the Android device via Bluetooth LE.
+
+There are two components: the BeetleIN Android 
+app, and server code that runs on the Pi and waits for Android
+devices to connect.
+Python/C instructions set up clickable buttons, drop-down selection lists, check boxes, text input boxes, or
+send text and graphics to the Android for display. So the Android can be used as a touch-screen input
+device, an output screen, or a mixture of both.
+A sister [BeetleIN repository](https://github.com/petzval/beetlein) contains the server library
+and full documentation showing how to write
+your own code. BeetleIN uses the same btlib.c/h files as btferret.
+
+
+## 3-12 Blue Dot Server
+
+Another simple way to control a Pi from an Android device is
 the [Blue Dot app](https://bluedot.readthedocs.io). It connects as a
 classic client to a Pi listening as a classic server, and displays a pattern of dots. Tapping
 the dots sends command messages to the Pi. No programming is needed at the Android end. There is
@@ -1173,7 +1348,7 @@ These library functions are in btlib.c/btlib.h.
 [find\_ctic\_index](#4-2-14-find\_ctic\_index) - Find characteristic index of UUID<br/>
 [write\_ctic](#4-2-41-write\_ctic) - Write characteristic to an LE device<br/>
 [read\_ctic](#4-2-28-read\_ctic) - Read characteristic from an LE device<br/>
-[notify\_ctic](#4-2-26-notify\_ctic) - Enable/disable LE characterisitc notifications<br/>
+[notify\_ctic](#4-2-26-notify\_ctic) - Enable/disable LE characteristic notify/indicate<br/>
 [write\_node](#4-2-43-write\_node) - Write serial data to connected node device<br/>
 [write\_mesh](#4-2-42-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
 [read\_mesh](#4-2-30-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
@@ -1354,7 +1529,7 @@ Recommended keyflags:
                             
   KEY_ON  | PASSKEY_REMOTE  Use for Android/Windows.. clients. Inconvenient because
                             the pass key appears on the remote client connecting
-                            device and must be entered on the local device.                                                  
+                            device and must be entered on the local device.
                                
                     
                     
@@ -1489,7 +1664,7 @@ Use
 CHANNEL\_NEW to specify the channel in the parameters. CHANNEL\_STORED uses the channel stored
 in device information that can be set in two ways:
 
-1. With an e.g. "CHANNEL=1" entry in the [init\_blue](#4-2-15-init\_blue) devices.txt infomation.
+1. With an e.g. "CHANNEL=1" entry in the [devices file](#3-3-devices-file) infomation.
 
 2. A CHANNEL\_NEW connection will store the channel number, so CHANNEL\_STORED can be used for
 all subsequent reconnections.
@@ -1521,19 +1696,19 @@ DEVICE = My other Pi  TYPE=MESH NODE=9 ADDRESS = B8:27:EB:F1:50:C3
 
 connect_node(9,CHANNEL_NODE,0);  // connect to My other Pi Mesh device node 9
                                  // listening as a node server
-                                 
+
 connect_node(9,CHANNEL_LE,0);   // connect to My other Pi Mesh device node 9
                                 // listening as an LE server
-                                 
+
 connect_node(9,CHANNEL_NEW,1);  // connect to My other Pi Mesh device node 9
                                 // listening as a classic server on channel 1
                                 // (all Mesh Pis listen on channel 1)
-                                
+
 set_le_wait(500);              // some LE connections fail if the wait is too small 
-connect_node(3,CHANNEL_LE,0);  // connect to Pictail LE server node 3                                
+connect_node(3,CHANNEL_LE,0);  // connect to Pictail LE server node 3
                                             
 connect_node(6,CHANNEL_STORED,0); // connect to HC-05 classic server node 6
-                                  // via channel 1 specified in devices.txt                       
+                                  // via channel 1 specified in devices.txt
 
 connect_node(7,CHANNEL_NEW,4);  // connect to Windows PC Classic server node 7 
                                 // listening on RFCOMM serial channel 4
@@ -1544,7 +1719,7 @@ connect_node(7,CHANNEL_STORED,0);  // reconnect to Windows PC classic server nod
                                    // CHANNEL_NEW connection  
 
 int channel;
-                                  
+
       // find Classic server channel number from its 2 or 16-byte UUID               
 channel = find_channel(7,UUID_2,strtohex("1101",NULL));
 // OR
@@ -1783,7 +1958,7 @@ the disconnection and the client must wait for a disconnection sequence from the
 complete the process gracefully - and [wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
-[node client/server connection](#3-7-pi-pi-client-server-connection).
+[node client/server connection](#3-8-pi-pi-client-server-connection).
 
 ```c
    // Send a serial data message to node 4 that it interprets as
@@ -1864,7 +2039,7 @@ int find_ctics(int node)
 
 Read the characteristic information from a connected LE server and save it
 in the device info. This is not necessary if the characteristic
-information has been set via devices.txt in [init\_blue](#4-2-15-init\_blue).
+information has been set in the [devices file](#3-3-devices-file).
 
 PARAMETERS
 
@@ -1896,7 +2071,7 @@ int find_ctic_index(int node,int flag,char *uuid)
 Returns the characteristic index of a specified UUID for an LE server. This
 searches the device information for the UUID. It does not read information from
 the LE device itself. If the characteristic is not in the device information (most 
-conveniently via devices.txt in [init\_blue](#4-2-15-init\_blue)),
+conveniently via the [devices file](#3-3-devices-file),
 call [find\_ctics](#4-2-13-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
@@ -1953,9 +2128,14 @@ file with information about devices in the network (btferret assumes devices.txt
 The list should include the local device itself. All Pis in the network
 should be MESH type, while other devices will be CLASSIC or LE. If there is only one
 Bluetooth adapter it will be hci0 (as reported by hciconfig), and init\_blue should be used.
-For other hci device numbers, use init\_blue\_ex. If the local device is going to be
-an LE server, see [le\_server()](#4-2-17-le\_server) for more information about setting
-characteristics in the devices.txt file.
+For other hci device numbers, use init\_blue\_ex. See [devices file](#3-3-devices-file)
+and [le\_server()](#4-2-17-le\_server)
+for more information about the devices.txt file.
+Additional devices can be found and added to the device information 
+via [classic\_scan](#4-2-1-classic\_scan)
+or [le\_scan](#4-2-16-le\_scan).
+Characteristics are found via [find\_ctics](#4-2-13-find\_ctics).
+
 
 PARAMETERS
 
@@ -1976,82 +2156,13 @@ RETURN
 SAMPLE CODE
 
 ```
+if(init_blue("devices.txt") == 0)
+  return(0);
+
 if(init_blue("/home/pi/mydevices.txt") == 0)
   return(0);
   
-devices txt file example:
-
-  ; semi colon is comment character - everything beyond ignored
-  ; This file must list all network devices
-DEVICE = My Pi        TYPE=MESH NODE=1 ADDRESS=B6:15:EB:F5:50:53
-DEVICE = My other Pi  TYPE=MESH NODE=2 ADDRESS=B8:27:EB:F1:50:C3
-  ; characteristics when acting as an LE server - see le_server() documentation
-  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=8   ; index 0 r/w no ack 8 bytes 
-  LECHAR=Detector HANDLE=0007  PERMIT=06  SIZE=2   ; index 1 r/w no ack 2 bytes
-DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; characteristic index 0
-  LECHAR=Control handle=000E PERMIT=06 SIZE=1   ;                index 1
-  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ;                index 2
-  LECHAR=Name    UUID=2A00                      ;                index 3  
-DEVICE = Windows PC  TYPE=classic node=10 address=00:1A:7D:DA:71:13
-DEVICE = HC-05 TYPE=CLASSIC NODE=7 PIN=1234 CHANNEL=1 ADDRESS = 98:D3:32:31:59:84
-DEVICE = Android phone TYPE=CLASSIC NODE=4 ADDRESS = 4C:4E:03:83:CE:B9
 ```
-
-Text in the devices text file can be upper or lower case and can include spaces.
-
-```
-DEVICE = Device name of your choice (don't use any of the key words
-                  such as TYPE/NODE/ADDRESS.. or chaos will follow) 
-TYPE   = MESH     all Pis running btferret/btlib 
-         CLASSIC  classic servers such as Windows/Android/HC05
-         LE       LE servers
- 
-NODE = 4                      Node number in decimal of your choice
-ADDRESS = 00:1E:C0:2D:17:7C   6-byte Bluetooth address
-CHANNEL = 4                   RFCOMM channel for CLASSIC servers (optional)
-PIN = 1234                    PIN code for CLASSIC servers (optional)
-```
-
-LE DEVICE entries can be followed by any number of characteristic entries as follows:
-
-```
-LECHAR = Characteristic name of your choice
-HANDLE = 000B     2-byte handle in hex
-PERMIT = 06       Permissions in hex
-SIZE = 1          Number of bytes in decimal. Only used for writes - not needed for reads
-UUID = 2A00       Not needed if HANDLE specified
-```
-
-PERMIT permissions should be one of the following bit combinations:
-
-```
-02 = r   Read only
-04 = w   Write no acknowledge
-08 = wa  Write with acknowledge
-06 = rw  Read/Write no ack
-0A = rwa Read/Write ack
-10 = n   Notify capable
-16 = rwn Read/Write no ack/Notify capable
-```
-
-If PERMIT is not known, find_ctics will
-find it and save it in the device information. 
-
-If HANDLE is not known, the UUID can be specified instead.
-
-```
-LECHAR = Characteristic name
-UUID = 11223344-5566-7788-99AABBCCDDEEFF00
-```
-
-With this minimum information, when the characteristic is read via
-read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
-
-Additional devices can be found and added to the device information 
-via [classic\_scan](#4-2-1-classic\_scan)
-or [le\_scan](#4-2-16-le\_scan).
-Characteristics are found via [find\_ctics](#4-2-13-find\_ctics).
 
 
 ## 4-2-16 le\_scan
@@ -2148,7 +2259,7 @@ connect simultaneously. The clients may be Windows/Android/.. devices running
 an LE client app or other Pis running btferret/btlib.
 
 The local device's characteristics are
-defined in the devices.txt file read by [init_blue](#4-2-15-init\_blue). The local device reads and writes them
+defined in the [devices file](#3-3-devices-file). The local device reads and writes them
 by using [read\_ctic](#4-2-28-read\_ctic) and [write\_ctic](#4-2-41-write\_ctic) with
 [localnode()](#4-2-21-localnode) as follows:
 
@@ -2197,7 +2308,7 @@ standard defined [16-bit UUID Numbers](https://www.bluetooth.com/specifications/
 connecting device will recognise it as such. 
 
 Here is a sample devices.txt entry for a mesh Pi that will act as an LE server. There is more information
-about devices.txt LE characteristic entries in [init\_blue](#4-2-15-init\_blue).
+about devices.txt LE characteristic entries in [devices file](#3-3-devices-file).
 
 ```
 DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
@@ -2205,7 +2316,7 @@ DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable (uses 3 handles)
   LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte         (uses 2 handles)
   LECHAR=Message  HANDLE=000C  PERMIT=06  SIZE=8 UUID=00112233445566778899AABBCCDDEEFF   ; r/w 8 bytes
-  LECHAR=Name     PERMIT=06  SIZE=16 UUID=2A00     ; 2A00 is the standard UUID for Device Name                                                 
+  LECHAR=Name     PERMIT=06  SIZE=16 UUID=2A00     ; 2A00 is the standard UUID for Device Name
   LECHAR=Control  PERMIT=06  SIZE=2                ; index 5 Handle and UUID will be assigned automatically 
                                                      (but other Mesh Pis will report this as an error in 
                                                       their devices.txt file - they need a handle or a UUID.)
@@ -2398,8 +2509,8 @@ list_uuid(5,strtohex("0100",NULL));
 int localnode(void)
 ```
 
-Return the node number of the local device - should be set via devices.txt
-data in [init\_blue](#4-2-15-init\_blue).
+Return the node number of the local device - should be set 
+in the [devices file](#3-3-devices-file).
 
 SAMPLE CODE
 
@@ -2563,11 +2674,11 @@ int node_callback(int clientnode,char *data,int datlen)
 int notify_ctic(int node,int cticn,int notifyflag,int (*callback)())
 ```
 
-Enables/disables LE characteristic notifications. If an LE characteristic has permission
-bits 0x10 or 0x20 set then it is capable of sending notifications: when the value changes, the
+Enables/disables LE characteristic notifications and indications. If an LE characteristic has permission
+bits 0x10/0x20 set then it is capable of sending notifications/indications: when the value changes, the
 LE device sends it to the client device without being asked. In addition to the permission
-bit (that is set by the LE device), notifications must also be enabled by the client
-via this function. Once enabled, when a notification is received, the callback
+bit (that is set by the LE device), notifications/indications must also be enabled by the client
+via this function. Once enabled, when a notification/indication is received, the callback
 function is called. The client must be listening for
 input via: [read\_node\_count](#4-2-31-read\_node\_count),
 [read\_node-all\_endchar](#4-2-32-read\_node-all\_endchar),
@@ -2612,9 +2723,10 @@ SAMPLE CODE
 If devices.txt information for init_blue() is as follows:
 
 DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Test  HANDLE=0014 PERMIT=16 SIZE=2       ; index 0
+  LECHAR=Test  HANDLE=0014 PERMIT=16 SIZE=2       ; index 0  Notify capable
+  LECHAR=Control handle=0020 permit=20 size=8     ; index 1  Indicate capable
   
-  PERMIT has bit 0x10 set, so is notify capable
+  Test PERMIT has bit 0x10 set, so is notify capable
   
 */
 
@@ -2699,9 +2811,9 @@ Number of bytes read
 inbuf[] = read data
           a termination zero that is not part of the read data
           is added so inbuf[Number read] = 0 
-          
-The read_error() function returns one of the following:
-
+ 
+If returned number of bytes read = 0          
+the read_error() function returns one of the following:
   0 = OK - no error
   ERROR_FATAL = some other error 
   
@@ -2801,9 +2913,10 @@ inbuf[] = received data
           so inbuf[Number of bytes] = 0
 *node = Node number of sending node
         Zero on failure
-        
-The read_error() function returns one of the following:
 
+
+If returned number of bytes = 0        
+the read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
@@ -2885,8 +2998,8 @@ inbuf[] = Received data
   received data is also added - so inbuf[Number of bytes read] = 0
   On failure, there may be bytes in the buffer.
   
-The read_error() function returns one of the following:
-
+If returned number of bytes read = 0
+the read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
@@ -3033,8 +3146,8 @@ inbuf[] = Received data
 *node  For read_all_endchar() the sending node is returned in *node
        Zero on failure
   
-The read_error() function returns one of the following:
-
+If returned number of bytes read = 0
+the read_error() function returns one of the following:
   0 = OK - no error
   ERROR_TIMEOUT = timed out
   ERROR_KEY = x key press
@@ -3571,8 +3684,7 @@ record for a serial channel. (decode info v3,pB,3)
 
 The UUID is in the aid=1 entry. The aid=4 entry identifies this record as an RFCOMM channel.
 
-A channel can be specified in the device information via the devices.txt
-file passed to [init\_blue](#4-2-15-init\_blue). 
+A channel can be specified in the device information via the [devices file](#3-3-devices-file). 
 BTlib also has functions for reading a remote device's SDP
 database [list\_channels](#4-2-18-list\_channels),
 finding the RFCOMM channel of a specified UUID [find\_channel](#4-2-12-find\_channel).
@@ -3598,8 +3710,7 @@ There are some standard 2-byte UUIDs that identify the type of characteristic;
 The full list can be found in a pdf document called "16-bit UUID Numbers Document"
 [here](https://www.bluetooth.com/specifications/assigned-numbers/). 
 
-A handle or UUID can be pre-set in the device information via the devices.txt file
-passed to [init\_blue](#4-2-15-init\_blue).
+A handle or UUID can be pre-set in the device information via the [devices file](#3-3-devices-file).
  
 BTlib also has functions for reading an LE device's characteristic/UUID list
 [find\_ctics](#4-2-13-find\_ctics) which
@@ -6213,7 +6324,7 @@ handle  opcode 05 reply   opcode 09/11 reply (first byte = number of following b
 0009    01 09 00 03 28    07 09 00 06 0A 00 00 2A            third characteristic info UUID=2803  eog=000A
                                                              permit=06 value handle=000A valueUUID=2A00
                                                              valueUUID=2A00 (standard UUID for Device Name)
-000A    01 0A 00 00 2A    09 0A 00 61 62 63 64 65 66 00      third characteristic value  UUID=2A00  (Device Name)                                                                
+000A    01 0A 00 00 2A    09 0A 00 61 62 63 64 65 66 00      third characteristic value  UUID=2A00  (Device Name)
                                                              7-byte value = "abcdef" plus terminate zero
 
 ```
@@ -6463,9 +6574,16 @@ This code sets up a custom 16-byte UUID serial channel.
 
 AndroidManifest.xml 
 
-  <uses-permission android:name="android.permission.BLUETOOTH" />
-  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
 
 
 MainActivity.java
@@ -6727,9 +6845,17 @@ This code connects to a listening btferret classic server via the standard
 ```
 AndroidManifest.xml 
 
-  <uses-permission android:name="android.permission.BLUETOOTH" />
-  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+
 
 
 MainActivity.java

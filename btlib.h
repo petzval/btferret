@@ -1,4 +1,4 @@
-  // Version 3
+  // Version 4
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -31,8 +31,10 @@
 #define CTIC_NOTIFY  (1 << 6)
 
   // callback returns
-#define SERVER_CONTINUE 0
-#define SERVER_EXIT 1
+#define SERVER_CONTINUE 1
+#define SERVER_EXIT 0
+#define SERVER_BTLETIMER 2
+#define SERVER_BTLESTOP  4 
  
    // read_error() returns
 #define ERROR_TIMEOUT 1
@@ -55,6 +57,7 @@
 #define LE_WRITE   3
 #define LE_DISCONNECT 4
 #define LE_TIMER 5
+#define LE_BTLETIMER 6
   // link key
 #define KEY_OFF 0
 #define KEY_ON  1
@@ -69,6 +72,9 @@
 
 
 #define READ_WAIT -1
+
+int btle_devtimer(int node,int tods);
+void btle_notifynode(int node);
 
 void classic_scan(void);
 int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag);
@@ -91,6 +97,7 @@ int find_ctic_index(int node,int flag,char *uuid);
 
 int init_blue(char *filename);
 int init_blue_ex(char *filename,int hcin);
+int init_btle(char *name,int hcin);
 
 void le_scan(void);
 int le_server(int(*callback)(),int timerds);

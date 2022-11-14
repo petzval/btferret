@@ -24,3 +24,15 @@ to complete the process. A connection waiting time has been added, and can be ch
 
 5. Sample code for a Blue Dot server has been included. Blue Dot is an
 Android app that provides an easy way to control a Pi from a phone. See documentation section 3.10.
+
+### Version 4
+
+1. Support for BeetleIN server. BeetleIN is an Android app that is programmed from a Pi via Bluetooth LE in
+Python or C,
+and allows an Android phone/tablet to be used as a touch screen input/output device. See separate repository
+[github.com/petzval/beetlein](https://github.com/petzval/beetlein) for full documentation. The C interface is based on btlib.c.
+
+2. Bug fix: LE characteristics with notify permission 10 or indicate permission 20 were not recognised.
+Characteristics with indicate permission now handled correctly.
+ 
+
