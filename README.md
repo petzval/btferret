@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 4*
+*Version 5*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -419,8 +419,9 @@ Additional devices can be found and added to the device information
 via [classic\_scan](#4-2-1-classic\_scan)
 or [le\_scan](#4-2-16-le\_scan). Additional
 characteristics are found via [find\_ctics](#4-2-13-find\_ctics).
-One tricky point is that some LE servers have a random address which changes (e.g. Android - every
-ten minutes), so it is not possible to list them in the devices file, and le\_scan must be used.
+One tricky point is that some LE servers have a random address which changes,
+so it is not possible to list the address in the devices file. In this case, use
+MATCH_NAME - see description below.
 
 
 ```
@@ -451,6 +452,11 @@ DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ;                index 2
   LECHAR=Name    UUID=2A00                      ;                index 3  
 
+DEVICE = My Android  TYPE=LE NODE=5 ADDRESS = MATCH_NAME  
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   
+                                        ; use MATCH_NAME for devices with random address
+                                        ; and run a scan to find the current address
+                                                 
 DEVICE = Windows PC  TYPE=classic node=10 address=00:1A:7D:DA:71:13
 
 DEVICE = HC-05 TYPE=CLASSIC NODE=7 PIN=1234 CHANNEL=1 ADDRESS = 98:D3:32:31:59:84
@@ -469,8 +475,12 @@ TYPE   = MESH     all Pis running btferret/btlib which can then
          CLASSIC  classic servers such as Windows/Android/HC05
          LE       LE servers
  
-NODE = 4                      Node number in decimal - you choose this
+NODE = 4          Node number in decimal - you choose this
+
 ADDRESS = 00:1E:C0:2D:17:7C   6-byte Bluetooth address
+  or
+ADDRESS = MATCH_NAME          To find address during a scan by matching name - 
+                                 CLASSIC and LE type only (see further discussion below)
 CHANNEL = 4                   RFCOMM channel for CLASSIC servers (optional)
 PIN = 1234                    PIN code for CLASSIC servers (optional)
 ```
@@ -512,7 +522,23 @@ LECHAR=Name  UUID=11223344-5566-7788-99AABBCCDDEEFF00
 With this minimum information, when the characteristic is read via
 read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
 
+### Match Name
 
+For LE and Classic devices there is an ADDRESS = MATCH\_NAME option. In this case, the address is
+found by running a scan - [classic\_scan](#4-2-1-classic\_scan)
+or [le\_scan](#4-2-16-le\_scan). When a device is found by the scan, its name is compared with
+the name specified by the DEVICE=Name entry. If the names match, the current random address is assigned to that
+entry and it will be reported as a known device with the node number you chose. (If no match is found, it will
+be reported as a new device with a node number of 1000 or higher).
+Some LE devices set a new random address every time they are started as a server (e.g. An
+Android LE server changes its address approximately every ten minutes), so
+this method must be used. The name of the remote device is compared up to the number of characters
+in the DEVICE= name.
+So if the name of the remote device is "Galaxy A7 tablet", then setting DEVICE=Galaxy in the
+devices file will find a good match. The comparison is case sensitive. You can find the name that the
+remote device is advertising with an LE scan. It will report "Name = Galaxy A7 tablet (Use this for MATCH\_NAME)".
+See second code example in
+[LE client](#3-6-le-client). 
 
 ## 3-4 Windows-Android-HC-05 Classic servers
 
@@ -693,11 +719,11 @@ int classic_callback(int clientnode,char *data,int datlen)
 Connect to an LE server and read/write characteristics. Sometimes a device will have
 a fixed Bluetooth address for Classic connections, but a random changeable address for LE connections
 (Android devices running [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile)
-as an advertiser for example). In this case, it is not possible to set the address
-in the devices.txt file, so the LE device and its current address must be found by scanning
-via b in btferret or [le\_scan()](#4-2-16-le\_scan), and the characteristics must be found via v in
-btferret or [find\_ctics()](#4-2-13-find\_ctics). Some LE servers need to be given time to complete the
-connection, or they will connect, but then disconnect soon after. When using the btferret c command, you will
+as an advertiser for example). In this case, the ADDRESS=MATCH_NAME method should be used in devices.txt (see
+second code example below and [devices file](#3-3-devices-file) for more details).
+A device with a random address can be found from btferret via an LE scan (b) and a service read (v).
+Some LE servers need to be given time to complete the
+connection, or they will connect, but then disconnect soon after. When using the btferret connect command, you will
 be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-37-set\_le\_wait) function
 sets this time. Zero may work, otherwise find the shortest time that prevents disconnection.
 
@@ -719,7 +745,7 @@ R - Read notifications
 d - Disconnect
 
 ```
-LE read/writes are programmed via btlib funtions as follows:
+LE read/writes for an LE server with a fixed address are programmed via btlib funtions as follows:
 
 ```c
 /* devices.txt for an LE device that has a fixed address
@@ -731,8 +757,6 @@ DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
 
 
 char buf[32];
-
-le_scan();       // Find listening LE devices
 
 set_le_wait(750);              // LE connection completion time 750ms
 connect_node(7,CHANNEL_LE,0);  // 3rd parameter 0 not needed for LE devices
@@ -766,10 +790,46 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
   
   return(0);
   }  
-  
-
 
 ```
+
+This is code for connection to an LE server with a random address.
+
+```c
+/* devices.txt for an LE device that has a random address
+   The name (Galaxy) must match the start of the LE device's advertised name
+   Find the advertised name with an LE scan - it will report:
+   Name = Galaxy A7 tablet (Use this for MATCH_NAME)
+   
+DEVICE = Galaxy  TYPE=LE  NODE=7   ADDRESS = MATCH_NAME
+  LECHAR=Test    HANDLE=001C PERMIT=06 SIZE=2     ; index 0
+*/ 
+
+
+char buf[32];
+
+le_scan();       // Find listening LE devices and address by matching name
+                 // If the scan has not found a device with a
+                 // name starting "Galaxy", then the connect will fail
+
+set_le_wait(750);              // LE connection completion time 750ms
+connect_node(7,CHANNEL_LE,0);  // 3rd parameter 0 not needed for LE devices
+
+read_ctic(7,0,buf,sizeof(buf));   // read Test (index 0) from node 7
+                                  // buf[0] and buf[1] will have the data
+
+         // write 12 34 to Test (index 0)
+buf[0] = 0x12;
+buf[1] = 0x34;
+write_ctic(7,0,buf,0);  // device info knows the size of Test is 2
+                        // so can set the last parameter count=0
+
+disconnect_node(7);
+
+```
+
+
+
 
 ## 3-7 LE server
 

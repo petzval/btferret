@@ -35,4 +35,11 @@ and allows an Android phone/tablet to be used as a touch screen input/output dev
 2. Bug fix: LE characteristics with notify permission 10 or indicate permission 20 were not recognised.
 Characteristics with indicate permission now handled correctly.
  
+### Version 5
+
+1. A new devices.txt file option ADDRESS=MATCH\_NAME. Some LE servers have a random address, so it is
+not possible to set the address in the devices file. If MATCH\_NAME has been specified, the name is used
+to identify a device and a scan must be run
+to find the address before connection. During a scan the remote device name is compared to the DEVICE=Name specified in the
+devices file, and if they match, the address is allocated to that device. See sections 3.3 (devices file) and 3.6 (LE client) in the documentation.
 

@@ -73,7 +73,7 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 4
+#define VERSION 5
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -107,6 +107,7 @@ struct devdata
   {
   int type;                   // 0=not used    BTYPE_  values   
   char name[NAMELEN];         // name of LE device - your choice
+  int matchname;              // 1=use name match to find baddr 
   unsigned char baddr[6];     // board address hi byte first
   unsigned int rfchan;        // RFCOMMM serial channel
   int node;                   // of device
@@ -1501,16 +1502,23 @@ int init_blue_ex(char *filename,int hcin)
         {  // ADDRESS 
         len = entrylen(ind,2);
         sn = ind[2] & 0xFFFF;
-        data = strtohexx(s + sn,len,&hn);
-        if(hn != 6)
-          {
-          NPRINT "%sDevice address must be 6 bytes\n",errs);
-          errflag = 1;
-          }
+        
+        if(strncasecmp(s+sn,"MATCH_NAME",10) == 0)
+          dev[dn]->matchname = 1;
         else
           {
-          for(i = 0 ; i < 6 ; ++i)
-            dev[dn]->baddr[i] = data[i];
+          dev[dn]->matchname = 0;
+          data = strtohexx(s + sn,len,&hn);
+          if(hn != 6)
+            {
+            NPRINT "%sDevice address must be 6 bytes\n",errs);
+            errflag = 1;
+            }  
+          else
+            {
+            for(i = 0 ; i < 6 ; ++i)
+              dev[dn]->baddr[i] = data[i];
+            }
           }        
         }  // end ind[2] ADDRESS
       
@@ -1782,6 +1790,13 @@ int localctics()
   
   for(j = 1 ; devok(j) != 0 ; ++j)
     {
+    if(dev[j]->matchname != 0 && dev[j]->type == BTYPE_ME)
+      {
+      NPRINT "\n  ERROR *** %s Node %d - MATCH_NAME not allowed for TYPE=MESH\n",dev[j]->name,dev[j]->node);
+      return(0);
+      }
+    
+    
     for(n = 0 ; ctic(j,n)->type == CTIC_ACTIVE ; ++n)
       {
       cp = ctic(j,n);
@@ -1972,7 +1987,7 @@ char *device_address(int node)
   else
     ndevice = devnp(node);
   
-  if(ndevice >= 0)
+  if(ndevice >= 0 && dev[ndevice]->matchname != 1)
     return(baddstr(dev[ndevice]->baddr,0));
   else
     return("00:00:00:00:00:00");
@@ -1985,9 +2000,12 @@ int devnfrombadd(char *badd,int type,int dirn)
   int n;
   
   for(n = 0 ; devok(n) != 0 ; ++n)
-    {    
-    if(bincmp(badd,dev[n]->baddr,6,dirn) != 0 && (type == 0 || (type & dev[n]->type) != 0))
-      return(n);
+    { 
+    if(dev[n]->matchname != 1)
+      {   
+      if(bincmp(badd,dev[n]->baddr,6,dirn) != 0 && (type == 0 || (type & dev[n]->type) != 0))
+        return(n);
+      }
     }
   return(-1);
   }
@@ -2207,6 +2225,7 @@ int devalloc()
   dp->dhandle[1] = 0;
   dp->nx = -1;
   dp->btletods = 0;
+  dp->matchname = 0;
   
   for(j = 0 ; j < 6 ; ++j)
     dp->baddr[j] = 0;
@@ -2240,7 +2259,7 @@ void le_scan()
   
 int lescanx()
   {    
-  int n,j,k,i,tn,ndevice,count,repn,type,newcount;
+  int n,j,k,i,tn,ndevice,count,repn,type,newcount,flag;
   unsigned char *rp;
   struct devdata *dp;
   char buf[64];
@@ -2331,7 +2350,7 @@ int lescanx()
               ++k;
               }  
             buf[k] = 0;
-            NPRINT "    Name = %s\n",buf);
+            NPRINT "    Name = %s (Use this for MATCH_NAME)\n",buf);
             }
           }
         else
@@ -2409,17 +2428,36 @@ int lescanx()
         
       // compare board address with known devices  no type check
               
-  
+        
       ndevice = devnfrombadd(rp+2,BTYPE_LE | BTYPE_ME,DIRN_REV);
      
-      if(ndevice < 0 && (rp[1] & 1) != 0 && buf[0] != 0)
-        {  // no board address match for random address and have name in buf
-           // look for name match
+      if(ndevice < 0 && buf[0] != 0)
+        {  // no board address match and have name in buf
+           // look for name match or random address change   
         for(k = 1 ; ndevice < 0 && devok(k) != 0 ; ++k)
           {
-          if(dev[k]->type == BTYPE_LE && (dev[k]->leaddtype & 1) != 0)
+          if(dev[k]->type == BTYPE_LE)
             {
-            if(strcmp(buf,dev[k]->name) == 0)
+            if((dev[k]->matchname & 1) != 0)
+              {  // MATCH_NAME
+              flag = 0;
+              for(i = 0 ; i < strlen(dev[k]->name) && flag == 0 ; ++i)
+                {
+                if(dev[k]->name[i] != buf[i])
+                  flag = 1;
+                }
+              if(flag == 0)
+                {
+                NPRINT "    Found via MATCH_NAME\n");
+                dev[k]->matchname |= 2;  // found address flag
+                dev[k]->leaddtype = rp[1] & 1;  // type public/random
+                dev[k]->leaddtype |= 2;         // found by scan
+                ndevice = k;
+                for(i = 0 ; i < 6 ; ++i)
+                  dev[k]->baddr[i] = rp[7-i];          
+                }
+              }            
+            else if((dev[k]->leaddtype & 1) != 0 && (rp[1] & 1) != 0 && strcmp(buf,dev[k]->name) == 0)
               {
               NPRINT "    Random address changed\n");
               ndevice = k;
@@ -2768,8 +2806,15 @@ int device_info(int mask)
           }       
         }
 
-          
-      NPRINT "\n      %s",baddstr(dp->baddr,0));
+     
+      if(dp->matchname == 1)
+        NPRINT "\n     Address via MATCH_NAME not found - run scan");
+      else 
+        {    
+        NPRINT "\n      %s",baddstr(dp->baddr,0));
+        if((dp->matchname & 2) != 0)
+          NPRINT " via MATCH_NAME");
+        }
       if(dp->type == BTYPE_LE && (dp->leaddtype & 1) != 0)
         NPRINT " Random - may change");
       
@@ -7619,6 +7664,12 @@ int clservices(int ndevice,int flags,char *uuid)
     }
     
   dp = dev[ndevice];
+  
+  if(dp->matchname == 1)
+    {  // must be 0 or 3
+    NPRINT "Address via MATCH_NAME not found - run a classic scan\n");
+    return(-1);
+    }
 
   if(dp->conflag != 0)
     {
@@ -8782,7 +8833,7 @@ void classic_scan()
 
 void clscanx()
   {
-  int n,k,j,repn,nrep,ndevice,count,newcount;
+  int n,k,j,repn,nrep,ndevice,count,newcount,flag;
   unsigned char *rp;
   struct devdata *dp;
   char buf[64];
@@ -8811,6 +8862,7 @@ void clscanx()
     nrep = insdatn[0];
     for(repn = 0 ; repn < nrep ; ++repn)
       {
+      flag = 0;  // no MATCH_NAME
       NPRINT "%d FOUND %s\n",count+1,baddstr(rp,1));      
       
       ndevice = devnfrombadd(rp,BTYPE_CL | BTYPE_ME,DIRN_REV);
@@ -8862,16 +8914,51 @@ void clscanx()
             ++k;
             }
           buf[k] = 0;
-           
-          k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
-          if(k > 0 && bincmp(dev[k]->name,"LE node 1",9,DIRN_FOR) != 0)
-            strcpy(dev[k]->name,buf);  // is also LE without name
+
+            
+          // MATCH_NAME?
+          for(k = 1 ; flag == 0 && devok(k) != 0 ; ++k)
+            {
+            if(k != ndevice && dev[k]->type == BTYPE_CL)
+              {
+              if((dev[k]->matchname & 1) != 0)
+                {  // MATCH_NAME
+                flag = 1;
+                for(j = 0 ; j < strlen(dev[k]->name) && flag != 0 ; ++j)
+                  {
+                  if(dev[k]->name[j] != buf[j])
+                    flag = 0;
+                  }
+                if(flag != 0)
+                  {  
+                  dp->type = 0;      // free ndevice
+                  ndevice = k;       // swap to known device k
+                  NPRINT "   Found via MATCH_NAME\n");
+                  NPRINT "   Known device %d = %s\n",dev[ndevice]->node,dev[ndevice]->name);
+                  dev[k]->matchname |= 2;  // found address flag
+                  ndevice = k;
+                  for(j = 0 ; j < 6 ; ++j)
+                    dev[ndevice]->baddr[j] = rp[5-j];          
+                  rwlinkey(0,ndevice);  // link key in file?
+                  }
+                } 
+              }
+            }           
+
+          if(flag == 0)
+            {
+            k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
+            if(k > 0 && bincmp(dev[k]->name,"LE node 1",9,DIRN_FOR) != 0)
+              strcpy(dev[k]->name,buf);  // is also LE without name
+            }
           }
 
-        strcpy(dev[ndevice]->name,buf);
-                 
-        NPRINT "   New device %s\n",dev[ndevice]->name);
-        rwlinkey(0,ndevice);  // link key in file?
+        if(flag == 0)
+          {
+          strcpy(dev[ndevice]->name,buf);                
+          NPRINT "   New device %s\n",dev[ndevice]->name);
+          rwlinkey(0,ndevice);  // link key in file?
+          }
         }
       rp += 14;
       ++count;
@@ -9135,6 +9222,13 @@ int connect_node(int node,int channelflag,int channel)
     return(0);
     }
   
+  if(dev[ndevice]->matchname == 1)
+    {  // must be 0 or 3
+    NPRINT "Address via MATCH_NAME not found - run a scan\n");
+    flushprint();
+    return(0);
+    }
+    
   retval = 0;  
   type = dev[ndevice]->type;
   dev[ndevice]->lecflag = 0;  
