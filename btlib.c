@@ -73,7 +73,7 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 5
+#define VERSION 6
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -1385,7 +1385,7 @@ int init_blue_ex(char *filename,int hcin)
     btleindex = 1;
     }
       
-  while(readret > 0 && errcount < 6)
+  while(readret > 0 && errcount == 0)
     {
     errflag = 0;
         
@@ -1401,8 +1401,9 @@ int init_blue_ex(char *filename,int hcin)
     ind[8] = strinstr(s,"PERMIT");
     ind[9] = strinstr(s,"NODE");
     ind[10] = strinstr(s,"CHANNEL");
-    ind[11] = strlen(s) << 16;
-    ind[12] = 0x80000000;  // terminate flag
+    ind[11] = strinstr(s,"RANDOM");
+    ind[12] = strlen(s) << 16;
+    ind[13] = 0x80000000;  // terminate flag
       
     if(gpar.btleflag == 0)
       {
@@ -1658,6 +1659,18 @@ int init_blue_ex(char *filename,int hcin)
         }  // end ind[10] CHANNEL
 
 
+      if(ind[11] != 0)
+        {  // RANDOM = UNCHANGED
+        sn = ind[11] & 0xFFFF;
+        if(strncasecmp(s+sn,"UNCHANGED",9) == 0)
+          dev[dn]->leaddtype = 1;  // random
+        else
+          {
+          NPRINT "%sExpecting RANDOM = UNCHANGED\n",errs);
+          errflag = 1;
+          }
+        }
+
       if(errflag != 0)
         ++errcount;
 
@@ -1718,6 +1731,13 @@ int init_blue_ex(char *filename,int hcin)
   if(gpar.btleflag == 0 && stream != NULL)
     fclose(stream);
    
+  if(errcount != 0)
+    {
+    closehci();
+    printf("\n************ initblue() FAILED ************\n");
+    return(0);
+    }
+
   if(dev[0]->node == 0)
     {
     dev[0]->node = newnode();
@@ -1764,9 +1784,8 @@ int init_blue_ex(char *filename,int hcin)
     return(1);
     }
     
-    
   printf("\n************ initblue() FAILED ************\n");
-         
+  closehci();            
   return(0);  
   }
 
@@ -2264,6 +2283,8 @@ int lescanx()
   struct devdata *dp;
   char buf[64];
   double fac;
+  static char *fixran[2] = {"Fixed","Random"};
+  
   //static double powa[5] = { 1,10,100,1000,10000 };
   //static double powb[10] = { 1,1.25,1.6,2.0,2.5,3.16,4,5,6.3,8.0 };
   
@@ -2306,8 +2327,7 @@ int lescanx()
       {  // each response
       // rp[2]...[7]  board address
 
-      NPRINT "%d FOUND %s\n",count+1,baddstr(rp+2,1));      
-     
+      NPRINT "%d FOUND %s - %s\n",count+1,baddstr(rp+2,1),fixran[rp[1] & 1]);      
       flushprint();
       
       type = BTYPE_LE;  // unless find mesh
@@ -2473,6 +2493,13 @@ int lescanx()
       if(ndevice >= 0)
         {
         NPRINT "    Known device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+        if((dev[ndevice]->leaddtype & 1) != (rp[1] & 1))
+          {
+          NPRINT "    Changing fixed/random address type\n");
+          if((dev[ndevice]->leaddtype & 2) == 0)
+            NPRINT "    *** Fixed/Random info in devices file is wrong ***\n"); 
+          dev[ndevice]->leaddtype = (rp[1] & 1) | (dev[ndevice]->leaddtype & 2);
+          }
         if(dev[ndevice]->type == BTYPE_ME && dev[ndevice]->node >= 1000)
           NPRINT "    Add to devices.txt with node < 1000 to authorise mesh packets\n");
         if(dev[ndevice]->type != BTYPE_LE && dev[ndevice]->type != BTYPE_ME)

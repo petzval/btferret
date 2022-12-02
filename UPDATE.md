@@ -43,3 +43,9 @@ to identify a device and a scan must be run
 to find the address before connection. During a scan the remote device name is compared to the DEVICE=Name specified in the
 devices file, and if they match, the address is allocated to that device. See sections 3.3 (devices file) and 3.6 (LE client) in the documentation.
 
+### Version 6
+
+1. A further addition to the LE random address issue from Version 5. Some LE devices have a random address,
+but do not change it. In this case, the address can be listed in the devices file, but it must be flagged as
+random by adding RANDOM=UNCHANGED. No scan is needed. See sections 3.3 (devices file) and
+3.6 (LE client) in the documentation.
