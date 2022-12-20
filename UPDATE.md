@@ -49,3 +49,11 @@ devices file, and if they match, the address is allocated to that device. See se
 but do not change it. In this case, the address can be listed in the devices file, but it must be flagged as
 random by adding RANDOM=UNCHANGED. No scan is needed. See sections 3.3 (devices file) and
 3.6 (LE client) in the documentation.
+
+### Version 7
+
+1. The limit on LE characteristic size (for server and client) has been increased from 20 to 245.
+
+2. Bug fix: The LE server did not respond correctly to some attribute information requests from some LE clients
+(e.g. nRF Connect Desktop could not see characteristic UUIDs), and did not respond to connection parameter change requests,
+which could cause a disconnection.

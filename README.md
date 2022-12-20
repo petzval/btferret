@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 6*
+*Version 7*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -335,11 +335,14 @@ be readable, writeable or both. A Pi running btferret/btlib can act as an LE cli
 LE characteristics can also have a notify property whereby the value is transmitted when it changes - without being asked
 by the client. The client must enable the characteristic's notification process for this to work.
 
+
 The use of LE goes beyond this simple read operation and there are
 LE server devices such as the Microchip RN4020 that has digital I/O pins and PWM capabilities
 that can be contolled by writing to its characteristics for remote control applications.
 This separate document [RN4020.md](RN4020.md)
 describes the use of btlib functions and an RN4020 for motor speed control.
+The [BeetleIN app](#3-11-beetlein-server) uses
+an LE connection to control a Pi from a phone, or to use a phone as a remote screen.
 
 In addition to the above standard funtionality, btferret has two custom types of connection: mesh and node. These 
 connections can only be made between two Pis running btferret/btlib.
@@ -500,7 +503,7 @@ will be an LE server (but still type=MESH) see [le server](#4-2-17-le\_server) f
 LECHAR = Characteristic name of your choice
 HANDLE = 000B     2-byte handle in hex - can be automatically allocated
 PERMIT = 06       Permissions in hex
-SIZE = 1          Number of bytes in decimal. Only used for writes - not needed for reads
+SIZE = 1          Number of bytes in decimal. Range = 1 to 245
 UUID = 2A00       Not needed if HANDLE specified - can be automatically allocated
 UUID = 11223344-5566-7788-99AA-BBCCDDEEFF00    16-byte UUID
 ```
@@ -527,7 +530,7 @@ If HANDLE is not known, the UUID can be specified instead.
 LECHAR=Name  UUID=11223344-5566-7788-99AABBCCDDEEFF00
 ```
 
-With this minimum information, when the characteristic is read via
+With this minimum information, when the characteristic is read via find\_ctics or
 read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
 
 ### Match Name

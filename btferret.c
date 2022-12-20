@@ -1,7 +1,7 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h Version 3
+  btlib.c/h Version 7
 COMPILE
   gcc bterret.c btlib.c -o btferret
 EDIT
@@ -413,7 +413,7 @@ int mesh_callback(int clientnode,char *buf,int nread)
 int le_callback(int clientnode,int operation,int cticn)
   {
   int n,nread;
-  unsigned char dat[32]; 
+  unsigned char dat[256]; 
     
   if(operation == LE_CONNECT)
     printf("  %s has connected\n",device_name(clientnode));
@@ -1232,7 +1232,7 @@ void readle()
   {
   int n,k,xn,node,cticn,chand,ascflag,len,maxlen,datlen;
   int notflag;
-  char dat[64];
+  char dat[256];
   
   printf("\nRead an LE characteristic\n");
   
@@ -1281,7 +1281,7 @@ void readle()
 void writele()
   {
   int node,cticn,size;
-  char buf[128];
+  char buf[256];
   char *val;
   
   printf("\nWrite an LE characteristic\n");
