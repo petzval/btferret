@@ -57,3 +57,8 @@ random by adding RANDOM=UNCHANGED. No scan is needed. See sections 3.3 (devices 
 2. Bug fix: The LE server did not respond correctly to some attribute information requests from some LE clients
 (e.g. nRF Connect Desktop could not see characteristic UUIDs), and did not respond to connection parameter change requests,
 which could cause a disconnection.
+
+### Version 8
+
+1. Bug fix. LE characteristic search and size setting did not work for some devices. The limit on size has been reduced
+from 245 to 244 to deal with this. 

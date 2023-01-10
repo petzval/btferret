@@ -73,13 +73,13 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 6
+#define VERSION 8
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
 #define TOPUPCREDIT 200
-  // ATT_MTU data cannot be more than 245 
-#define LEDATLEN 245
+  // ATT_MTU data cannot be more than 244 
+#define LEDATLEN 244
 
 struct cticdata 
   {
@@ -445,6 +445,7 @@ void readleatt(int node,int handle);
 #define IN_PASSREQ  ((long long int)1 << 43)    // HCI event 34 
 #define IN_PARAMREQ ((long long int)1 << 44)    // HCI event 3E/6 
 #define IN_DATLEN   ((long long int)1 << 45)    // HCI event 3E/7 
+#define IN_CONUP5   ((long long int)1 << 46)    // channel 5 connection paramters 
 #define IN_IMMED  ((long long int)1 << 63)
 
 /***************** END Received PACKET TYPES *************/
@@ -500,6 +501,7 @@ unsigned char leupdate[40] = {18,0,0,0,
 unsigned char lerrf[20] = {6,0,0,0,1,0x16,0x20,0x02,0,0}; // len 6
                                  // LE open [10]... board address     [23][24] = timeout x 10ms
 unsigned char lecancel[8] = {4,0,0,0,0x01,0x0E,0x20,0};
+unsigned char leconnreply[20] = {15,0,S2_HAND,0,2,0x40,0,0x0A,0,0x06,0,0x05,0,0x13,0x01,2,0,0,0 };
 
 unsigned char bluclosex[16] = {7,0,0,0,1,6,4,3,0x40,0,0x13};  // len 7
 unsigned char bluclose[16] = {7,0,S2_HAND,0,1,6,4,3,0x40,0,0x13};  // len 7
@@ -521,7 +523,6 @@ unsigned char leconf[20] = {10,0,S2_HAND,0,2,0x40,0,5,0,1,0,4,0,0x1E};  // len 1
 
 unsigned char mtuset[20] = {12,0,S2_HAND,0,2,0x40,0,7,0,3,0,4,0,0x02,0x19,0x00};  // len 14
 unsigned char datlenset[16] = { 10,0,S2_HAND,0,1,0x22,0x20,0x06,0x40,0x00,0x85,0x00,0x00,0x20};
-unsigned char conupreply[20] = { 15,0,S2_HAND,0,2,0x40,0,0x0A,0,0x06,0,0x05,0,0x13,0,2,0,1,0 };  // 1=reject conn update
 unsigned char paramnegreply[16] = { 7,0,S2_HAND,0,1,0x21,0x20,0x03,0x40,0x00,0x3B };
 unsigned char paramset[24] =   { 18,0,S2_HAND,0,1,0x13,0x20,0x0E,0x40,0x00,0x06,0,0x06,0,0,0,0xF4,0x01,0,0,0,0 };
 unsigned char paramreply[24] = { 18,0,S2_HAND,0,1,0x20,0x20,0x0E,0x40,0x00,0x06,0,0x06,0,0,0,0xF4,0x01,0,0,0,0 };
@@ -3092,9 +3093,8 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
         VPRINT "%s has connected\n",dp->name);
         mesh_on();
         dp->btletods = 0;
-        dp->setdatlen = 20;
         if(dev[0]->datlen > 20)
-          setlelen(ndevice,dev[0]->datlen,1); 
+          setlelen(ndevice,LEDATLEN,1); 
         }
         
       flushprint();
@@ -3913,12 +3913,7 @@ int leconnect(int ndevice)
 
   VPRINT "SEND LE connect to %s\n",dp->name);
     
-  if(dp->datlen > 20)
-    {
-    lesuggest[PAKHEADSIZE+4] = (unsigned char)((dp->datlen+3) & 0xFF);
-    lesuggest[PAKHEADSIZE+5] = (unsigned char)(((dp->datlen+3) >> 8) & 0xFF);
-    sendhci(lesuggest,0);
-    }  
+  dp->setdatlen = 20;
     
   sendhci(leopen,ndevice);
       
@@ -3934,10 +3929,7 @@ int leconnect(int ndevice)
     if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
       readhci(0,0,0,gpar.leclientwait,0);  // server may request attributes
 
-    dp->setdatlen = 20;
-    if(dp->datlen > 20)
-       setlelen(ndevice,dp->datlen,1);
-        
+    setlelen(ndevice,LEDATLEN,1);    
     popins();
     flushprint();
     return(1);
@@ -4094,6 +4086,7 @@ int disconnectdev(int ndevice)
   dp->conflag = 0;
   dp->lecflag = 0;
   dp->btletods = 0;
+  dp->setdatlen = 20;
   
   flushprint();
   
@@ -4275,7 +4268,8 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
         cmd[5] = (locsize+3) & 0xFF;
         cmd[6] = ((locsize+3) >> 8) & 0xFF;
   
-        lenotify[0] = 12+locsize;  // 13 for 1 byte
+        lenotify[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
+        lenotify[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF);  // 13 for 1 byte
         
         sendhci(lenotify,n);         
         }
@@ -4397,7 +4391,8 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
   cmd[5] = (locsize+3) & 0xFF;
   cmd[6] = ((locsize+3) >> 8) & 0xFF;
   
-  lewrite[0] = 12+locsize;  // 13 for 1 byte
+  lewrite[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
+  lewrite[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF); 
   
   if((cp->perm & 8) == 0 || notflag != 0)   // no acknowledge 
     cmd[9] = 0x52;  // write command opcode
@@ -4418,6 +4413,13 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     flushprint();
     }
          
+   // clear input buffer 
+  do
+    {
+    readhci(ndevice,0,IN_ATTDAT,0,0);
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    }
+  while(n >= 0);
         
   if(sendhci(lewrite,ndevice) == 0)  
     return(0);
@@ -4834,7 +4836,7 @@ int sendhci(unsigned char *s,int ndevice)
       chan = cmd[7] + (cmd[8] << 8);  // channel
       if(chan == 1)
         {
-        VPRINT "< L2CAP 0001 Opcode:id = %02X:%02X   ",cmd[9],cmd[10]);
+        VPRINT "< CHANNEL 0001 Opcode:id = %02X:%02X   ",cmd[9],cmd[10]);
         if(cmd[9] == 2 || cmd[9] == 4 || cmd[9] == 6 || cmd[9] == 10)
           VPRINT "Expects reply %02X:%02X\n",cmd[9]+1,cmd[10]);
         else if(cmd[9] == 3 || cmd[9] == 5 || cmd[9] == 7  || cmd[9] == 11)
@@ -4843,7 +4845,7 @@ int sendhci(unsigned char *s,int ndevice)
          VPRINT "\n");              
         }
       else if(chan == 4)
-        VPRINT "< L2CAP 0004 Opcode = %02X\n",cmd[9]);       
+        VPRINT "< CHANNEL 0004 Opcode = %02X\n",cmd[9]);       
       else if(chan >= 0x0040)
         {
         if((dp->conflag & CON_PSM1) != 0 && cmd[7] == dp->dcid[2])
@@ -4860,7 +4862,7 @@ int sendhci(unsigned char *s,int ndevice)
           VPRINT "< CONTROL Address:Opcode = %02X:%02X\n",cmd[9],cmd[10]);
         }
       else
-        VPRINT "< ? Opcode %02X\n",cmd[9]);
+        VPRINT "< CHANNEL %04X Opcode %02X\n",chan,cmd[9]);
       }
     else if(cmd[0] == 1)
       VPRINT "< HCI OGF=%02X OCF=%02X\n",(cmd[2] >> 2) & 0x3F,((cmd[2] << 8) & 0x300) + cmd[1]);
@@ -5362,6 +5364,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                 ledat[0] = LE_CONNECT;
                 ledat[1] = (unsigned char)devicen;
                 pushins(IN_LECMD,devicen,2,ledat);
+                dev[devicen]->setdatlen = 20;
                 eflag = 0;
                 }
               }
@@ -5460,6 +5463,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           mesh_on();
         dp->conflag = 0;
         dp->lecflag = 0;
+        dp->setdatlen = 20;
         if(lesflag != 0)
           {
           ledat[0] = LE_DISCONNECT;
@@ -5506,7 +5510,8 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             gotflag = IN_DATA;    // mesh data
           else
             {
-            gotflag = IN_ATTDAT;  // LE
+            if(buf[9] != 3)  // not MTU ack
+              gotflag = IN_ATTDAT;  // LE
             
             if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] & 1) == 0 && buf[9] <= 0x20)
               {  // even opcode = request from server - let odd opcodes go to ATTDAT 
@@ -5514,9 +5519,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
               if(buf[9] == 0x02)
                 {  // MTU exhange
                 VPRINT "SEND MTU exchange reply\n");
-                lemtu[PAKHEADSIZE+10] = (unsigned char)((dev[devicen]->setdatlen + 3) & 0xFF);
-                lemtu[PAKHEADSIZE+11] = (unsigned char)(((dev[devicen]->setdatlen + 3) >> 8) & 0xFF);
+                lemtu[PAKHEADSIZE+10] = (unsigned char)((LEDATLEN + 3) & 0xFF);
+                lemtu[PAKHEADSIZE+11] = (unsigned char)(((LEDATLEN + 3) >> 8) & 0xFF);
                 sendhci(lemtu,devicen);
+                dev[devicen]->setdatlen = LEDATLEN;
                 }
               else 
                 {
@@ -5610,6 +5616,12 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           else if(buf[10] == 0x53)
             gotflag = IN_DISCH | IN_IMMED;  // close CONTROL/RFCOMM            
           }
+        else if(chan == 5)
+          {
+          if(buf[9] == 0x12)
+            gotflag = IN_CONUP5 | IN_IMMED;
+          }
+          
         }  // end not extra
    
       nxx = -2;   // stack index
@@ -5742,7 +5754,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         {     
         if(chan == 1)
           {
-          VPRINT "> L2CAP 0001 Opcode:id = %02X:%02X",buf[9],buf[10]);
+          VPRINT "> CHANNEL 0001 Opcode:id = %02X:%02X",buf[9],buf[10]);
           if(buf[9] == 2 || buf[9] == 4 || buf[9] == 6 || buf[9] == 10)
             VPRINT "  Must send reply %02X:%02X\n",buf[9]+1,buf[10]);
           else if(buf[9] == 3 || buf[9] == 5 || buf[9] == 7  || buf[9] == 11)
@@ -5752,7 +5764,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           }
         else if(chan == 4)
           {
-          VPRINT "> L2CAP 0004 Opcode = %02X\n",buf[9]);
+          VPRINT "> CHANNEL 0004 Opcode = %02X\n",buf[9]);
           if(buf[9] == 1)  // error return
             {
             k = buf[13];
@@ -5782,7 +5794,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           }
         else
           {
-          VPRINT "> L2CAP %04X ? = ",chan);
+          VPRINT "> CHANNEL %04X = ",chan);
           for(k = 9 ; k < wantlen && k < 20 ; ++k)
             VPRINT " %02X",buf[k]);
           if(k == wantlen)
@@ -6256,8 +6268,13 @@ void immediate(long long lookflag)
     else if(gotflag == IN_DATLEN)
       {
       j = insdat[n+7] + (insdat[n+8] << 8) - 3;
-      VPRINT "%s is requesting a larger data length %d\n",dp->name,j);
-      setlelen(devicen,j,0);
+      VPRINT "%s is requesting a larger data size %d\n",dp->name,j);
+      setlelen(devicen,LEDATLEN,0);
+      }
+    else if(gotflag == IN_CONUP5)
+      {
+      leconnreply[PAKHEADSIZE+10] = insdat[n+1];  // id
+      sendhci(leconnreply,devicen);
       }
     else 
       VPRINT "Unrecognised immediate\n");
@@ -6662,9 +6679,10 @@ void leserver(int ndevice,int count,unsigned char *dat)
   else if(dat[0] == 0x02)
     {  // MTU exhange
     VPRINT "SEND MTU exchange reply\n");
-    lemtu[PAKHEADSIZE+10] = (unsigned char)((dev[ndevice]->setdatlen + 3) & 0xFF);
-    lemtu[PAKHEADSIZE+11] = (unsigned char)(((dev[ndevice]->setdatlen + 3) >> 8) & 0xFF);
+    lemtu[PAKHEADSIZE+10] = (unsigned char)((LEDATLEN + 3) & 0xFF);
+    lemtu[PAKHEADSIZE+11] = (unsigned char)(((LEDATLEN + 3) >> 8) & 0xFF);
     sendhci(lemtu,ndevice);
+    dev[ndevice]->setdatlen = LEDATLEN;
     }  
   else if(xflag == 0)
     { // request not supported
@@ -8227,13 +8245,22 @@ int leservices(int ndevice,int flag,char *uuid)
     locuuid = 0x2803;   // SRVC_FIND = chaaracteristics
     
     
-  lasth = 0;  // last handle read
+  lasth = 0; // last handle read
   cmd = lereaduuid2 + PAKHEADSIZE;
   count = 0; 
   getout = 0;
   loop = 0;
   failcount = 0;
-  
+
+
+  // clear input buffer 
+  do
+    {
+    readhci(ndevice,0,IN_ATTDAT,0,0);
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    }
+  while(n >= 0);
+   
   NPRINT "Reading LE services from %s..",dev[ndevice]->name);
   if(gpar.printflag == PRINT_VERBOSE || flag != SRVC_READCTICS)
     NPRINT "\n");
@@ -8254,7 +8281,7 @@ int leservices(int ndevice,int flag,char *uuid)
     readhci(ndevice,IN_ATTDAT,0,gpar.timout,gpar.toshort);  
      
     n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    
+      
     if(n >= 0)
       {
       if(insdatn[0] == 0x01)  // no more data - normal terminate
@@ -8370,7 +8397,10 @@ int leservices(int ndevice,int flag,char *uuid)
          
         }    // end opcode 09 got info response
       else   // unexpected opcode return
-        ++failcount; 
+        {
+        VPRINT "Read UUID failed\n");
+        ++failcount;
+        } 
       popins();  
       }   // end got ATTDAT reply
     else
@@ -8847,18 +8877,25 @@ int savectic(int devicen,struct servicedata *serv,int servlen)
 
 int setlelen(int ndevice,int len,int flag)
   {
-  if(len <= dev[ndevice]->setdatlen)
+  int xlen;  
+
+  if(len > LEDATLEN)
+    xlen = LEDATLEN;
+  else
+    xlen = len;
+
+  if(xlen <= dev[ndevice]->setdatlen)
     return(0);
-  VPRINT "Set larger MTU and data length %d\n",len);  
-  mtuset[PAKHEADSIZE+10] = (unsigned char)((len+3) & 0xFF);
-  mtuset[PAKHEADSIZE+11] = (unsigned char)(((len+3) >> 8) & 0xFF);
+        
+  VPRINT "Set larger data size %d\n",xlen);  
+  dev[ndevice]->setdatlen = xlen;
+  xlen += 3;  
+  mtuset[PAKHEADSIZE+10] = (unsigned char)(xlen & 0xFF);
+  mtuset[PAKHEADSIZE+11] = (unsigned char)((xlen >> 8) & 0xFF);
   sendhci(mtuset,ndevice);
-  datlenset[PAKHEADSIZE+6] = mtuset[PAKHEADSIZE+10];
-  datlenset[PAKHEADSIZE+7] = mtuset[PAKHEADSIZE+11];
-  sendhci(datlenset,ndevice);
-  if(flag != 0)
-    readhci(0,0,0,100,0);
-  dev[ndevice]->setdatlen = len;
+  
+  // flag = 1 OK to call readhci   
+        
   return(0);  
   }
 
@@ -10781,66 +10818,74 @@ void readleatt(int node,int handle)
   opa[14] = handle;
   sendhci(opa,ndevice);
   readhci(0,0,0,500,0);
+  n = findhci(IN_ATTDAT,ndevice,INS_POP);
   
-  
+ 
   op4[14] = handle;
   op4[16] = handle;
   sendhci(op4,ndevice);  
   readhci(0,0,0,500,0);
-  n = findhci(IN_ATTDAT,ndevice,INS_NOPOP);
+  n = findhci(IN_ATTDAT,ndevice,INS_POP);
   if(n < 0)
     return;
 
   uuidtype = 0;
-  if(insdatn[1] == 1)
+  if(insdat[n+1] == 1)
     uuidtype = 2;
-  else if(insdatn[1] == 2)
+  else if(insdat[n+1] == 2)
     uuidtype = 16;
   else
    return;    
 
   if(uuidtype == 2)
-    sprintf(s,"%02X%02X",insdatn[5],insdatn[4]);
+    sprintf(s,"%02X%02X",insdat[n+5],insdat[n+4]);
   else
     {
     s[0] = 0;
     for(k = 0 ; k < 16 ; ++k)
       {
-      sprintf(sx,"%02X",insdatn[19-k]);
+      sprintf(sx,"%02X",insdat[n+19-k]);
       strcat(s,sx);
       }
     }
+    
+  NPRINT "UUID = %s\n",s);
+  flushprint();
   
   if(uuidtype == 2)
     {
     opx2[14] = handle;
     opx2[16] = handle;
-    opx2[18] = insdatn[4];
-    opx2[19] = insdatn[5];
+    opx2[18] = insdat[n+4];
+    opx2[19] = insdat[n+5];
     
     opx2[13] = 0x08;
     sendhci(opx2,ndevice);
     readhci(0,0,0,500,0);
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
 
     opx2[13] = 0x10;
     sendhci(opx2,ndevice);
     readhci(0,0,0,500,0);
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
     }
   else if(uuidtype == 16)
     {
     opx16[14] = handle;
     opx16[16] = handle;
     for(k = 0 ; k < 16 ; ++k)
-      opx16[k+18] = insdatn[k+4];
+      opx16[k+18] = insdat[n+k+4];
   
     opx16[13] = 0x08;
     sendhci(opx16,devn(node));
     readhci(0,0,0,500,0);
-    
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
+  
     opx16[13] = 0x10;
     sendhci(opx16,devn(node));
     readhci(0,0,0,500,0);      
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
     }
     
-
+  popins();
   }

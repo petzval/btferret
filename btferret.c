@@ -1,7 +1,7 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h Version 7
+  btlib.c/h Version 8
 COMPILE
   gcc bterret.c btlib.c -o btferret
 EDIT
@@ -752,6 +752,7 @@ int sendfile()
   unsigned short crc,bwd;
   char c; 
   static int nblock = 0;
+  static char ddirsav[256] = {""};
  
     // input target device to receive file - will read replies from it
 
@@ -807,10 +808,22 @@ int sendfile()
     printf("No file name\n");
     return(0);
     } 
-     
-  printf("Enter destination directory  e.g.  /home/pi/  ( / = none, x = cancel)\n");
+
+  if(ddirsav[0] != 0)
+    {
+    printf("Existing destination directory = %s\n",ddirsav);    
+    printf("Enter destination directory  e.g.  /home/pi/  ( / = none, r = retain,  x = cancel)\n");
+    }
+  else
+    printf("Enter destination directory  e.g.  /home/pi/  ( / = none, x = cancel)\n");
+    
   getstring("? ",ddir,256);
   
+  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
+    strcpy(ddir,ddirsav);
+  else  
+    strcpy(ddirsav,ddir);
+
   if(ddir[0] == 'x' && ddir[1] == 0)
     {
     printf("Cancelled\n");

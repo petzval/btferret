@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 7*
+*Version 8*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -503,7 +503,7 @@ will be an LE server (but still type=MESH) see [le server](#4-2-17-le\_server) f
 LECHAR = Characteristic name of your choice
 HANDLE = 000B     2-byte handle in hex - can be automatically allocated
 PERMIT = 06       Permissions in hex
-SIZE = 1          Number of bytes in decimal. Range = 1 to 245
+SIZE = 1          Number of bytes in decimal. Range = 1 to 244
 UUID = 2A00       Not needed if HANDLE specified - can be automatically allocated
 UUID = 11223344-5566-7788-99AA-BBCCDDEEFF00    16-byte UUID
 ```
@@ -559,9 +559,11 @@ listed in the devices file, but it must be flagged as random by adding RANDOM=UN
 A scan is then not required. So the two options for an LE device with a random address are as follows:
 
 ```
-   If the LE server has a random address that changes:
+   If the LE server has a random address that changes, and you know its name is "Galaxy...":
 
 DEVICE = Galaxy  TYPE=LE  NODE=7   ADDRESS = MATCH_NAME
+
+   And an LE scan is then needed to find the address.
 
    But if you are sure that the random address does not change:
 
@@ -2143,6 +2145,7 @@ int find_ctics(int node)
 Read the characteristic information from a connected LE server and save it
 in the device info. This is not necessary if the characteristic
 information has been set in the [devices file](#3-3-devices-file).
+
 
 PARAMETERS
 
