@@ -3898,7 +3898,8 @@ int bincmp(char *s,char *t,int count,int dirn)
 int leconnect(int ndevice)
   {
   struct devdata *dp;
- 
+  int flag;
+  
      // ndevice checked
         
   dp = dev[ndevice];
@@ -3922,14 +3923,21 @@ int leconnect(int ndevice)
   if(dp->conflag != 0)
     {    // IN_LEHAND not saved to stack
     if(dp->type == BTYPE_LE || (dp->type == BTYPE_ME && dp->lecflag != 0))
+      {
       NPRINT "Connect OK as LE client\n"); 
-    else    
+      flag = 0;
+      }
+    else
+      {    
       NPRINT "Connect OK as NODE client\n");
+      flag = 1;
+      }
     VPRINT "Handle = %02X%02X\n",dp->dhandle[1],dp->dhandle[0]);
     if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
       readhci(0,0,0,gpar.leclientwait,0);  // server may request attributes
 
-    setlelen(ndevice,LEDATLEN,1);    
+    if(flag == 0)
+      setlelen(ndevice,LEDATLEN,1);    
     popins();
     flushprint();
     return(1);
