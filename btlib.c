@@ -93,7 +93,7 @@ struct cticdata
   int uuidtype;   // 0=unknown 2=2-byte 16=16-byte
   int iflag;      // 1=have read info from remote device
   unsigned char value[LEDATLEN];
-  char uuid[16];
+  unsigned char uuid[16];
   int (*callback)();
   struct cticdata *nextctic;  // next in chain
   };
@@ -129,7 +129,7 @@ struct devdata
   int linkflag;
   int datlen;                 // max LE characteristic size
   int setdatlen;
-  char linkey[16];
+  unsigned char linkey[16];
   char pincode[64];
   struct cticdata *ctic;      // first ctic in chain
   };
@@ -328,8 +328,8 @@ unsigned char calcfcs(unsigned char *s,int count);
 int pushins(long long int typebit,int ndevice,int len,unsigned char *s);
 int addins(int nx,int len,unsigned char *s);
 void popins(void);
-int decodesdp(char *sin,int len,struct servicedata *serv,int servlen);
-int decodedes(char *sin,int len,struct sdpdata *sdpp);
+int decodesdp(unsigned char *sin,int len,struct servicedata *serv,int servlen);
+int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp);
 int openremotesdp(int ndevice);
 int clconnect0(int ndevice);
 int clconnectxx(int ndevice);
@@ -360,11 +360,11 @@ int readkey(void);
 int devn(int node);
 int devnp(int node);
 int devnfrombadd(char *badd,int type,int dirn);
-char *baddstr(char *badd,int dirn);
+char *baddstr(unsigned char *badd,int dirn);
 int disconnectdev(int ndevice);
 void meshreadon(void);
 void meshreadoff(void);
-int statusok(int flag,char *md);
+int statusok(int flag,unsigned char *md);
 int readline(FILE *stream,char *s);
 int newnode(void);
 int classicserverx(int clientnode);
@@ -1591,7 +1591,7 @@ int init_blue_ex(char *filename,int hcin)
         data = strtohexx(s + sn,len,&hn);
         if(!(hn == 2 || hn == 16))
           {
-          NPRINT "%sUUID must be 2 or 16 bytes\n",errs);
+          NPRINT "%sUUID must be 2 or 16 bytes\n",errs); 
           errflag = 1;
           }
         else
@@ -2000,7 +2000,7 @@ int entrylen(unsigned int *ind,int in)
   } 
 
 
-char *baddstr(char *badd,int dirn)
+char *baddstr(unsigned char *badd,int dirn)
   {
   int n,k;
   static char s[20];
@@ -2300,12 +2300,13 @@ void le_scan()
   
 int lescanx()
   {    
-  int n,j,k,i,tn,ndevice,count,repn,type,newcount,flag;
+  int n,j,k,i,tn,ndevice,count,repn,type,newcount,flag,meshflag;
   unsigned char *rp;
   struct devdata *dp;
   char buf[64];
   double fac;
   static char *fixran[2] = {"Fixed","Random"};
+  static unsigned char advert[8] = { 0,0,0xC0,0xDE,0x99 };
   
   //static double powa[5] = { 1,10,100,1000,10000 };
   //static double powb[10] = { 1,1.25,1.6,2.0,2.5,3.16,4,5,6.3,8.0 };
@@ -2352,7 +2353,8 @@ int lescanx()
       NPRINT "%d FOUND %s - %s\n",count+1,baddstr(rp+2,1),fixran[rp[1] & 1]);      
       flushprint();
       
-      type = BTYPE_LE;  // unless find mesh
+      type = BTYPE_LE;  
+      meshflag = 0;
       buf[0] = 0;  // for name             
         // find name in data at rp[9] length rp[8]
       
@@ -2372,16 +2374,16 @@ int lescanx()
         if(rp[j+1] == 0xFF && (rp[j+2] ==  ((rp[2] ^ rp[3]) ^ rp[4]) )  &&
                               (rp[j+3] == (((rp[5] ^ rp[6]) ^ rp[7]) ) | 0xC0 ) )
           {
-          NPRINT "    Mesh device\n");
-          type = BTYPE_ME;
-          /*** print mesh data                                  
-          for(k = 0 ; k < rp[j]-5 ; ++k)
-            NPRINT " %02X",rp[j+6+k]);
-          NPRINT "\n");  
-          ***/
-          
-          }              
-        else if(rp[j+1] == 8 || rp[j+1] == 9)  // found name 8=short 9=full
+          if(bincmp(rp+j+4,advert,5,DIRN_FOR) != 0)
+            {
+            type = BTYPE_ME;
+            meshflag = 2;  // is a MESH devices
+            }
+          else
+            meshflag = 1;  // might be a MESH device
+          }
+                        
+        if(rp[j+1] == 8 || rp[j+1] == 9)  // found name 8=short 9=full
           {  // length rp[j]
           if(rp[j] > 1)
             {
@@ -2529,9 +2531,13 @@ int lescanx()
         }
       else
         {  // not already stored
-        if(type == BTYPE_ME)  // auto detect mesh device
+        if(meshflag != 0)  // auto detect mesh device
           {
-          NPRINT "    SECURITY NOTE - To receive mesh packets from this device\n");
+          if(meshflag == 2)
+            NPRINT "                    MESH device\n");
+          else
+            NPRINT "                    May be a MESH device\n");
+          NPRINT "                    To receive mesh packets from this device\n");
           NPRINT "                    add to devices.txt with node < 1000\n");
           }
         // find next free entry
@@ -2543,7 +2549,7 @@ int lescanx()
           }
         ++newcount;
         dp = dev[ndevice];
-        dp->type = type;  // BTYPE_LE or BTYPE_ME
+        dp->type = type;  // BTYPE_LE or BTYPE_ME 
         dp->leaddtype |= rp[1] & 1;  // type public/random
         dp->leaddtype |= 2;          // found by scan
         dp->node = newnode();
@@ -2552,18 +2558,13 @@ int lescanx()
         
         if(buf[0] == 0)
           {  // no name
-          if(type == BTYPE_ME)  // auto detect - security risk
-            sprintf(buf,"Mesh node %d",dp->node);
+          k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
+          if(k > 0 && bincmp(dev[k]->name,"Classic node 1",14,DIRN_FOR) == 0)
+            strcpy(buf,dev[k]->name);  // is also a classic with name 
           else
             {
-            k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-            if(k > 0 && bincmp(dev[k]->name,"Classic node 1",14,DIRN_FOR) == 0)
-              strcpy(buf,dev[k]->name);  // is also a classic with name 
-            else
-              {
-              sprintf(buf,"LE node %d",dp->node);
-              NPRINT "    No name so set = %s\n",buf);
-              }
+            sprintf(buf,"LE node %d",dp->node);
+            NPRINT "    No name so set = %s\n",buf);
             }
           }
         else
@@ -4915,7 +4916,7 @@ return 1 = seen status OK reply
 *********************/
 
      
-int statusok(int flag,char *cmd)
+int statusok(int flag,unsigned char *cmd)
   {
   int n,retval,repflag;
   
@@ -9189,7 +9190,7 @@ void clscanx()
 /******** PRINT SDP DATA **************/
 
   
-int decodesdp(char *sin,int len,struct servicedata *serv,int servlen)
+int decodesdp(unsigned char *sin,int len,struct servicedata *serv,int servlen)
   {
   struct sdpdata sdp;
         
@@ -9214,11 +9215,11 @@ int decodesdp(char *sin,int len,struct servicedata *serv,int servlen)
 re-entrant for mulitple des levels
 ******************************/  
   
-int decodedes(char *sin,int len,struct sdpdata *sdpp)  //  int level,int aidflag,int record,unsigned int callaid)
+int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,int aidflag,int record,unsigned int callaid)
   {
   int k,type,size,loop,textflag,ntogo,locaidflag,aidflip,loclevel,prflag,getout,uuidn;
   unsigned int datlen,uuid;
-  char *s;
+  unsigned char *s;
   static int szlook[8] = {1,2,4,8,16,101,102,104};
    
   
@@ -10561,7 +10562,7 @@ unsigned int strinstr(char *s,char *t)
     if(flag == 0)  // found t match
       {
       // look for =
-      while(s[n+k] != 0 && s[n+k] != '=')
+      while(s[n+k] != 0 && s[n+k] == ' ')
         ++k;
       if(s[n+k] == '=')
         {

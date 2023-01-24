@@ -613,7 +613,8 @@ t - Send string. Enter the node number of the device.
 d - Disconnect. Enter the device node number.
 ```
 
-The same procedure is programmed via btlib functions as follows:
+The same procedure is programmed via btlib functions as follows. For an example of binary data
+transfer see the second example in [Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection). 
 
 ```c
 /* devices.txt
@@ -700,7 +701,8 @@ server function.
  
 ```
 
-The same procedure is programmed via btlib functions as follows:
+The same procedure is programmed via btlib functions as follows. For an example of binary data
+transfer see the second example in [Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection). 
 
 ```c
 /* devices.txt
@@ -1099,8 +1101,8 @@ Two Mesh Pis connected as a client/server pair. There must be two Pis
 listed as MESH type in devices.txt. The connection can be NODE or CLASSIC.
 The NODE type connects quickly but has slow transfer speeds (2000 bytes/s), 
 while the CLASSIC type has a more convoluted connection procedure, but much
-faster speeds (50,000 bytes/s).
-
+faster speeds (50,000 bytes/s). The first example exchanges ASCII strings, and
+the second shows how to send binary data.
 
 ```
 devices.txt
@@ -1219,6 +1221,63 @@ write_node(1,outbuf,2);
 wait_for_disconnect();
 
 ```
+
+### BINARY DATA
+
+When a server is set up, a termination character is specified. Usually this will be a 
+line feed (10). So when an ASCII string terminated by 10 is sent, the server
+knows when all the data has been received and it is sent to the callback function.
+But this will not work for binary data because
+it might contain the termination character. One solution is to send an initial ASCII string
+telling the receiving device how many bytes of binary data to expect, followed by the data.
+The receiver callback code then uses
+read\_node\_count to read that many bytes. This is client/server code to implement this procedure
+that will work for NODE or CLASSIC connections. The file transfer code in btferret.c is an expanded
+version of this method that slices the binary data into a series of transfers and adds a CRC check.
+
+```
+
+CLIENT CODE
+
+int n;
+unsigned char buf[64];
+
+buf[0] = '#';   // you choose a code to indicate a binary transfer (# in this example)
+buf[1] = '3';   // followed by ascii 32 = number of bytes that will be sent
+buf[2] = '2';
+buf[3] = 10;    // termination character
+
+write_node(1,buf,4);    // send ASCII #32 + termination character 10 to node 1
+                        // tells server to expect 32 bytes
+                        // set up 32 bytes of binary data
+for(n = 0 ; n < 32 ; ++n)
+  buf[n] = n;
+  
+write_node(1,buf,32);   // send 32 bytes of binary data
+
+
+
+SERVER CODE (classic or node callback)
+
+int clasic_callback(int clientnode,char *data,int datlen)
+  {
+  int numbytes;
+  unsigned char buf[64];
+  
+  // data[] should be #32 ascii
+     
+  if(data[0] == '#')
+    {   // # = your code for binary transfer
+    numbytes = atoi(data+1);   // Convert ASCII number of bytes to int
+                               // Read that many bytes with 3s time out
+    read_node_count(clientnode,buf,numbytes,EXIT_TIMEOUT,3000); 
+    }
+                            
+  return(SERVER_CONTINUE);  // wait for another packet
+  }  
+
+```
+
 
 
 ## 3-9 Broadcast to all mesh servers
@@ -1508,6 +1567,7 @@ init_blue("filename")
 le_scan()
 le_server(le_callback,timerds)
     le_callback(clientnode,operation,cticn)
+    operation = LE_CONNECT, LE_READ, LE_WRITE, LE_TIMER, LE_DISCONNECT
 list_channels(node,flag)
     flag = LIST_SHORT, LIST_FULL 
 list_ctics(node,flag)
@@ -1541,7 +1601,7 @@ scroll_forward()
 set_le_wait(waitms)
 set_print_flag(flag)
      flag = PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
-*strtohex("ascii string",&nbytes)
+*strtohex("2A00",&nbytes)
 wait_for_disconnect(node,timeoutms)
 write_ctic(node,cticn,outbuf[],count)
 write_mesh(outbuf[],count)
@@ -2093,7 +2153,10 @@ int find_channel(int node,int flag,char *uuid)
 ```
 
 Returns the RFCOMM channel number of a specified
-[UUID](#5-1-what-gives-with-uuids). Use the RFCOMM channel to
+[UUID](#5-1-what-gives-with-uuids). It connects to the specified CLASSIC node
+and reads its SDP database to find the UUID and the corresponding channel, and then
+disconnects. The CLASSIC node must
+be disconnected when this function is called. Use the RFCOMM channel to
 connect to a Classic server via [connect\_node](#4-2-4-connect\_node).
 
 PARAMETERS
@@ -2142,7 +2205,7 @@ if(channel > 0)
 int find_ctics(int node)
 ```
 
-Read the characteristic information from a connected LE server and save it
+Read the services (characteristic) information from a connected LE server and save it
 in the device info. This is not necessary if the characteristic
 information has been set in the [devices file](#3-3-devices-file).
 
@@ -3648,7 +3711,8 @@ the program, within this time. Always allow for this possible delay when using w
 Mesh packets are transmitted publically with no encryption and can be read by
 any Bluetooth device in the vicinity, so they are NOT SECURE. Be aware that a
 rogue device could impersonate one of your Pis by sending the appropriate
-mesh packets. To send secure encrypted data use a Classic client/server connection.
+mesh packets. You can ensure security by encrypting the mesh packet data, or use a
+Classic client/server connection, which is always encrypted automatically.
 
 PARAMETERS
 
@@ -3756,7 +3820,9 @@ Standard 2-byte Serial Port
    UUID = 1101
 Standard 16-byte Serial Port
    UUID = 00001101-0000-1000-8000-00805F9B34FB
-   (note the 3rd/4th bytes are the 2-byte UUID 1101)
+     Note the 3rd/4th bytes are the 2-byte UUID 1101
+     The rest of the UUID is the full "standard" 16-byte value
+     So a 2-byte UUID 2A05 might also appear as 00002A05-0000-1000-8000-00805F9B34FB
 My custom serial
    UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB
 ```
@@ -4033,51 +4099,81 @@ Bluetooth packets are sent and received through an HCI socket opened
 as follows.
 
 ```c
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+
+struct sockaddr_hci
+  {
+  unsigned short hci_family;
+  unsigned short hci_dev;      
+  unsigned short hci_channel;
+  };
+
+unsigned char eventmask[16] =  { 1,1,0x0C,8,0xFF,0xFF,0xFB,0xFF,0x07,0xF8,0xBF,0x3D }; // len 12  
+unsigned char lemask[16] = { 1,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 };  // len 12  
+unsigned char scanip[8] = { 1,0x1A,0x0C,1,3};  // len 5   I/P scans [8] 0=off  3=I/P scans
+
+//#define HCIDEVDOWN _IOW('H',202,int)
+#define HCIDEVDOWN 0x400448CA
+
+
 void hcisock()
   {
   int dd;
   struct sockaddr_hci sa;
-  struct hci_filter flt;
-  struct hci_dev_req dr;
-    
-  // turn bluez off if it is running
- 
-  dd = socket(31,SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,BTPROTO_HCI);
-  ioctl(dd,HCIDEVDOWN,0);   // hci0
-  close(dd);                // finished with bluez
-   
-  // open HCI socket 
   
-  dd = socket(AF_BLUETOOTH,SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,BTPROTO_HCI);
+  // Shut down bluez  AF_BLUETOOTH=31 BTPROTO_HCI=1
+  
+  dd = socket(31, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,1);
 
-  flt.type_mask = 0x16;    
-  flt.event_mask[0] = 0xFFFFFFFF;
-  flt.event_mask[1] = 0xFFFFFFFF;
-  flt.opcode = 0;
-    
-  setsockopt(dd,SOL_HCI,HCI_FILTER,&flt,sizeof(flt));
+  if(dd >= 0)
+    {
+    if(ioctl(dd,HCIDEVDOWN,0) < 0)   // hci0
+      {
+      // ioctl fail
+      }
+    close(dd); 
+    }
+  else
+    {
+    // socket open failed
+    }
+        
+  // Open HCI user socket
  
-  sa.hci_family = AF_BLUETOOTH;
-  sa.hci_dev = 0;   // hci0
-  sa.hci_channel = HCI_CHANNEL_USER    
-  
-  bind(dd,(struct sockaddr *)&sa,sizeof(sa));
-       
-  dr.dev_id = 0;  // hci0
-  dr.dev_opt = SCAN_PAGE | SCAN_INQUIRY;
-  ioctl(dd,HCISETSCAN,(unsigned long)&dr);
-  
-   // dd is needed for read/write/close
- 
-   // Read/write HCI packets via:
+  dd = socket(31, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,1);
 
-  read(dd,inbuf,sizeof(inbuf));
-  write(dd,outbuf,count);
-  
-   // Close 
+  if(dd < 0)
+    {
+    // Socket open error
+    }
  
-  close(dd);
-  } 
+  // Bind to Bluetooth hci0 user channel
+
+  sa.hci_family = 31;   // AF_BLUETOOTH;
+  sa.hci_dev = 0;       // hci0/1/2 number
+  sa.hci_channel = 1;   // HCI_CHANNEL_USER    
+  
+  if(bind(dd,(struct sockaddr *)&sa,sizeof(sa)) < 0)
+    {
+    // Bind failed
+    }
+
+  // dd is hci socket
+  // read/write HCI packets via read() and write()
+
+  // Set event mask  Vol 4 Part E Section 7.3.1
+  write(dd,eventmask,12);
+
+  // Set LE event mask Vol 4 Part E Section 7.8.1
+  write(dd,lemask,12);
+
+  // Set page/inquiry scan  Vol 4 Part E Section 7.3.18
+  write(dd,scanip,5);  // SCAN_PAGE | SCAN_INQUIRY    
+  }
 ``` 
   
 In the following sections, the packets are shown as follows.
@@ -4106,8 +4202,8 @@ This connects to a classic device server, sets up a serial channel, exchanges
 a few serial data packets with the server and disconnects. It includes
 [HCI Commands](#5-2-1-starting-01-hci-commands),
 [HCI Events](#5-2-2-starting-04-hci-events),
-[L2CAP 0001 packets](#5-2-3-starting-02-channel-0001), and
-[L2CAP 0040+ packets](#5-2-5-starting-02-channel-0040-plus).
+[CHANNEL 0001 packets](#5-2-3-starting-02-channel-0001), and
+[CHANNEL 0040+ packets](#5-2-5-starting-02-channel-0040-plus).
 The disconnection here is initiated by the client, but there
 may be reasons for letting the server initiate - see 
 [disconnect\_node](#4-2-11-disconnect\_node), and
@@ -4140,27 +4236,27 @@ Open classic connection to DC...56
       0000  04 12 08 00 56 DB 04 32 - A6 DC 01 
 > Event 03 = 00 0C 00 56 DB 04 32 A6 DC 01...
       0000  04 03 0B 00 0C 00 56 DB - 04 32 A6 DC 01 00 
-GOT Open OK (Event 03) with handle = 000C     
+GOT Open OK (Event 03) with handle = 000C at [4][5]    
 > Event 1B = 0C 00 05
       0000  04 1B 03 0C 00 05 
-> L2CAP 0001 Opcode:id = 0A:01  Must send reply 0B:01
+> CHANNEL 0001 Opcode:id = 0A:01  Must send reply 0B:01
       0000  02 0C 20 0A 00 06 00 01 - 00 0A 01 02 00 02 00 
 GOT ask info (opcode 0A) type 2
 
 SEND info reply type 2
   Set [1][2] handle 0C 00
   Set [10] id 01
-< L2CAP 0001 Opcode:id = 0B:01   is reply to 0A:01
+< CHANNEL 0001 Opcode:id = 0B:01   is reply to 0A:01
       0000  02 0C 00 10 00 0C 00 01 - 00 0B 01 08 00 02 00 00 
       0010  00 B8 02 00 00 
-> L2CAP 0001 Opcode:id = 0A:02  Must send reply 0B:02
+> CHANNEL 0001 Opcode:id = 0A:02  Must send reply 0B:02
       0000  02 0C 20 0A 00 06 00 01 - 00 0A 02 02 00 03 00 
 GOT ask info (opcode 0A) type 3
 
 SEND info reply type 3
   Set [1][2] handle 0C 00
   Set [10] id 02
-< L2CAP 0001 Opcode:id = 0B:02   is reply to 0A:02
+< CHANNEL 0001 Opcode:id = 0B:02   is reply to 0A:02
       0000  02 0C 00 14 00 10 00 01 - 00 0B 02 0C 00 03 00 00 
       0010  00 86 00 00 00 00 00 00 - 00 
 > Event 13 = 01 0C 00 02 00
@@ -4244,13 +4340,13 @@ SEND connect L2CAP channel psm 3
   Set [1][2] handle 0C 00
   Set [10] id 03 your choice
   Set [15][16] local L2CAP channel 0042 (your choice >= 0040)
-< L2CAP 0001 Opcode:id = 02:03   Expects reply 03:03
+< CHANNEL 0001 Opcode:id = 02:03   Expects reply 03:03
       0000  02 0C 00 0C 00 08 00 01 - 00 02 03 04 00 03 00 42 
       0010  00 
-> L2CAP 0001 Opcode:id = 03:03  is reply from 02:03
+> CHANNEL 0001 Opcode:id = 03:03  is reply from 02:03
       0000  02 0C 20 10 00 0C 00 01 - 00 03 03 08 00 40 00 42 
       0010  00 00 00 00 00 
-> L2CAP 0001 Opcode:id = 04:03  Must send reply 05:03
+> CHANNEL 0001 Opcode:id = 04:03  Must send reply 05:03
       0000  02 0C 20 1B 00 17 00 01 - 00 04 03 13 00 42 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
  (might get a result=1 reply pending at this point
@@ -4263,12 +4359,12 @@ SEND L2 config request. Choose id 04
   Set [1][2] handle 0C 00
   Set [10] id 04
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 04:04   Expects reply 05:04
+< CHANNEL 0001 Opcode:id = 04:04   Expects reply 05:04
       0000  02 0C 00 1B 00 17 00 01 - 00 04 04 13 00 40 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00 
-> L2CAP 0001 Opcode:id = 05:04  is reply from 04:04
+> CHANNEL 0001 Opcode:id = 05:04  is reply from 04:04
       0000  02 0C 20 12 00 0E 00 01 - 00 05 04 0A 00 42 00 00 
       0010  00 00 00 01 02 F5 03 
 GOT L2 config reply
@@ -4278,7 +4374,7 @@ SEND L2 config reply with received id
   Set [1][2] handle 0C 00
   Set [10] id 03
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 05:03   is reply to 04:03
+< CHANNEL 0001 Opcode:id = 05:03   is reply to 04:03
       0000  02 0C 00 12 00 0E 00 01 - 00 05 03 0A 00 40 00 00 
       0010  00 00 00 01 02 F5 03 
 Connect L2CAP psm 3 now done OK
@@ -4368,14 +4464,14 @@ At any time the server may try to read our local SDP database
 by opening an L2CAP psm 1 channel as follows.
 This is none of its business so fob it off.
 
-> L2CAP 0001 Opcode:id = 02:04  Must send reply 03:04
+> CHANNEL 0001 Opcode:id = 02:04  Must send reply 03:04
       0000  02 0C 20 0C 00 08 00 01 - 00 02 04 04 00 01 00 41 
       0010  00 
 GOT connect request 02:04 to read SDP
 SEND Fob it off with a No Resources reply
   Set [1][2] handle 0C 00
   Set [10] id 04
-< L2CAP 0001 Opcode:id = 03:04   is reply to 02:04
+< CHANNEL 0001 Opcode:id = 03:04   is reply to 02:04
       0000  02 0C 00 10 00 0C 00 01 - 00 03 04 08 00 00 00 00 
       0010  00 04 00 00 00 
       
@@ -4514,7 +4610,7 @@ SEND Close CONTROL request (opcode 53)
       0000  04 13 05 01 0C 00 02 00 
 > CONTROL Address:Opcode 03:73
       0000  02 0C 20 08 00 04 00 42 - 00 03 73 01 D7 
-> L2CAP 0001 Opcode:id = 06:05  Must send reply 07:05
+> CHANNEL 0001 Opcode:id = 06:05  Must send reply 07:05
       0000  02 0C 20 0C 00 08 00 01 - 00 06 05 04 00 42 00 40 
       0010  00 
 GOT UA reply (opcode 73)
@@ -4525,10 +4621,10 @@ SEND disconnect L2CAP channel. Choose id 08
   Set [10] id 08
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 42 00
-< L2CAP 0001 Opcode:id = 06:08   Expects reply 07:08
+< CHANNEL 0001 Opcode:id = 06:08   Expects reply 07:08
       0000  02 0C 00 0C 00 08 00 01 - 00 06 08 04 00 40 00 42 
       0010  00 
-> L2CAP 0001 Opcode:id = 07:08  is reply from 06:08
+> CHANNEL 0001 Opcode:id = 07:08  is reply from 06:08
       0000  02 0C 20 0C 00 08 00 01 - 00 07 08 04 00 40 00 42 
       0010  00 
 GOT L2CAP disconnect request - id 05
@@ -4538,7 +4634,7 @@ SEND L2CAP disconnect reply with received id 05
   Set [10] id 05
   Set [13][14] local L2CAP channel 42 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:05   is reply to 06:05
+< CHANNEL 0001 Opcode:id = 07:05   is reply to 06:05
       0000  02 0C 00 0C 00 08 00 01 - 00 07 05 04 00 42 00 40 
       0010  00 
 L2CAP channel closed      
@@ -4683,7 +4779,7 @@ SEND UA reply (opcode 73)
   Set [12] FCS=B6 calculated for 3 bytes from [9]
 < CONTROL Address:Opcode = 01:73
       0000  02 0C 00 08 00 04 00 40 - 00 01 73 01 B6 
-> L2CAP 0001 Opcode:id = 06:05  Must send reply 07:05
+> CHANNEL 0001 Opcode:id = 06:05  Must send reply 07:05
       0000  02 0C 20 0C 00 08 00 01 - 00 06 05 04 00 42 00 40 
       0010  00 
 GOT L2CAP disconnect request - 06:05
@@ -4692,12 +4788,12 @@ SEND L2CAP disconnect request - 06:09
   Set [10] id 09
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 42 00
-< L2CAP 0001 Opcode:id = 06:09   Expects reply 07:09
+< CHANNEL 0001 Opcode:id = 06:09   Expects reply 07:09
       0000  02 0C 00 0C 00 08 00 01 - 00 06 09 04 00 40 00 42 
       0010  00 
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00 
-> L2CAP 0001 Opcode:id = 07:09  is reply from 06:09
+> CHANNEL 0001 Opcode:id = 07:09  is reply from 06:09
       0000  02 0C 20 0C 00 08 00 01 - 00 07 09 04 00 40 00 42 
       0010  00 
 SEND L2CAP disconnect reply with received id 05
@@ -4705,7 +4801,7 @@ SEND L2CAP disconnect reply with received id 05
   Set [10] id 05
   Set [13][14] local L2CAP channel 42 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:05   is reply to 06:05
+< CHANNEL 0001 Opcode:id = 07:05   is reply to 06:05
       0000  02 0C 00 0C 00 08 00 01 - 00 07 05 04 00 42 00 40 
       0010  00 
 GOT L2CAP disconnect reply
@@ -4797,7 +4893,7 @@ GOT Open OK (Event 03) with handle = 000B
       0000  04 03 0B 00 0B 00 13 71 - DA 7D 1A 00 01 00 
 > Event 1B = 0B 00 05
       0000  04 1B 03 0B 00 05 
-> L2CAP 0001 Opcode:id = 02:59  Must send reply 03:59
+> CHANNEL 0001 Opcode:id = 02:59  Must send reply 03:59
       0000  02 0B 20 0C 00 08 00 01 - 00 02 59 04 00 01 00 40 
       0010  00 
 
@@ -4810,10 +4906,10 @@ SEND connect reply
   Set [10] id 59
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 03:59   is reply to 02:59
+< CHANNEL 0001 Opcode:id = 03:59   is reply to 02:59
       0000  02 0B 00 10 00 0C 00 01 - 00 03 59 08 00 41 00 40 
       0010  00 00 00 00 00 
-> L2CAP 0001 Opcode:id = 04:5A  Must send reply 05:5A
+> CHANNEL 0001 Opcode:id = 04:5A  Must send reply 05:5A
       0000  02 0B 20 10 00 0C 00 01 - 00 04 5A 08 00 41 00 00 
       0010  00 01 02 00 04 
 
@@ -4822,19 +4918,19 @@ SEND L2 config request. Choose id 05
   Set [1][2] handle 0B 00
   Set [10] id 05
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+< CHANNEL 0001 Opcode:id = 04:05   Expects reply 05:05
       0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 SEND L2 config reply
   Set [1][2] handle 0B 00
   Set [10] id 5A
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 05:5A   is reply to 04:5A
+< CHANNEL 0001 Opcode:id = 05:5A   is reply to 04:5A
       0000  02 0B 00 12 00 0E 00 01 - 00 05 5A 0A 00 40 00 00 
       0010  00 00 00 01 02 F5 03 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+> CHANNEL 0001 Opcode:id = 05:05  is reply from 04:05
       0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 > SDP operation
@@ -4869,7 +4965,7 @@ SEND SDP reply (opcode 05) with SDP data sequence
       0000  02 0B 00 1F 00 1B 00 40 - 00 05 00 01 00 16 00 13 
       0010  35 11 09 00 04 35 0C 35 - 03 19 01 00 35 05 19 00 
       0020  03 08 01 00 
-> L2CAP 0001 Opcode:id = 06:5B  Must send reply 07:5B
+> CHANNEL 0001 Opcode:id = 06:5B  Must send reply 07:5B
       0000  02 0B 20 0C 00 08 00 01 - 00 06 5B 04 00 41 00 40 
       0010  00 
 
@@ -4879,7 +4975,7 @@ SEND same L2CAP disconnect request
   Set [10] id 0B
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+< CHANNEL 0001 Opcode:id = 06:0B   Expects reply 07:0B
       0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
       0010  00 
 SEND L2CAP disconnect reply
@@ -4887,7 +4983,7 @@ SEND L2CAP disconnect reply
   Set [10] id 5B
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:5B   is reply to 06:5B
+< CHANNEL 0001 Opcode:id = 07:5B   is reply to 06:5B
       0000  02 0B 00 0C 00 08 00 01 - 00 07 5B 04 00 41 00 40 
       0010  00 
 > Event 32 = 13 71 DA 7D 1A 00 03 00 00
@@ -4910,7 +5006,7 @@ SEND IO capability request reply
       0000  01 2B 04 09 13 71 DA 7D - 1A 00 01 00 00 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+> CHANNEL 0001 Opcode:id = 07:0B  is reply from 06:0B
       0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
       0010  00 
 > Event 0E = 01 2B 04 00 13 71 DA 7D 1A 00
@@ -4940,17 +5036,17 @@ has reported Authentication=0.
 
 > Event 08 = 00 0B 00 01
       0000  04 08 04 00 0B 00 01 
-> L2CAP 0001 Opcode:id = 0A:5C  Must send reply 0B:5C
+> CHANNEL 0001 Opcode:id = 0A:5C  Must send reply 0B:5C
       0000  02 0B 20 0A 00 06 00 01 - 00 0A 5C 02 00 02 00 
 
 GOT ask info (opcode 0A) type 2
 SEND info reply type 2
   Set [1][2] handle 0B 00
   Set [10] id 5C
-< L2CAP 0001 Opcode:id = 0B:5C   is reply to 0A:5C
+< CHANNEL 0001 Opcode:id = 0B:5C   is reply to 0A:5C
       0000  02 0B 00 10 00 0C 00 01 - 00 0B 5C 08 00 02 00 00 
       0010  00 B8 02 00 00 
-> L2CAP 0001 Opcode:id = 02:5D  Must send reply 03:5D
+> CHANNEL 0001 Opcode:id = 02:5D  Must send reply 03:5D
       0000  02 0B 20 0C 00 08 00 01 - 00 02 5D 04 00 03 00 41 
       0010  00 
 
@@ -4963,12 +5059,12 @@ SEND connect reply
   Set [10] id 5D
   Set [13][14] local L2CAP channel 43 00
   Set [15][16] remote L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 03:5D   is reply to 02:5D
+< CHANNEL 0001 Opcode:id = 03:5D   is reply to 02:5D
       0000  02 0B 00 10 00 0C 00 01 - 00 03 5D 08 00 43 00 41 
       0010  00 00 00 00 00 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 04:5E  Must send reply 05:5E
+> CHANNEL 0001 Opcode:id = 04:5E  Must send reply 05:5E
       0000  02 0B 20 10 00 0C 00 01 - 00 04 5E 08 00 43 00 00 
       0010  00 01 02 F9 03 
 
@@ -4977,17 +5073,17 @@ SEND L2 config request. Choose id 05
   Set [1][2] handle 0B 00
   Set [10] id 05
   Set [13][14] remote L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+< CHANNEL 0001 Opcode:id = 04:05   Expects reply 05:05
       0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 41 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 SEND L2 config reply
   Set [1][2] handle 0B 00
   Set [10] id 5E
   Set [13][14] remote L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 05:5E   is reply to 04:5E
+< CHANNEL 0001 Opcode:id = 05:5E   is reply to 04:5E
       0000  02 0B 00 12 00 0E 00 01 - 00 05 5E 0A 00 41 00 00 
       0010  00 00 00 01 02 F5 03 
-> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+> CHANNEL 0001 Opcode:id = 05:05  is reply from 04:05
       0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 43 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 > Event 13 = 01 0B 00 02 00
@@ -5143,7 +5239,7 @@ SEND UA reply (opcode 73)
       0000  02 0B 00 08 00 04 00 41 - 00 03 73 01 D7 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 06:5F  Must send reply 07:5F
+> CHANNEL 0001 Opcode:id = 06:5F  Must send reply 07:5F
       0000  02 0B 20 0C 00 08 00 01 - 00 06 5F 04 00 43 00 41 
       0010  00 
 
@@ -5153,7 +5249,7 @@ SEND same L2CAP disconnect request
   Set [10] id 0B
   Set [13][14] remote L2CAP channel 41 00
   Set [15][16] local L2CAP channel 43 00
-< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+< CHANNEL 0001 Opcode:id = 06:0B   Expects reply 07:0B
       0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 41 00 43 
       0010  00 
 SEND L2CAP disconnect reply
@@ -5161,12 +5257,12 @@ SEND L2CAP disconnect reply
   Set [10] id 5F
   Set [13][14] local L2CAP channel 43 00
   Set [15][16] remote L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 07:5F   is reply to 06:5F
+< CHANNEL 0001 Opcode:id = 07:5F   is reply to 06:5F
       0000  02 0B 00 0C 00 08 00 01 - 00 07 5F 04 00 43 00 41 
       0010  00 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+> CHANNEL 0001 Opcode:id = 07:0B  is reply from 06:0B
       0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 41 00 43 
       0010  00 
 GOT UA reply (opcode 73)
@@ -5228,7 +5324,7 @@ GOT Open OK (Event 03) with handle = 000B
       0000  04 03 0B 00 0B 00 13 71 - DA 7D 1A 00 01 00 
 > Event 1B = 0B 00 05
       0000  04 1B 03 0B 00 05 
-> L2CAP 0001 Opcode:id = 02:76  Must send reply 03:76
+> CHANNEL 0001 Opcode:id = 02:76  Must send reply 03:76
       0000  02 0B 20 0C 00 08 00 01 - 00 02 76 04 00 01 00 40 
       0010  00 
 
@@ -5241,10 +5337,10 @@ SEND connect reply
   Set [10] id 76
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 03:76   is reply to 02:76
+< CHANNEL 0001 Opcode:id = 03:76   is reply to 02:76
       0000  02 0B 00 10 00 0C 00 01 - 00 03 76 08 00 41 00 40 
       0010  00 00 00 00 00 
-> L2CAP 0001 Opcode:id = 04:77  Must send reply 05:77
+> CHANNEL 0001 Opcode:id = 04:77  Must send reply 05:77
       0000  02 0B 20 10 00 0C 00 01 - 00 04 77 08 00 41 00 00 
       0010  00 01 02 00 04 
 
@@ -5253,19 +5349,19 @@ SEND L2 config request. Choose id 05
   Set [1][2] handle 0B 00
   Set [10] id 05
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+< CHANNEL 0001 Opcode:id = 04:05   Expects reply 05:05
       0000  02 0B 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 SEND L2 config reply
   Set [1][2] handle 0B 00
   Set [10] id 77
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 05:77   is reply to 04:77
+< CHANNEL 0001 Opcode:id = 05:77   is reply to 04:77
       0000  02 0B 00 12 00 0E 00 01 - 00 05 77 0A 00 40 00 00 
       0010  00 00 00 01 02 F5 03 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+> CHANNEL 0001 Opcode:id = 05:05  is reply from 04:05
       0000  02 0B 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 > Event 32 = 13 71 DA 7D 1A 00 01 00 05
@@ -5364,7 +5460,7 @@ SEND SDP reply (opcode 07) with data sequence
       0030  02 00 
 > Event 13 = 01 0B 00 02 00
       0000  04 13 05 01 0B 00 02 00 
-> L2CAP 0001 Opcode:id = 06:78  Must send reply 07:78
+> CHANNEL 0001 Opcode:id = 06:78  Must send reply 07:78
       0000  02 0B 20 0C 00 08 00 01 - 00 06 78 04 00 41 00 40 
       0010  00 
 
@@ -5377,7 +5473,7 @@ SEND same L2CAP disconnect request
   Set [10] id 0B
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+< CHANNEL 0001 Opcode:id = 06:0B   Expects reply 07:0B
       0000  02 0B 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
       0010  00 
 SEND L2CAP disconnect reply
@@ -5385,10 +5481,10 @@ SEND L2CAP disconnect reply
   Set [10] id 78
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:78   is reply to 06:78
+< CHANNEL 0001 Opcode:id = 07:78   is reply to 06:78
       0000  02 0B 00 0C 00 08 00 01 - 00 07 78 04 00 41 00 40 
       0010  00 
-> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+> CHANNEL 0001 Opcode:id = 07:0B  is reply from 06:0B
       0000  02 0B 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
       0010  00 
 > Event 13 = 01 0B 00 02 00
@@ -5417,7 +5513,7 @@ GOT Open OK (Event 03) with handle = 000C
       0000  04 03 0B 00 0C 00 13 71 - DA 7D 1A 00 01 00 
 > Event 1B = 0C 00 05
       0000  04 1B 03 0C 00 05 
-> L2CAP 0001 Opcode:id = 02:79  Must send reply 03:79
+> CHANNEL 0001 Opcode:id = 02:79  Must send reply 03:79
       0000  02 0C 20 0C 00 08 00 01 - 00 02 79 04 00 01 00 40 
       0010  00 
 
@@ -5429,10 +5525,10 @@ SEND connect reply
   Set [10] id 79
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 03:79   is reply to 02:79
+< CHANNEL 0001 Opcode:id = 03:79   is reply to 02:79
       0000  02 0C 00 10 00 0C 00 01 - 00 03 79 08 00 41 00 40 
       0010  00 00 00 00 00 
-> L2CAP 0001 Opcode:id = 04:7A  Must send reply 05:7A
+> CHANNEL 0001 Opcode:id = 04:7A  Must send reply 05:7A
       0000  02 0C 20 10 00 0C 00 01 - 00 04 7A 08 00 41 00 00 
       0010  00 01 02 00 04 
 
@@ -5441,19 +5537,19 @@ SEND L2 config request. Choose id 05
   Set [1][2] handle 0C 00
   Set [10] id 05
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+< CHANNEL 0001 Opcode:id = 04:05   Expects reply 05:05
       0000  02 0C 00 1B 00 17 00 01 - 00 04 05 13 00 40 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 SEND L2 config reply
   Set [1][2] handle 0C 00
   Set [10] id 7A
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 05:7A   is reply to 04:7A
+< CHANNEL 0001 Opcode:id = 05:7A   is reply to 04:7A
       0000  02 0C 00 12 00 0E 00 01 - 00 05 7A 0A 00 40 00 00 
       0010  00 00 00 01 02 F5 03 
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00 
-> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+> CHANNEL 0001 Opcode:id = 05:05  is reply from 04:05
       0000  02 0C 20 19 00 15 00 01 - 00 05 05 11 00 41 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 > SDP operation
@@ -5493,7 +5589,7 @@ the RFCOMM channel 01 at [0040] and its name Serial16
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00  
            
-> L2CAP 0001 Opcode:id = 06:7E  Must send reply 07:7E
+> CHANNEL 0001 Opcode:id = 06:7E  Must send reply 07:7E
       0000  02 0C 20 0C 00 08 00 01 - 00 06 7E 04 00 41 00 40 
       0010  00 
 
@@ -5503,7 +5599,7 @@ SEND same L2CAP disconnect request
   Set [10] id 0B
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 41 00
-< L2CAP 0001 Opcode:id = 06:0B   Expects reply 07:0B
+< CHANNEL 0001 Opcode:id = 06:0B   Expects reply 07:0B
       0000  02 0C 00 0C 00 08 00 01 - 00 06 0B 04 00 40 00 41 
       0010  00 
 SEND L2CAP disconnect reply
@@ -5511,10 +5607,10 @@ SEND L2CAP disconnect reply
   Set [10] id 7E
   Set [13][14] local L2CAP channel 41 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:7E   is reply to 06:7E
+< CHANNEL 0001 Opcode:id = 07:7E   is reply to 06:7E
       0000  02 0C 00 0C 00 08 00 01 - 00 07 7E 04 00 41 00 40 
       0010  00 
-> L2CAP 0001 Opcode:id = 07:0B  is reply from 06:0B
+> CHANNEL 0001 Opcode:id = 07:0B  is reply from 06:0B
       0000  02 0C 20 0C 00 08 00 01 - 00 07 0B 04 00 40 00 41 
       0010  00  
 > Event 13 = 01 0C 00 02 00
@@ -5535,17 +5631,17 @@ SEND link key obtained from Event 18 during pairing above.
       0000  04 0E 0A 01 0B 04 00 13 - 71 DA 7D 1A 00 
 > Event 08 = 00 0C 00 01
       0000  04 08 04 00 0C 00 01 
-> L2CAP 0001 Opcode:id = 0A:7F  Must send reply 0B:7F
+> CHANNEL 0001 Opcode:id = 0A:7F  Must send reply 0B:7F
       0000  02 0C 20 0A 00 06 00 01 - 00 0A 7F 02 00 02 00 
 
 GOT ask info (opcode 0A) type 2
 SEND info reply type 2
   Set [1][2] handle 0C 00
   Set [10] id 7F
-< L2CAP 0001 Opcode:id = 0B:7F   is reply to 0A:7F
+< CHANNEL 0001 Opcode:id = 0B:7F   is reply to 0A:7F
       0000  02 0C 00 10 00 0C 00 01 - 00 0B 7F 08 00 02 00 00 
       0010  00 B8 02 00 00 
-> L2CAP 0001 Opcode:id = 02:80  Must send reply 03:80
+> CHANNEL 0001 Opcode:id = 02:80  Must send reply 03:80
       0000  02 0C 20 0C 00 08 00 01 - 00 02 80 04 00 03 00 42 
       0010  00 
 
@@ -5555,12 +5651,12 @@ SEND connect reply
   Set [10] id 80
   Set [13][14] local L2CAP channel 43 00
   Set [15][16] remote L2CAP channel 42 00
-< L2CAP 0001 Opcode:id = 03:80   is reply to 02:80
+< CHANNEL 0001 Opcode:id = 03:80   is reply to 02:80
       0000  02 0C 00 10 00 0C 00 01 - 00 03 80 08 00 43 00 42 
       0010  00 00 00 00 00 
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00 
-> L2CAP 0001 Opcode:id = 04:81  Must send reply 05:81
+> CHANNEL 0001 Opcode:id = 04:81  Must send reply 05:81
       0000  02 0C 20 10 00 0C 00 01 - 00 04 81 08 00 43 00 00 
       0010  00 01 02 F9 03 
 
@@ -5569,17 +5665,17 @@ SEND L2 config request. Choose id 05
   Set [1][2] handle 0C 00
   Set [10] id 05
   Set [13][14] remote L2CAP channel 42 00
-< L2CAP 0001 Opcode:id = 04:05   Expects reply 05:05
+< CHANNEL 0001 Opcode:id = 04:05   Expects reply 05:05
       0000  02 0C 00 1B 00 17 00 01 - 00 04 05 13 00 42 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 SEND L2 config reply
   Set [1][2] handle 0C 00
   Set [10] id 81
   Set [13][14] remote L2CAP channel 42 00
-< L2CAP 0001 Opcode:id = 05:81   is reply to 04:81
+< CHANNEL 0001 Opcode:id = 05:81   is reply to 04:81
       0000  02 0C 00 12 00 0E 00 01 - 00 05 81 0A 00 42 00 00 
       0010  00 00 00 01 02 F5 03 
-> L2CAP 0001 Opcode:id = 05:05  is reply from 04:05
+> CHANNEL 0001 Opcode:id = 05:05  is reply from 04:05
       0000  02 0C 20 19 00 15 00 01 - 00 05 05 11 00 43 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 > Event 13 = 01 0C 00 02 00
@@ -5730,10 +5826,10 @@ SEND disconnect L2CAP channel. Choose id 08
   Set [10] id 08
   Set [13][14] remote L2CAP channel 42 00
   Set [15][16] local L2CAP channel 43 00
-< L2CAP 0001 Opcode:id = 06:08   Expects reply 07:08
+< CHANNEL 0001 Opcode:id = 06:08   Expects reply 07:08
       0000  02 0C 00 0C 00 08 00 01 - 00 06 08 04 00 42 00 43 
       0010  00 
-> L2CAP 0001 Opcode:id = 07:08  is reply from 06:08
+> CHANNEL 0001 Opcode:id = 07:08  is reply from 06:08
       0000  02 0C 20 0C 00 08 00 01 - 00 07 08 04 00 42 00 43 
       0010  00 
 GOT L2CAP disconnect done reply
@@ -5784,16 +5880,16 @@ SEND connect L2CAP channel psm 1
   Set [1][2] handle 0C 00
   Set [10] id 03
   Set [15][16] local L2CAP channel 44 00
-< L2CAP 0001 Opcode:id = 02:03   Expects reply 03:03
+< CHANNEL 0001 Opcode:id = 02:03   Expects reply 03:03
       0000  02 0C 00 0C 00 08 00 01 - 00 02 03 04 00 01 00 44 
       0010  00 
-> L2CAP 0001 Opcode:id = 03:03  is reply from 02:03
+> CHANNEL 0001 Opcode:id = 03:03  is reply from 02:03
       0000  02 0C 20 10 00 0C 00 01 - 00 03 03 08 00 40 00 44 
       0010  00 01 00 00 00 
-> L2CAP 0001 Opcode:id = 03:03  is reply from 02:03
+> CHANNEL 0001 Opcode:id = 03:03  is reply from 02:03
       0000  02 0C 20 10 00 0C 00 01 - 00 03 03 08 00 40 00 44 
       0010  00 00 00 00 00 
-> L2CAP 0001 Opcode:id = 04:04  Must send reply 05:04
+> CHANNEL 0001 Opcode:id = 04:04  Must send reply 05:04
       0000  02 0C 20 10 00 0C 00 01 - 00 04 04 08 00 44 00 00 
       0010  00 01 02 00 04 
 GOT result=1 pending reply. Wait for result=0 reply
@@ -5804,12 +5900,12 @@ SEND L2 config request. Choose id 04
   Set [1][2] handle 0C 00
   Set [10] id 04
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 04:04   Expects reply 05:04
+< CHANNEL 0001 Opcode:id = 04:04   Expects reply 05:04
       0000  02 0C 00 1B 00 17 00 01 - 00 04 04 13 00 40 00 00 
       0010  00 01 02 F5 03 04 09 00 - 00 00 00 00 00 00 00 00 
 > Event 13 = 01 0C 00 02 00
       0000  04 13 05 01 0C 00 02 00 
-> L2CAP 0001 Opcode:id = 05:04  is reply from 04:04
+> CHANNEL 0001 Opcode:id = 05:04  is reply from 04:04
       0000  02 0C 20 19 00 15 00 01 - 00 05 04 11 00 44 00 00 
       0010  00 00 00 04 09 00 00 00 - 00 00 00 00 00 00 
 GOT L2 config reply
@@ -5818,7 +5914,7 @@ SEND L2 config reply with received id
   Set [1][2] handle 0C 00
   Set [10] id 04
   Set [13][14] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 05:04   is reply to 04:04
+< CHANNEL 0001 Opcode:id = 05:04   is reply to 04:04
       0000  02 0C 00 12 00 0E 00 01 - 00 05 04 0A 00 40 00 00 
       0010  00 00 00 01 02 F5 03 
 Connect L2CAP psm 1 now done OK
@@ -5999,10 +6095,10 @@ SEND disconnect L2CAP channel. Choose id 08
   Set [10] id 08
   Set [13][14] remote L2CAP channel 40 00
   Set [15][16] local L2CAP channel 44 00
-< L2CAP 0001 Opcode:id = 06:08   Expects reply 07:08
+< CHANNEL 0001 Opcode:id = 06:08   Expects reply 07:08
       0000  02 0C 00 0C 00 08 00 01 - 00 06 08 04 00 40 00 44 
       0010  00 
-> L2CAP 0001 Opcode:id = 06:0B  Must send reply 07:0B
+> CHANNEL 0001 Opcode:id = 06:0B  Must send reply 07:0B
       0000  02 0C 20 0C 00 08 00 01 - 00 06 0B 04 00 44 00 40 
       0010  00 
 
@@ -6012,10 +6108,10 @@ SEND L2CAP disconnect reply
   Set [10] id 0B
   Set [13][14] local L2CAP channel 44 00
   Set [15][16] remote L2CAP channel 40 00
-< L2CAP 0001 Opcode:id = 07:0B   is reply to 06:0B
+< CHANNEL 0001 Opcode:id = 07:0B   is reply to 06:0B
       0000  02 0C 00 0C 00 08 00 01 - 00 07 0B 04 00 44 00 40 
       0010  00 
-> L2CAP 0001 Opcode:id = 07:08  is reply from 06:08
+> CHANNEL 0001 Opcode:id = 07:08  is reply from 06:08
       0000  02 0C 20 0C 00 08 00 01 - 00 07 08 04 00 40 00 44 
       0010  00 
 
@@ -6166,7 +6262,7 @@ SEND LE connect to 00:1E:C0:2D:17:7C
       0000  04 3E 13 01 00 40 00 00 - 00 7C 17 2D C0 1E 00 27 
       0010  00 00 00 11 01 00 
 Connect OK
-Handle = 0040
+Handle = 0040 returned at [5][6]
 
 Write (no acknowledge) one byte (12) to characteristic handle 0018
 SEND write LE characteristic
@@ -6175,7 +6271,7 @@ SEND write LE characteristic
   Set [10][11] characteristic handle 0018
   Set [12].. 01 data bytes
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 52
+< CHANNEL 0004 Opcode = 52
       0000  02 40 00 08 00 04 00 04 - 00 52 18 00 12 
 
 Write (with acknowledge) two bytes (34 56) to characteristic handle 001C
@@ -6186,11 +6282,11 @@ SEND write LE characteristic
   Set [10][11] characteristic handle 001C
   Set [12].. 02 data bytes
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 12
+< CHANNEL 0004 Opcode = 12
       0000  02 40 00 09 00 05 00 04 - 00 12 1C 00 34 56 
 > Event 13 = 01 40 00 01 00
       0000  04 13 05 01 40 00 01 00 
-> L2CAP 0004 Opcode = 13
+> CHANNEL 0004 Opcode = 13
       0000  02 40 20 05 00 01 00 04 - 00 13 
 > Event 13 = 01 40 00 01 00
       0000  04 13 05 01 40 00 01 00 
@@ -6198,9 +6294,9 @@ SEND write LE characteristic
 Read characteristic handle 001C - returns two bytes 34 56
   Set [10][11] handle 001C
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 0A
+< CHANNEL 0004 Opcode = 0A
       0000  02 40 00 07 00 03 00 04 - 00 0A 1C 00 
-> L2CAP 0004 Opcode = 0B
+> CHANNEL 0004 Opcode = 0B
       0000  02 40 20 07 00 03 00 04 - 00 0B 34 56   
       
       
@@ -6214,7 +6310,7 @@ SEND write LE characteristic
   Set [10][11] characteristic handle 0017
   Set [12].. 02 data bytes
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 52
+< CHANNEL 0004 Opcode = 52
       0000  02 40 00 09 00 05 00 04 - 00 52 17 00 01 00 
 
 Enable indicate for characteristic handle 0019
@@ -6227,21 +6323,21 @@ SEND write LE characteristic
   Set [10][11] characteristic handle 001A
   Set [12].. 02 data bytes
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 52
+< CHANNEL 0004 Opcode = 52
       0000  02 40 00 09 00 05 00 04 - 00 52 1A 00 01 00 
 
 At any time, characteristic 0016 may send a notification as follows:
-> L2CAP 0004 Opcode = 1B
+> CHANNEL 0004 Opcode = 1B
       0000  02 40 20 09 00 05 00 04 - 00 1B 16 00 12 34 
 Notify value of 0016 = 12 34
 
 At any time, characteristic 0019 may send an indication as follows:
-> L2CAP 0004 Opcode = 1D
+> CHANNEL 0004 Opcode = 1D
       0000  02 40 20 09 00 05 00 04 - 00 1D 19 00 12 34 
 Indicate value of 0019 = 12 34
 Then the indication must be acknowledged as follows:
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 1E
+< CHANNEL 0004 Opcode = 1E
       0000  02 40 00 05 00 01 00 04 - 00 1E 
        
       
@@ -6282,7 +6378,7 @@ SEND LE connect to 00:1E:C0:2D:17:7C
       0000  04 3E 13 01 00 40 00 00 - 00 7C 17 2D C0 1E 00 27 
       0010  00 00 00 11 01 00 
 Connect OK
-Has returned handle = 0040
+Has returned handle = 0040 at [5][6]
 
 Search for UUID=2803 services. This returns a list of characteristic
 handles and UUIDs. Start search at handle 0001 and repeat until
@@ -6293,9 +6389,9 @@ SEND read UUID (opcode 08)
   Set [10][11] starting characteristic handle 0001
   Set [14][15] UUID 2803
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 08
+< CHANNEL 0004 Opcode = 08
       0000  02 40 00 0B 00 07 00 04 - 00 08 01 00 FF FF 03 28 
-> L2CAP 0004 Opcode = 09
+> CHANNEL 0004 Opcode = 09
       0000  02 40 20 1B 00 17 00 04 - 00 09 07 02 00 0A 03 00 
       0010  00 2A 04 00 02 05 00 01 - 2A 06 00 02 07 00 04 2A 
   
@@ -6315,11 +6411,11 @@ SEND read UUID (opcode 08)
   Set [10][11] starting characteristic handle 0008
   Set [14][15] UUID 2803
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 08
+< CHANNEL 0004 Opcode = 08
       0000  02 40 00 0B 00 07 00 04 - 00 08 08 00 FF FF 03 28 
 > Event 13 = 01 40 00 01 00
       0000  04 13 05 01 40 00 01 00 
-> L2CAP 0004 Opcode = 09
+> CHANNEL 0004 Opcode = 09
       0000  02 40 20 1B 00 17 00 04 - 00 09 07 0A 00 10 0B 00 
       0010  37 2A 0D 00 02 0E 00 38 - 2A 0F 00 08 10 00 39 2A 
 
@@ -6329,11 +6425,11 @@ SEND read UUID (opcode 08)
   Set [10][11] starting characteristic handle 0011
   Set [14][15] UUID 2803
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 08
+< CHANNEL 0004 Opcode = 08
       0000  02 40 00 0B 00 07 00 04 - 00 08 11 00 FF FF 03 28 
 > Event 13 = 01 40 00 02 00
       0000  04 13 05 01 40 00 02 00 
-> L2CAP 0004 Opcode = 09
+> CHANNEL 0004 Opcode = 09
       0000  02 40 20 0D 00 09 00 04 - 00 09 07 12 00 04 13 00 
       0010  06 2A 
       
@@ -6343,9 +6439,9 @@ SEND read UUID (opcode 08)
   Set [10][11] starting characteristic handle 0014
   Set [14][15] UUID 2803
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 08
+< CHANNEL 0004 Opcode = 08
       0000  02 40 00 0B 00 07 00 04 - 00 08 14 00 FF FF 03 28 
-> L2CAP 0004 Opcode = 09
+> CHANNEL 0004 Opcode = 09
       0000  02 40 20 1B 00 17 00 04 - 00 09 15 15 00 06 16 00 
       0010  01 FF EE DD CC BB AA 99 - 88 77 66 55 44 33 22 11 
  
@@ -6357,9 +6453,9 @@ SEND read UUID (opcode 08)
   Set [10][11] starting characteristic handle 0017
   Set [14][15] UUID 2803
   Set [1][2] handle 40 00
-< L2CAP 0004 Opcode = 08
+< CHANNEL 0004 Opcode = 08
       0000  02 40 00 0B 00 07 00 04 - 00 08 17 00 FF FF 03 28 
-> L2CAP 0004 Opcode = 01
+> CHANNEL 0004 Opcode = 01
    Error 0A = Attribute Not Found - have reached end of characteristics
       0000  02 40 20 09 00 05 00 04 - 00 01 08 20 00 0A 
 
