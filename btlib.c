@@ -579,6 +579,9 @@ unsigned char pnreply[64] = { 23,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_DLCIPN,0x02,0
 
 unsigned char sabmx[64] = { 13,0,S2_HAND | S2_DCIDC | S2_ADD | S2_FCS3,0,0x02,0x0C,0x00,0x08,0x00,0x04,0x00,0x40,0x00,0x0B,0x3F,0x01,0x59};
 
+unsigned char msccmdsend[32] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,
+0x70};
+
 unsigned char msccmdrsp[64] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,
 0x70};
 
@@ -1808,7 +1811,7 @@ int init_blue_ex(char *filename,int hcin)
 
 char *cticerrs(struct cticdata * cp)
   {
-  static char errs[80];
+  static char errs[128];
     
   sprintf(errs,"\n  ERROR *** Local node %d LE characteristic %s\n      ",dev[0]->node,cp->name); 
   return(errs);
@@ -5618,8 +5621,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             gotflag = IN_RFCHAN | IN_IMMED;
           else if( (sflag & IN_PNRSP) != 0 &&  buf[10] == 0xEF && add == 0 && buf[12] == 0x81)
             gotflag = IN_PNRSP;    
-          else if(buf[10] == 0xEF && buf[9] == 0x03 && (buf[12] == 0xE1 || buf[12] == 0xE3))
+          else if(buf[10] == 0xEF && buf[9] == 0x03 && (buf[12] == 0xE1 || buf[12] == 0xE3 || 
+                       buf[12] == 0x93 || buf[12] == 0x91))
+            {     // copy for reply      
             gotflag = IN_MSC | IN_IMMED;
+            datlen = buf[3] + (buf[4] << 8) + 2;
+            for(k = 0 ; k < datlen && k < 60 ; ++k)
+              msccmdrsp[PAKHEADSIZE+k+3] = buf[k+3];
+            msccmdrsp[0] = datlen+3;
+            }
           else if( (buf[10] & 0xEF) == 0xEF && add != 0)   // EF or FF
             gotflag = IN_DATA;    
           else if(buf[10] == 0x53)
@@ -6040,7 +6050,7 @@ void immediate(long long lookflag)
       VPRINT "GOT MSC %02X\n",j);
       VPRINT "SEND MSC reply\n");
       msccmdrsp[PAKHEADSIZE+9] = 0x01;  // reply
-      msccmdrsp[PAKHEADSIZE+12] = j;  // E3 or E1
+      msccmdrsp[PAKHEADSIZE+12] = j;  // E3 E1 93 91
       sendhci(msccmdrsp,devicen);
       if((lookflag & IN_AUTOEND) != 0 && j == 0xE1)
         {
@@ -9622,15 +9632,15 @@ int sconnectx(int ndevice)
      
   popins();
 
-  VPRINT "SEND MSC CMD to set modem status\n");   // 64
-  msccmdrsp[PAKHEADSIZE+9] = 0x03;
-  msccmdrsp[PAKHEADSIZE+12] = 0xE3;
-  sendhci(msccmdrsp,ndevice);
+  VPRINT "SEND MSC E3 to set modem status\n");   // 64
+  msccmdsend[PAKHEADSIZE+9] = 0x03;
+  msccmdsend[PAKHEADSIZE+12] = 0xE3;
+  sendhci(msccmdsend,ndevice);
  // readhci(0,0,0,50,0);  // peek
 
-  VPRINT "SEND MSC RSP\n"); // 66 to receive data?
-  msccmdrsp[PAKHEADSIZE+12] = 0xE1;
-  sendhci(msccmdrsp,ndevice);
+  VPRINT "SEND MSC E1\n"); // 66 to receive data?
+  msccmdsend[PAKHEADSIZE+12] = 0xE1;
+  sendhci(msccmdsend,ndevice);
   readhci(0,0,0,25,0);  // peek
   
   dp->credits = 0;
