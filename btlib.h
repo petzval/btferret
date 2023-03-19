@@ -1,4 +1,4 @@
-  // Version 4
+  // for btlib.c Version 9
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -70,6 +70,7 @@
 #define CLASSIC_CONN  2
 #define LE_CONN       3
 
+#define ANY_DEVICE 0
 
 #define READ_WAIT -1
 
@@ -79,7 +80,7 @@ void btle_notifynode(int node);
 void classic_scan(void);
 int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag);
 void close_all(void);
-
+int cmd_stack_ptr(void);
 int connect_node(int node,int channelflag,int channel);
 char *ctic_name(int node,int cticn);
 int ctic_ok(int node,int cticn);
@@ -134,13 +135,13 @@ void read_all_clear(void);
 
 void read_notify(int timeoutms);
 
-void register_serial(char *uuid,char *name);
+void register_serial(unsigned char *uuid,char *name);
 
 void scroll_back(void);
 void scroll_forward(void);
 int set_le_wait(int waitms);
 int set_print_flag(int flag);
-char *strtohex(char *s,int *num);
+unsigned char *strtohex(char *s,int *num);
 
 
 int wait_for_disconnect(int node,int timout);

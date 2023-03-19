@@ -1,7 +1,7 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h Version 8
+  btlib.c/h Version 9
 COMPILE
   gcc bterret.c btlib.c -o btferret
 EDIT
@@ -13,16 +13,18 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"
+#include "btlib.h"   
 
 void btlink(void);
 void printhelp(void);
 void settings(void);
 int clientread(int node);
-int sendstring(int node,char *comd,char endchar);
+int sendstring(int node,char *comd);
 int inputint(char *ps);
-int sendfile(void);
+int sendgetfile(void);
+int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,int termchar);
 int receivefile(char *fname,int clientnode);
+int receivefilex(char *fname,int clientnode);
 int filelength(FILE *file);
 int inputnode(int typemask,int meshflag);
 int inputchan(int node,int *channel,int *method);
@@ -32,7 +34,7 @@ int clientconnect(void);
 int meshsend(void);
 int clientsend(int fun);
 int server(void);
-int node_callback(int clientnode,char *buf,int nread);
+int node_classic_callback(int clientnode,char *buf,int nread);
 int le_callback(int clientnode,int operation,int cticn);
 int mesh_callback(int clientnode,char *buf,int nread);
 int notify_callback(int lenode,int cticn,char *buf,int nread);
@@ -44,15 +46,14 @@ void notifyle();
 void getstring(char *prompt,char *s,int len);
 void readnotify(void);
 void regserial(void);
-unsigned short crccalc(unsigned short crc,char *buf,int len);
+unsigned short crccalc(unsigned short crc,unsigned char *buf,int len);
 
-char termchar = 10;  // terminate char for string sent from client
-char repchar = 10;   // terminate char for reply sent from server
+char endchar = 10;  // terminate char for read/write 
 
 
 int main(int argc,char *argv[])
   { 
-  if(init_blue("devices.txt") == 0) 
+  if(init_blue("devices.txt") == 0)   
     return(0);     
 
   btlink();
@@ -67,9 +68,8 @@ int main(int argc,char *argv[])
 
 void btlink()
   {
-  int cmd,n;
+  int cmd;
   char cmds[64];
-  char uuid[64];
   
   printf("h = help\n");
     
@@ -81,7 +81,7 @@ void btlink()
     cmd = cmds[0];
     
     switch(cmd)
-      {    
+      {
       case 'h':
         printhelp();
         break; 
@@ -103,7 +103,7 @@ void btlink()
         break;
              
       case 'f':
-        sendfile();
+        sendgetfile();
         break;
 
       case '[':
@@ -201,7 +201,7 @@ void printhelp()
   printf("  t Send string to server       T Send string to mesh\n");
   printf("  r Read LE characteristic      w Write LE characteristic\n");
   printf("  d Disconnect                  D Tell server to disconnect\n");  
-  printf("  s Become a listening server   f Send file to server\n");
+  printf("  s Become a listening server   f File transfer (send or get)\n");
   printf("  v Read node services          y Read specified UUID service\n");
   printf("  o Save screen output to file  g Register custom serial UUID\n");  
   printf("  j LE notify/indicate on/off   R Read LE notifications\n");                     
@@ -217,14 +217,14 @@ int clientread(int node)
   int n,gotn;
   char buf[1024];
   
-   // read to repchar 3s time out
-  gotn = read_node_endchar(node,buf,1024,repchar,EXIT_TIMEOUT,3000);
+   // read to endchar 3s time out
+  gotn = read_node_endchar(node,buf,1024,endchar,EXIT_TIMEOUT,3000);
 
   if(gotn > 0)
     {
     for(n = 0 ; n < gotn && n < 1023 ; ++n)
       { 
-      if(n == gotn-1 && buf[n] == repchar)
+      if(n == gotn-1 && buf[n] == endchar)
         buf[n] = 0;  // wipe terminate char          
       else if(buf[n] < 32 || buf[n] > 127)
         buf[n] = '.';            
@@ -240,8 +240,8 @@ int clientread(int node)
 
 int clientsend(int cmd)
   {
-  int n,flag,node;
-  char savtc,savrc,coms[256];
+  int flag,node;
+  char coms[256];
   
   if(cmd == 'D')
     flag = 1;  // all mesh servers option
@@ -272,24 +272,17 @@ int clientsend(int cmd)
   if(cmd == 'p' || cmd == 'D')
     printf("This command only works if connected to a btferret server\n");
                  
-  savtc = termchar;
-  savrc = repchar;
   
   coms[0] = 0;
   coms[1] = 0;
   if(cmd == 't')
-    {  
+    { 
+    printf("Will add endchar = %d\n",endchar); 
     getstring("Input string to send: ",coms,128);
-    n = inputint("Input terminate char used by server (probably 10)");
-    if(n < 0)
-      return(0);
-        
-    termchar = n;
-    repchar = n;  // assume reply term is same as send
     } 
   else if(cmd == 'p')
     {
-    coms[0] = 0;  // empty string - will add termchar
+    coms[0] = 0;  // empty string - will add endchar
     printf("Ping server\n");
     }
   else if(cmd == 'D')
@@ -303,7 +296,7 @@ int clientsend(int cmd)
     return(0);
     }
       
-  if(sendstring(node,coms,termchar) != 0)   
+  if(sendstring(node,coms) != 0)   
     {   // read reply from connected node - not mesh
     clientread(node);
     }
@@ -311,8 +304,7 @@ int clientsend(int cmd)
   if((device_type(node) == BTYPE_CL || device_type(node) == BTYPE_ME) && cmd == 'D') 
     wait_for_disconnect(node,5000);  // wait for classic server to initiate and complete disconnect
                                      // 5 sec time out
-  termchar = savtc; 
-  repchar = savrc; 
+
   return(1);
   }
 
@@ -322,13 +314,13 @@ int server()
   {
   int serverflag,clinode,keyflag,inkey,timeds;
    
-  printf("\n  0 = mesh server\n  1 = node server\n  2 = classic server\n  3 = LE server\n");
+  printf("\n  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = mesh server\n");
   serverflag = inputint("Input server type 0/1/2/3");
   if(serverflag < 0)
     return(0);
-  if(serverflag == 0)   // Mesh
+  if(serverflag == 3)   // Mesh
     mesh_server(mesh_callback);
-  else if(serverflag == 3)
+  else if(serverflag == 2)
     {   // LE
     printf("Input LE_TIMER interval in deci (0.1) seconds\n   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
     timeds = inputint("Timer interval");
@@ -336,21 +328,24 @@ int server()
       return(0);
     le_server(le_callback,timeds);
     }
-  else if(serverflag == 1 || serverflag == 2)
+  else if(serverflag == 0 || serverflag == 1)
     {  // node or classic
     printf("\nInput node of client that will connect\n");
-  
-    clinode = inputnode(BTYPE_ME | BTYPE_CL,0);  
+   
+    if(serverflag == 0)
+      clinode = inputnode(BTYPE_ME | BTYPE_CL,0);  
+    else
+      clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
     if(clinode < 0)
       {
       printf("Cancelled\n");
       return(0);
       }
-    if(serverflag == 1)   // node
-      node_server(clinode,node_callback,termchar);
+    if(serverflag == 0)   // node
+      node_server(clinode,node_classic_callback,endchar);
     else
       {  // classic
-      if(device_type(clinode) == BTYPE_ME)
+      if(clinode != 0 && device_type(clinode) == BTYPE_ME)
         keyflag = KEY_OFF | PASSKEY_OFF;
       else
         {
@@ -384,7 +379,9 @@ int server()
       printf("  Standard serial 2-byte 1101\n");
       printf("  Standard serial 16-byte\n");
       printf("  Custom serial set via register serial\n");
-      classic_server(clinode,node_callback,termchar,keyflag);
+      if(clinode == 0)
+        clinode = ANY_DEVICE;
+      classic_server(clinode,node_classic_callback,endchar,keyflag);
       }
     }   
    else
@@ -445,14 +442,17 @@ int le_callback(int clientnode,int operation,int cticn)
   }
 
 
-int node_callback(int clientnode,char *buf,int nread)
+int node_classic_callback(int clientnode,char *buf,int nread)
   {
-  int n,k;
-  char firstc;
-    
-  if(buf[0] == termchar || (nread == 2 && buf[0] != 0 && buf[1] == termchar) || 
-         (nread == 3 && buf[0] != 0 && buf[1] <= 13 && buf[2] == termchar) || buf[0] == 'F')
-    firstc = buf[0];  // is a single char or F receive file 
+  int n,k,flag;
+  char firstc,*s,temps[256];
+  static char destdir[256] = {""};
+  static int nblock = 400;
+      
+  if(buf[0] == endchar || (nread == 2 && buf[0] != 0 && buf[1] == endchar) || 
+         (nread == 3 && buf[0] != 0 && buf[1] <= 13 && buf[2] == endchar) ||
+         buf[0] == 'F' || buf[0] == 'X' || buf[0] == 'Y' || buf[0] == 'G')
+    firstc = buf[0];  // is a single char or FXYG file transfer
   else
     firstc = 0;       // more than one char - not a single char command  
  
@@ -460,8 +460,8 @@ int node_callback(int clientnode,char *buf,int nread)
     {   
     for(k = 0 ; k < nread ; ++k)
       {   // strip non-ascii chars for print
-      if(k == nread-1 && buf[k] == termchar)
-        buf[k] = 0;  // wipe termchar
+      if(k == nread-1 && buf[k] == endchar)
+        buf[k] = 0;  // wipe endchar
       else if(buf[k] < 32 || buf[k] > 126)
         buf[k] = '.';
       }   
@@ -471,28 +471,70 @@ int node_callback(int clientnode,char *buf,int nread)
   // check if received string is a known command 
   // and send reply to client
           
-  if(firstc == termchar || firstc == 'p')
+  if(firstc == endchar || firstc == 'p')
     {    
     printf("Ping\n");
-    sendstring(clientnode,"OK",repchar);  // REPLY 2=add repchar   
+    sendstring(clientnode,"OK");  // REPLY 2=add endchar   
     }
   else if(firstc == 'D')
     {
     printf("Disconnect\n");
-    sendstring(clientnode,"Server disconnecting",repchar);
+    sendstring(clientnode,"Server disconnecting");
     }
   else if(firstc == 'F')
     {  // receive file      
-    // command = Ffilename  termchar stripped 
-    if(receivefile(&buf[1],clientnode) == 0)
-      sendstring(clientnode,"Fail",repchar);
-    else 
-      sendstring(clientnode,"OK",repchar);
+    // command = Ffilename  endchar stripped 
+    receivefile(&buf[1],clientnode);
+    }
+  else if(firstc == 'X' && nread > 1)
+    {  // destination directory for get file
+    s = buf+1;
+    printf("Destination directory for GET file = %s\n",s);
+    n = 0;
+    while(s[n] != 0 && n < nread && n < 255)
+      {
+      destdir[n] = s[n];
+      ++n;
+      }
+    destdir[n] = 0;
+    }
+  else if(firstc == 'Y' && nread > 1)
+    {  // nblock for get file
+    k = 0;
+    s = buf+1;
+    flag = 0;
+    n = 0;
+    while(s[n] != 0 && n < nread)
+      {
+      if(s[n] >= '0' && s[n] <= '9')
+        k = (k*10) + (s[n] - '0');
+      else
+        flag = 1;  // error
+      ++n;
+      }
+    if(flag == 0)
+      {
+      nblock = k; 
+      printf("Block size for GET file = %d\n",nblock);
+      }
+    }
+  else if(firstc == 'G' && nread > 1)
+    { // get file request with file name
+    s = buf+1;
+    n = 0;
+    while(s[n] != 0 && n < nread && n < 255)
+      {
+      temps[n] = s[n];
+      ++n;
+      }
+    temps[n] = 0;
+    printf("GET file %s\n",temps);
+    sendfilex(clientnode,"F",temps,destdir,nblock,endchar);
     }
   else
     {
     printf("No action\n");
-    sendstring(clientnode,"Unknown command - no action",repchar);    
+    sendstring(clientnode,"Unknown command - no action");    
     }
     
   if(firstc == 'D')
@@ -599,9 +641,35 @@ void localdisconnect()
   }
 
 
-/************* SETTINGS ************/  
-  
+/************* SETTINGS ************/
+
+
 void settings()
+  {
+  int valn;
+  
+  valn = inputint("PRINT options\n  0 = None\n  1 = Normal\n  2 = Verbose - all HCI traffic\nInput one of the above options");
+  if(valn >= 0)
+    {
+    if(valn == 0)
+      valn = PRINT_NONE;
+    else if(valn == 1)
+      valn = PRINT_NORMAL;  
+    else if(valn == 2)
+      valn = PRINT_VERBOSE;  
+    else
+      printf("Invalid option\n");
+  
+    if(valn < 3)
+      set_print_flag(valn);
+    }
+  else
+    printf("Invalid option\n");
+  }
+  
+    
+  
+void xsettings()
   { 
   int valn;
 
@@ -668,7 +736,8 @@ void readservices()
 void readuuid()
   {
   int num,node,op,ret,flag;
-  char suuid[64],*uuid;
+  char suuid[64];
+  unsigned char *uuid;
    
   printf("\nFind services that contain a specified UUID\n");
   printf("  0 = List services\n");
@@ -743,48 +812,49 @@ void readuuid()
  
 /************* SEND/RECEIVE FILE *****************/
 
-int sendfile()
-  {
-  FILE *stream;
-  int len,n,bn,k,key,ntogo,fn,type,ndat,ncrc,ackflag,nblk;
-  int getout,gotn,progflag,packn,servernode,maxblock,xblock;
-  unsigned char temps[1024],fname[256],ddir[256],buf[8];
-  unsigned short crc,bwd;
-  char c; 
-  static int nblock = 0;
-  static char ddirsav[256] = {""};
- 
-    // input target device to receive file - will read replies from it
 
-  printf("\nSend file - only works if connected to a btferret classic or node server\n");
-   
+int sendgetfile()
+  {
+  int servernode,maxblock,xblock,retval,sorg;
+  char ec,fname[256],ddir[256],temps[256];
+  static char ddirsav[256] = {""};
+  static int nblock = 0;
+ 
+  printf("File transfer\n  0 = SEND file\n  1 = GET file\n"); 
+  sorg = inputint("Input 0/1");
+       
+  if(sorg == 0)
+    printf("\nSEND file\n");
+  else if(sorg == 1)
+    printf("\nGET file\n");
+  else
+    {
+    printf("Cancelled\n");
+    return(0);
+    }
+     
   servernode = inputnode(BTYPE_CONNECTED | BTYPE_ME | BTYPE_CL,0);       
   if(servernode < 0)
     {
     printf("Cancelled\n");
     return(0);
     }
-   
-  type = device_type(servernode);
-  if(type != BTYPE_ME && type != BTYPE_CL)
-    {
-    printf("Invalid device type\n");
-    return(0);
-    }
 
   maxblock = 1000;        
-  if(type == BTYPE_CL)
-    printf("*** NOTE *** Server must be programmed like receivefile() in btferret.c\n");
+  if(device_connected(servernode) == NO_CONN)
+    {
+    printf("Not connected\n");
+    return(0);
+    }
+  else if(device_type(servernode) == BTYPE_CL)
+    printf("*** NOTE *** Server must be programmed like file_server in btlib.c\n");
   else if(device_connected(servernode) == NODE_CONN)
     maxblock = 400;  // node connect max block size 
   
   if(nblock < 64 || nblock > maxblock)
     nblock = maxblock;
-       
-    // clear all packets from input buffer
-  read_node_clear(servernode);
 
-  printf("Enter file name e.g.  /home/pi/doc.txt  (x = cancel)\n");
+  printf("Enter file name e.g.  /home/pi/doc.txt  (x=cancel)\n");
   
   getstring("? ",fname,256);
   
@@ -794,61 +864,45 @@ int sendfile()
     return(0);
     }
 
-  // find end of directory - last /
-  
-  fn = 0;  // no directory
-  for(n = 0 ; fname[n] != 0 && n < 255 ; ++n)
-    {
-    if(fname[n] == '/')
-      fn = n+1;  // start of file name
-    }
- 
-  if(fname[fn] == 0)
-    {
-    printf("No file name\n");
-    return(0);
-    } 
-
   if(ddirsav[0] != 0)
     {
     printf("Existing destination directory = %s\n",ddirsav);    
-    printf("Enter destination directory  e.g.  /home/pi/  ( / = none, r = retain,  x = cancel)\n");
+    printf("Enter destination directory  e.g.  /home/pi/  ( /=none, r=retain, x=cancel)\n");
     }
   else
-    printf("Enter destination directory  e.g.  /home/pi/  ( / = none, x = cancel)\n");
+    printf("Enter destination directory  e.g.  /home/pi/  ( /=none, x=cancel)\n");
     
   getstring("? ",ddir,256);
-  
-  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
-    strcpy(ddir,ddirsav);
-  else  
-    strcpy(ddirsav,ddir);
 
   if(ddir[0] == 'x' && ddir[1] == 0)
     {
     printf("Cancelled\n");
     return(0);
     } 
+
+  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
+    strcpy(ddir,ddirsav);
+  else  
+    strcpy(ddirsav,ddir);
+
+  ec = ddir[strlen(ddir) - 1];
+  if(ec != '/' && ec != '\\')
+    {
+    printf("Directory must end with / or \\\n");
+    return(0);
+    }
+  
+  if(ddir[0] == '/' && (ddir[1] == 0 || ddir[1] == ' '))
+    {
+    printf("None - will save to server's btferret directory\n");
+    ddir[0] = 0;
+    }
+
+  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
+    strcpy(ddir,ddirsav);
+  else  
+    strcpy(ddirsav,ddir);
     
-  if(ddir[0] == '/' && ddir[1] == 0)
-    ddir[0] = 0;  // no directory
-  else
-    {   
-    n = 0;
-    while(ddir[n] != 0)
-      ++n;   
-   
-    if(n != 0)
-      {
-      if(!(ddir[n-1] == '/' || ddir[n-1] == '\\')) 
-        {  // backslash allowed for Classic/Windows
-        printf("Directory must end with /\n");
-        return(0);
-        }
-      }
-    }  
-    
- 
   printf("BLOCK SIZE = %d bytes\n",nblock);
   printf("  Data is transmitted in blocks of this size\n");
   printf("  Enter x to keep, or enter new value 64-%d\n",maxblock);
@@ -860,59 +914,172 @@ int sendfile()
     }
   else
     printf("Block size not changed\n");
+ 
+  // server must use the same opcode (F)
+  if(sorg == 0) 
+    retval = sendfilex(servernode,"F",fname,ddir,nblock,endchar);
+  else
+    {  
+    // get file - send destination directory
+    temps[0] = 'X';
+    temps[1] = 0;
+    strcat(temps,ddir);
+    sendstring(servernode,temps);
+    // send nblock
+    temps[0] = 'Y';
+    sprintf(temps+1,"%d",nblock);
+    sendstring(servernode,temps);
+    // send GET file command
+    temps[0] = 'G';
+    temps[1] = 0;
+    strcat(temps,fname);
+    sendstring(servernode,temps);
+    // server sends file
+    retval = read_node_endchar(servernode,temps,256,endchar,EXIT_TIMEOUT,5000);
+    if(retval != 0 && temps[0] == 'F')
+      {
+      // strip endchar
+      if(temps[retval-1] == endchar)
+        {
+        temps[retval-1] = 0;
+        retval = receivefile(temps+1,servernode);
+        }
+      else
+        {
+        printf("Timed out\n");
+        retval = 0;
+        }
+      }
+    else
+      {
+      printf("Server did not send file\n");
+      retval = 0;
+      }
+    }
+  return(retval);
+  }
+
+
+
+int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,int termchar)
+  {
+  FILE *stream;
+  int flen,n,fn,ntogo,type,ndat,ncrc,ackflag,nblk,crchi,crclo;
+  int getout,gotn,progflag,packn,maxblock,nblock;
+  unsigned char temps[1024],buf[8];
+  unsigned short crc;
+  char *fname;
+ 
+  crchi = 0;
+  crclo = 0;
+ 
+  fn = 0;  // after last / start of file name 
+  n = 0;
+  while(filename[n] > 32 && n < 1022)
+    {  // strip non alpha
+    if(filename[n] == '/')
+      fn = n+1;  // start of file name
+    ++n;
+    }
+    
+  fname = filename+fn;
+  
+  printf("Sending file %s\n",filename);
+       
+  type = device_type(node);
+  if(!(type == BTYPE_ME || type == BTYPE_CL) || device_connected(node) == NO_CONN)
+    {
+    printf("Invalid device type or not connected\n");
+    return(0);
+    }
+
+  maxblock = 1000;        
+  if(type == BTYPE_CL)
+    maxblock = 1000;
+  else if(device_connected(node) == NODE_CONN)
+    maxblock = 400;  // node connect max block size 
+  
+  nblock = blocksize;
+  if(nblock < 64 || nblock > maxblock)
+    nblock = maxblock;
+       
+  
+  if(fname[0] == 0 || opcode[0] == 0)
+    {
+    printf("No file name or opcode\n");
+    return(0);
+    } 
+    
+  if(destdir[0] != 0)
+    {   
+    n = 0;
+    while(destdir[n] != 0)
+      ++n;   
+   
+    if(n != 0)
+      {
+      if(!(destdir[n-1] == '/' || destdir[n-1] == '\\')) 
+        {  // backslash allowed for Classic/Windows
+        printf("Destination directory must end with / or \\\n");
+        return(0);
+        }
+      }
+    }  
                  
-  stream = fopen(fname,"r");
+  stream = fopen(filename,"r");
   if(stream == NULL)
     {
     printf("File open error\n");
     return(0);
     }
-           
-  len = filelength(stream);
-  
-  temps[0] = 'F';   // send file command
-  temps[1] = '\0';
-  strcat(temps,ddir);
-  strcat(temps,fname+fn);  // add dir:file name
-       
+ 
+
+  // clear all packets from input buffer
+  read_node_clear(node);
+
+  strcpy((char*)temps,opcode);   // send file command
+  strcat((char*)temps,destdir);
+  strcat((char*)temps,fname);  // add dir:file name
+  flen = strlen((char*)temps);
+  temps[flen] = termchar;
+  ++flen;      
   // send command  Ffilespec + termchar
-     
-  if(sendstring(servernode,temps,termchar) == 0) 
+  if(write_node(node,temps,flen) != flen)
     {   
     fclose(stream);
     return(0);
     }
 
   // send 4 length bytes 2 block size bytes and checksum byte
-
-  buf[0] = len & 255;
-  buf[1] = (len >> 8) & 255;
-  buf[2] = (len >> 16) & 255;
-  buf[3] = (len >> 24) & 255;
+  flen = filelength(stream);
+  buf[0] = flen & 255;
+  buf[1] = (flen >> 8) & 255;
+  buf[2] = (flen >> 16) & 255;
+  buf[3] = (flen >> 24) & 255;
   buf[4] = nblock & 255;
   buf[5] = (nblock >> 8) & 255;
   buf[6] = buf[0];
   for(n = 1 ; n < 6 ; ++n)
     buf[6] += buf[n];
       
-  if(write_node(servernode,buf,7) != 7)
+  if(write_node(node,buf,7) != 7)
     {
-    printf("Timed out\n");
+    printf("Transmit fail\n");
     fclose(stream);
     return(0);
     }
 
        // wait for single ack byte
-  gotn = read_node_count(servernode,buf,1,EXIT_TIMEOUT,5000);             
-  if(gotn != 1 || buf[0] != repchar)
+  gotn = read_node_count(node,buf,1,EXIT_TIMEOUT,5000);             
+  if(gotn != 1 || buf[0] != 10)
     {
-    printf("\nNot seen acknowledge from server\n");
+    printf("Not seen acknowledge from receiver\n");
     fclose(stream);
     return(0);
     }
     
   progflag = 0;  // no print progress
-  if(len > 5000)
+  if(flen > 5000)
     {  // every 10 packets 
     progflag = 1;
     printf("Progress");
@@ -922,11 +1089,12 @@ int sendfile()
  
   crc = 0xFFFF;
      
-  ntogo = len+2;  // do loop counter  
+  ntogo = flen+2;  // do loop counter  
   getout = 0;
   packn = 0;   // number of packets sent
   ackflag = 0;
   nblk = nblock;
+
   do
     {
     if(ntogo < nblock)
@@ -934,16 +1102,16 @@ int sendfile()
       
     if(ackflag != 0)
       {  // just sent nblk       
-         //  wait for ack = repchar from receiving device
+         //  wait for ack = 10 from receiving device
          //  single char read + time out
       buf[0] = 0;
                 // wait for single ack byte 5s time out
-      gotn = read_node_count(servernode,buf,1,EXIT_TIMEOUT,5000);                
+      gotn = read_node_count(node,buf,1,EXIT_TIMEOUT,5000);                
        
-      if(gotn != 1 || buf[0] != repchar)
+      if(gotn != 1 || buf[0] != 10)
         {
         getout = 1;
-        printf("\nNot seen acknowledge from server\n");
+        printf("Not seen acknowledge from receiver\n");
         printf("Transmission may be slow for unknown reason\n");
         printf("Try reducing block size\n");
         }
@@ -982,21 +1150,29 @@ int sendfile()
         if(ncrc == 2)
           {
           temps[ndat] = (unsigned short)((crc >> 8) & 255);
+          crchi = temps[ndat];
           temps[ndat+1] = (unsigned short)(crc & 255);
+          crclo = temps[ndat+1];
           ntogo -= 2;
           }
         else if(ncrc == 1)
           {
           if(ndat == 0)
+            {
             temps[0] = (unsigned short)(crc & 255);
+            crclo = temps[0];
+            }
           else
+            {
             temps[ndat] = (unsigned short)((crc >> 8) & 255);
+            crchi = temps[ndat];
+            }
           --ntogo;
           }     
 
         // send nblk bytes
        
-        if(write_node(servernode,temps,nblk) != nblk)
+        if(write_node(node,temps,nblk) != nblk)
           getout = 1;
         
        
@@ -1004,21 +1180,22 @@ int sendfile()
         ++packn;
         if(progflag != 0 && packn % 10 == 0)
           {
-          printf("."); 
+          printf(".");
           fflush(stdout);
-          }
+          } 
         }      
       } // end retval==1
     }   // end block loop
   while(getout == 0 && ntogo > 0);
   
+ 
   if(progflag != 0)
     printf("\n");  
   fclose(stream);
 
   if(getout != 0)
     {  // error may have left ack in buffer
-    read_node_clear(servernode);
+    read_node_clear(node);
     if(getout == 1)
       printf("Timed out\n");
     else
@@ -1026,11 +1203,31 @@ int sendfile()
     return(0);
     }   
   else
-    clientread(servernode);  // expect reply from receiving device
-  
-     
+    {
+    printf("Sent OK. Length=%d CRC=%04X\n",flen,(crchi << 8) + crclo);
+    // expect reply from receiving device
+    gotn = read_node_endchar(node,temps,1024,termchar,EXIT_TIMEOUT,5000);
+    if(gotn == 0)
+      printf("No reply from %s\n",device_name(node));
+    else
+      {
+      --gotn;
+      while(gotn >= 0)
+        {  // strip trailing endchar and any cr/lf
+        if(temps[gotn] < 32 || temps[gotn] == termchar)
+          temps[gotn] = 0;
+        else
+          gotn = 0;
+        --gotn;
+        }
+      printf("Reply from %s: %s\n",device_name(node),temps);
+      }
+    }
+      
   return(1);
   }
+
+
 
 
 /******* FILE LENGTH ********/
@@ -1053,13 +1250,25 @@ next 7 bytes =  4 length bytes  2 block size bytes  chksum
 followed by length bytes
 followed by 2 crc bytes
 ***************************/
+
  
 int receivefile(char *fname,int clientnode)
   {
+   if(receivefilex(fname,clientnode) == 0)
+    {
+    sendstring(clientnode,"Fail");
+    return(0);
+    }
+  sendstring(clientnode,"OK");
+  return(1);
+  }
+  
+int receivefilex(char *fname,int clientnode)
+  {
   FILE *stream;
-  int n,k,len,key,ntogo,nblock,bn,bcount,nread,getout,ndat,ncrc;
-  unsigned char c,lens[8],temps[1024],chksum;
-  unsigned short crc,bwd;
+  int n,ntogo,nblock,len,nread,getout,ndat,ncrc,crchi,crclo;
+  unsigned char lens[8],temps[1024],chksum;
+  unsigned short crc;
 
   if(fname[0] == '\0')
     {
@@ -1095,16 +1304,17 @@ int receivefile(char *fname,int clientnode)
     return(0);
     }
 
-  if(write_node(clientnode,&repchar,1) != 1)  // send one repchar ack byte
+  temps[0] = 10;
+  if(write_node(clientnode,temps,1) != 1)  // send one endchar ack byte
     {
     printf("Timed out\n");
     return(0);
     }
 
   crc = 0xFFFF;
-
-  bcount = 1;  // block number for info print
-      
+  crchi = 0xFF;
+  crclo = 0xFF;
+  
   ntogo = len+2;
 
   getout = 0;
@@ -1119,6 +1329,16 @@ int receivefile(char *fname,int clientnode)
      
     if(nread == nblock)   // got nblock chars
       {
+      if(nread == 1)
+        {
+        crchi = crclo;
+        crclo = temps[0];
+        }
+      else
+        {
+        crchi = temps[nread-2];
+        crclo = temps[nread-1];
+        }
       if(ntogo <= 2)
         {
         ncrc = ntogo;
@@ -1136,7 +1356,7 @@ int receivefile(char *fname,int clientnode)
     
       if(ndat > 0)
         {
-        if(fwrite(temps,1,ndat,stream) != ndat)
+        if((int)fwrite(temps,1,ndat,stream) != ndat)
           getout = 2;
         else
           ntogo -= ndat;
@@ -1150,7 +1370,8 @@ int receivefile(char *fname,int clientnode)
                
         if(ntogo != 0)
           {  // ack send not last block
-          if(write_node(clientnode,&repchar,1) != 1)  // send one repchar ack byte
+          temps[0] = 10;
+          if(write_node(clientnode,temps,1) != 1)  // send one endchar ack byte
             getout = 1; // error
           }
         }
@@ -1175,7 +1396,7 @@ int receivefile(char *fname,int clientnode)
     return(0);
     }
        
-  printf("OK\n");
+  printf("Received OK. CRC=%04X\n",(crchi << 8) + crclo);
   return(1);    
   }  
   
@@ -1185,10 +1406,11 @@ comd = zero terminated ascii string - not binary data
 add endchar to string
 ************************************************/
 
-int sendstring(int node,char *comd,char endchar)
+int sendstring(int node,char *comd)
   {
-  int n,clen,retval;
-  char *s,sbuff[1024]; 
+  int clen,retval;
+  char *s;
+  unsigned char sbuff[1024]; 
                 
   clen = strlen(comd); 
   if(clen > 999)
@@ -1243,9 +1465,8 @@ int meshsend()
 
 void readle()
   {
-  int n,k,xn,node,cticn,chand,ascflag,len,maxlen,datlen;
-  int notflag;
-  char dat[256];
+  int n,node,cticn,ascflag,datlen;
+  unsigned char dat[256];
   
   printf("\nRead an LE characteristic\n");
   
@@ -1295,7 +1516,7 @@ void writele()
   {
   int node,cticn,size;
   char buf[256];
-  char *val;
+  unsigned char *val;
   
   printf("\nWrite an LE characteristic\n");
   
@@ -1398,7 +1619,8 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
 void regserial()
   {
   int n;
-  char c,name[128],uuid[64],*newcustom;
+  char name[128],uuid[64];
+  unsigned char *newcustom;
   
   printf("\nRegister a custom serial service\n");
   
@@ -1432,7 +1654,7 @@ void regserial()
  
 int inputnode(int mask,int meshflag)
   {
-  int n,count,type,node,numbdevs,flag;
+  int n,count,node,flag;
 
   printf("\n");
 
@@ -1470,8 +1692,10 @@ int inputnode(int mask,int meshflag)
     
   count += n;
        
-  if(meshflag != 0)
-    printf(" 0  All mesh servers (not connected node servers)\n");
+  if(meshflag == 1)
+    printf(" 0 - All mesh servers (not connected node servers)\n");
+  else if(meshflag == 2)
+    printf(" 0 - Any device\n");  
   else if(count == 0)
     return(-1);  
                 
@@ -1498,9 +1722,7 @@ int inputnode(int mask,int meshflag)
 
 int inputchan(int node,int *channel,int *method) 
   {
-  int n,k,flag;
-  struct clasdata *cp;
-
+  int n,flag;
 
   printf("\n  0 = Reconnect/Use stored channel number\n");
   printf("  1 = Input channel number\n  2 = Read services to choose channel\n");
@@ -1601,7 +1823,7 @@ int inputint(char *ps)
   } 
 
 
-unsigned short crccalc(unsigned short crc,char *buf,int len)
+unsigned short crccalc(unsigned short crc,unsigned char *buf,int len)
   {
   static unsigned short table[256];
   static int init = 0;

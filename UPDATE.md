@@ -62,3 +62,13 @@ which could cause a disconnection.
 
 1. Bug fix. LE characteristic search and size setting did not work for some devices. The limit on size has been reduced
 from 245 to 244 to deal with this. 
+
+### Version 9
+
+1. A new option for classic\_server (ANY\_DEVICE) that accepts a connection from any device rather than a specified node.
+2. Primary service UUIDs can now be specified in a devices.txt file for LE servers.
+3. File transfer - btferret can now get a file from a server as well as send.
+4. File transfer. The distribution now includes a filetransfer.py file. This is a Python program
+that should run on any Python/Bluetooth capable device, and is compatible with btferret's file 
+transfer protocol. It can act as a classic client or server for btferret.
+5. Bug fix. Under some circumstances, a Windows COM port would disconnect unexpectedly.

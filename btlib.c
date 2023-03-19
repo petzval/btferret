@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include "btlib.h"
+#include "btlib.h"  
 
 /********** BLUETOOTH defines ********/
   
@@ -25,6 +25,7 @@
 #define HCIDEVDOWN 0x400448CA
 //#define HCISETSCAN _IOW('H',221,int)
 #define HCISETSCAN 0x400448DD
+
 
 struct sockaddr_hci
   {
@@ -73,13 +74,15 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 8
+#define VERSION 9
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
 #define TOPUPCREDIT 200
   // ATT_MTU data cannot be more than 244 
 #define LEDATLEN 244
+  // Target packet transmission time in microseconds
+#define TRANSMITUS 2048 
 
 struct cticdata 
   {
@@ -88,6 +91,8 @@ struct cticdata
   int size;    // number of bytes 0=unknown
   int perm;    // permissions 0=unknown 02=read 04=write no ack 08=write ack
   int notify;   // 1=enable notifications
+  int psn;  // primary service index
+  int lasthandle;  // in primary service
   char name[NAMELEN];  // name of characteristic - your choice
   int chandle;    // characteristic handle 0=unknown 
   int uuidtype;   // 0=unknown 2=2-byte 16=16-byte
@@ -129,6 +134,7 @@ struct devdata
   int linkflag;
   int datlen;                 // max LE characteristic size
   int setdatlen;
+  unsigned char primaryuuid[256];
   unsigned char linkey[16];
   char pincode[64];
   struct cticdata *ctic;      // first ctic in chain
@@ -159,6 +165,7 @@ struct devdata
 #define CON_PSM3X (1 << 30)
 
 #define LE_SERV (1 << 16)
+#define CL_SERV (1 << 17)
          
   // dev[0].dhandle[] index for server/sdp
 #define SERIALFD 0
@@ -220,7 +227,7 @@ struct devdata
 #define KEY_SENT 32
 
 
-#define BTYPE_ALL 0
+#define BTYPE_XALL 0
 #define DIRN_FOR  0
 #define DIRN_REV  1
 
@@ -253,6 +260,7 @@ struct globpar
   int bluez;           // 0/1 bluez down/up for server functions
   int timout;          // long time out for replies ms
   int toshort;         // short time out replies
+  int cmdcount;        // command stack pointer
   int btletimerds;     // btle server timer
   int meshflag;        // 1=R 2=W
   int readerror;       // 0=none 1=time out 2=key press  
@@ -309,7 +317,7 @@ struct sdpdata
   };
 
 
-int meshpacket(char *buf);
+int meshpacket(unsigned char *buf);
 void clscanx(void);
 int lescanx(void);
 int clconnect(int ndevice,int channel,int method);
@@ -323,7 +331,7 @@ int printctics1(int devicen);
 int savectic(int devicen,struct servicedata *serv,int servlen);
 int finduuidtext(int uuid);
 void hexdump(unsigned char *buf, int len);
-void printascii(char *s,int len);
+void printascii(unsigned char *s,int len);
 unsigned char calcfcs(unsigned char *s,int count);
 int pushins(long long int typebit,int ndevice,int len,unsigned char *s);
 int addins(int nx,int len,unsigned char *s);
@@ -359,7 +367,7 @@ int bluezdown(void);
 int readkey(void);
 int devn(int node);
 int devnp(int node);
-int devnfrombadd(char *badd,int type,int dirn);
+int devnfrombadd(unsigned char *badd,int type,int dirn);
 char *baddstr(unsigned char *badd,int dirn);
 int disconnectdev(int ndevice);
 void meshreadon(void);
@@ -370,11 +378,11 @@ int newnode(void);
 int classicserverx(int clientnode);
 int psmcheck(int n,long long lookflag);
 void immediate(long long lookflag);
-int bincmp(char *s,char *t,int count,int dirn);
+int bincmp(unsigned char *s,unsigned char *t,int count,int dirn);
 void waitdis(int ndevice,unsigned int timout);
 int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int (*callback)());
-void replysdp(int ndevice,int in,char *uuid,char *name);
-int addaid(char *sdp,char *aid,int *rn,int aidj,int aidk,int aidn);
+void replysdp(int ndevice,int in,unsigned char *uuid,char *name);
+int addaid(unsigned char *sdp,unsigned char *aid,int *rn,int aidj,int aidk,int aidn);
 void rwlinkey(int rwflag,int ndevice);
 int localctics(void);
 void leserver(int ndevice,int count,unsigned char *dat);
@@ -392,9 +400,10 @@ void printins(void);
 
 int sconnect(int ndevice);
 int readserial(int *ndevice,char *inbuff,int count,char endchar,int exitflags,int timeoutms);
-char *strtohexx(char *s,int slen,int *num);
+unsigned char *strtohexx(char *s,int slen,int *num);
 
 void readleatt(int node,int handle);
+void printval(unsigned char *s,int len,unsigned char *t);
 
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
@@ -446,6 +455,7 @@ void readleatt(int node,int handle);
 #define IN_PARAMREQ ((long long int)1 << 44)    // HCI event 3E/6 
 #define IN_DATLEN   ((long long int)1 << 45)    // HCI event 3E/7 
 #define IN_CONUP5   ((long long int)1 << 46)    // channel 5 connection paramters 
+#define IN_LEACK    ((long long int)1 << 47)    // write ctic response 
 #define IN_IMMED  ((long long int)1 << 63)
 
 /***************** END Received PACKET TYPES *************/
@@ -493,7 +503,7 @@ unsigned char locsup[8] = { 4,0,0,0,0x01,0x02,0x10,0x00 };
 unsigned char lemask[20] = { 12,0,0,0,0x01,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 };   // BF 05 for no data len event
 unsigned char lesetscan[16] = { 11,0,0,0,0x01,0x0B,0x20,0x07,0x01,0x10,0x00,0x10,0x00,0x00,0x02 };
 unsigned char locbadd[10] = {4,0,0,0,0x01,0x09,0x10,0};
-unsigned char lesuggest[16] = { 8,0,0,0,1,0x24,0x20,4,0x1B,0,0,2 };
+unsigned char lesuggest[16] = { 8,0,0,0,1,0x24,0x20,4,0xF8,0,TRANSMITUS & 0xFF,(TRANSMITUS >> 8) & 0xFF};
 unsigned char leopen[40] = {29,0,S2_BADD,0,
   1,0x0D,0x20,0x19,0x60,0,0x60,0,0,0,0x7C,0x17,0x2D,0xC0,0x1E,0,0,0x18,0,0x28,0,0,0,0x11,0x01,0,0,0,0}; // len 29
 unsigned char leupdate[40] = {18,0,0,0,
@@ -522,7 +532,7 @@ unsigned char lereaduuid16[40] = {30,0,S2_HAND,0,2,0x40,0,25,0,21,0,4,0,0x08,0x0
 unsigned char leconf[20] = {10,0,S2_HAND,0,2,0x40,0,5,0,1,0,4,0,0x1E};  // len 12 
 
 unsigned char mtuset[20] = {12,0,S2_HAND,0,2,0x40,0,7,0,3,0,4,0,0x02,0x19,0x00};  // len 14
-unsigned char datlenset[16] = { 10,0,S2_HAND,0,1,0x22,0x20,0x06,0x40,0x00,0x85,0x00,0x00,0x20};
+unsigned char datlenset[16] = { 10,0,S2_HAND,0,1,0x22,0x20,0x06,0x40,0x00,0xFB,0x00,TRANSMITUS & 0xFF,(TRANSMITUS >> 8) & 0xFF};
 unsigned char paramnegreply[16] = { 7,0,S2_HAND,0,1,0x21,0x20,0x03,0x40,0x00,0x3B };
 unsigned char paramset[24] =   { 18,0,S2_HAND,0,1,0x13,0x20,0x0E,0x40,0x00,0x06,0,0x06,0,0,0,0xF4,0x01,0,0,0,0 };
 unsigned char paramreply[24] = { 18,0,S2_HAND,0,1,0x20,0x20,0x0E,0x40,0x00,0x06,0,0x06,0,0,0,0xF4,0x01,0,0,0,0 };
@@ -579,10 +589,15 @@ unsigned char pnreply[64] = { 23,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_DLCIPN,0x02,0
 
 unsigned char sabmx[64] = { 13,0,S2_HAND | S2_DCIDC | S2_ADD | S2_FCS3,0,0x02,0x0C,0x00,0x08,0x00,0x04,0x00,0x40,0x00,0x0B,0x3F,0x01,0x59};
 
-unsigned char msccmdsend[32] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,
-0x70};
 
-unsigned char msccmdrsp[64] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,
+unsigned char msccmdrspe[64] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,
+0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,0x70};
+
+unsigned char msccmdrsp9[64] = {23,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x12,0x00,0x0E,0x00,0x41,
+0x00,0x01,0xEF,0x15,0x93,0x11,0x0B,0x07,0x00,0x00,0x00,0x00,0x01,0x00,0xAA };
+
+
+unsigned char msccmdsend[32] = { 17,0,S2_HAND | S2_DCIDC | S2_FCS2,S3_ADDMSC,0x02,0x0C,0x00,0x0C,0x00,0x08,0x00,0x40,0x00,0x03,0xEF,0x09,0xE3,0x05,0x0B,0x8D,
 0x70};
 
 unsigned char setcred[64] = { 14,0,S2_HAND | S2_DCIDC | S2_ADD | S2_FCS2,0,0x02,0x0C,0x00,0x09,0x00,0x05,0x00,0x40,0x00,0x0B,0xFF,0x01,TOPUPCREDIT,0x86};
@@ -667,6 +682,7 @@ unsigned char spcomp[20] =   { 10,0,S2_BADD,0,0x01,0x2C,0x04,0x06,0x11,0x22,0x33
 
 
 unsigned char baseuuid[16] = {0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF,0xFF};    
+  
 
   // LE server
 unsigned char lereadreply[LEDATLEN+20] = {11,0,S2_HAND,0,2,0x40,0,0x06,0,0x02,0,4,0,0x0B,0};  // length 10+number bytes
@@ -1199,11 +1215,12 @@ int init_blue(char *filename)
 
 int init_blue_ex(char *filename,int hcin)
   {
-  int n,dn,cn,k,j,sn,hn,i,len,flag,errflag,errcount,getout;
+  int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psn;
   int clflag,leflag,readret,meshcount,lecap,btleindex;
   unsigned int ind[16];
   struct cticdata *cp;
-  char s[256],*data,*es,buf[128],*uuid;
+  char s[256],buf[128],*es;
+  unsigned char *data;
   FILE *stream;
   static char errs[16] = {"   ERROR **** "};
   static unsigned char wln[8] = { 252,0,0,0,1,0x13,0x0C,0xF8 };
@@ -1220,7 +1237,8 @@ int init_blue_ex(char *filename,int hcin)
   
   gpar.btlenode = 0; 
   gpar.timout = 1000;   // reply wait ms time out
-  gpar.toshort = 25;    // ms
+  gpar.toshort = 5;    // ms
+  gpar.cmdcount = 0;
   gpar.btletimerds = 0;
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
@@ -1237,7 +1255,7 @@ int init_blue_ex(char *filename,int hcin)
   if(initflag == 0)
     {   
     gpar.s = (char*)calloc(PRBUFSZ,1);
-    instack = (char*)malloc(INSTACKSIZE); 
+    instack = (unsigned char*)malloc(INSTACKSIZE); 
   
     if(gpar.s == NULL || instack == NULL)
       {
@@ -1276,6 +1294,7 @@ int init_blue_ex(char *filename,int hcin)
     
   errcount = 0;
   meshcount = 0;
+  psn = -1;  // primary service index
       
   // zero entries  n=first undefined
   for(k = 0 ; k < NUMDEVS ; ++k)
@@ -1416,8 +1435,9 @@ int init_blue_ex(char *filename,int hcin)
     ind[9] = strinstr(s,"NODE");
     ind[10] = strinstr(s,"CHANNEL");
     ind[11] = strinstr(s,"RANDOM");
-    ind[12] = strlen(s) << 16;
-    ind[13] = 0x80000000;  // terminate flag
+    ind[12] = strinstr(s,"PRIMARY_SERVICE");
+    ind[13] = strlen(s) << 16;
+    ind[14] = 0x80000000;  // terminate flag
       
     if(gpar.btleflag == 0)
       {
@@ -1434,13 +1454,13 @@ int init_blue_ex(char *filename,int hcin)
 
     cp = &cticnull;  // for safety
     
-    clflag = ind[0] + ind[1] + ind[2] + ind[3] + ind[9] + ind[10];
+    clflag = ind[0] + ind[1] + ind[2] + ind[3] + ind[9] + ind[10] + ind[11];
     leflag = ind[4] + ind[5] + ind[6] + ind[7] + ind[8];
-
+   
     es = NULL;
      
-    if(clflag == 0 && leflag == 0)
-      es = "Must start with DEVICE= or LECHAR=";
+    if(ind[0] == 0 && ind[4] == 0 && ind[12] == 0)
+      es = "Must start with DEVICE= or LECHAR= or PRIMARY_SERVICE=";
     else if(clflag != 0 && leflag != 0) 
       es = "DEVICE and LECHAR values on same line";  
     else if(leflag != 0 && dev[dn]->type == BTYPE_CL)
@@ -1456,10 +1476,11 @@ int init_blue_ex(char *filename,int hcin)
         dn = devalloc();
         if(dn < 0)
           return(0);  // fatal alloc error
+        psn = -1;
         flag = 1;
         }
       }
-    else 
+    else if(leflag != 0) 
       {
       // ind[5] == 0 && ind[6] == 0  no handle/UUID
       cp = cticalloc(dn); // return ctic pointer - may be to cticnull=failed
@@ -1467,6 +1488,8 @@ int init_blue_ex(char *filename,int hcin)
         return(0);   // fatal alloc error
       flag = 2;  // characteristic entry
       }
+    else
+      flag = 3;  // primary service
      
     if(es != NULL)
       {
@@ -1495,6 +1518,7 @@ int init_blue_ex(char *filename,int hcin)
           dev[dn]->name[i] = 0;
           --i;
           }
+        psn = -1;
         }  // end ind[0] DEVICE
         
       if(ind[1] != 0)
@@ -1565,7 +1589,11 @@ int init_blue_ex(char *filename,int hcin)
           {
           cp->name[i] = 0;
           --i;
-          }   
+          }
+        if(psn < 0)
+          cp->psn = 0;
+        else
+          cp->psn = psn;   
         }  // end ind[4] LECHAR
         
         
@@ -1689,6 +1717,32 @@ int init_blue_ex(char *filename,int hcin)
           errflag = 1;
           }
         }
+     
+      if(ind[12] != 0)
+        {  // PRIMARY_SERVICE
+        len = entrylen(ind,12);
+        sn = ind[12] & 0xFFFF;
+        data = strtohexx(s + sn,len,&hn);
+        if(hn != 16)
+          {
+          NPRINT "%sSERVICE UUID must be 16 bytes\n",errs); 
+          errflag = 1;
+          }
+        else
+          {
+          if(psn < 15)
+            {
+            ++psn;
+            for(i = 0 ; i < 16 ; ++i)
+              dev[dn]->primaryuuid[(psn << 4) + i] = data[i];
+            }
+          else
+            {
+            NPRINT "%sToo many PRIMARY_SERVICEs\n",errs);
+            errflag = 1;
+            }
+          }                      
+        }
 
       if(errflag != 0)
         ++errcount;
@@ -1696,7 +1750,7 @@ int init_blue_ex(char *filename,int hcin)
       // check if local device / mesh
       if(flag == 1)
         {
-        if(gpar.btleflag != 0 || devnfrombadd(dev[dn]->baddr,BTYPE_ALL,DIRN_FOR) == 0)
+        if(gpar.btleflag != 0 || devnfrombadd(dev[dn]->baddr,BTYPE_XALL,DIRN_FOR) == 0)
           {   // is device 0 board address local - move to dn=0
           if(dev[dn]->type == BTYPE_ME)
             {
@@ -1773,7 +1827,7 @@ int init_blue_ex(char *filename,int hcin)
     for(n = 8 ; n < 256 ; ++n)
       s[n] = 0;
     strcpy(s+8,dev[0]->name);
-    sendhci(s,0);
+    sendhci((unsigned char*)s,0);
     }
       
   if(localctics() == 0)
@@ -1821,8 +1875,8 @@ char *cticerrs(struct cticdata * cp)
 
 int localctics()
   {
-  int n,k,j,i,uuidn,handle,flag,getout,min,max;
-  struct cticdata *cp,*cpx;
+  int n,k,j,uuidn,handle,flag,min,max,psn;
+  struct cticdata *cp,*cpx,*lastcp;
   char *errs;
   
   
@@ -1850,8 +1904,33 @@ int localctics()
       }  
     }
     
-    
+  // find primary services
+  psn = -1;
+  lastcp = NULL;
+  for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
+    {
+    cp = ctic(0,n);
+    if(cp->psn != psn)
+      {
+      psn = cp->psn;
+      if(lastcp != NULL)
+        lastcp->psn |= 0x20000;
+      cp->psn |= 0x10000;  // 1st flag
+      }
+    lastcp = cp;  
+    if(psn > 0 && cp->chandle != 0)
+      {
+      NPRINT "%sDo not specify HANDLE for PRIMARY SERVICES beyond first\n",cticerrs(cp));
+      NPRINT "      Specify UUID and let the system set the handles\n");
+      return(0);
+      }
+    }  
+
+  if(lastcp != NULL)
+    lastcp->psn |= 0x40000;
+      
   // check handles
+  handle = 4;  // max specified - 1st alloc = 5
   for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
     cp = ctic(0,n);
@@ -1864,6 +1943,10 @@ int localctics()
         NPRINT "%shandle must be 5 or greater\n",errs);
         return(0);
         }
+   
+      if(cp->chandle > handle)
+        handle = cp->chandle;
+        
       for(j = 0 ; ctic(0,j)->type == CTIC_ACTIVE ; ++j)
         {
         cpx = ctic(0,j);
@@ -1886,7 +1969,7 @@ int localctics()
     }  
 
   uuidn = 0;
-  handle = 4;  // first alloc = 5
+  
   
   for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
@@ -1908,11 +1991,15 @@ int localctics()
             max = min + 2;
             if((cp->perm & 0x30) != 0)
               --min;
+            if((cpx->psn & 0x10000) != 0)
+              --min;  // PS
             if((cpx->perm & 0x30) != 0)
+              ++max;
+            if((cp->psn & 0x10000) != 0)
               ++max;          
             if(handle >= min && handle <= max)
               {
-              flag = 1;
+              flag = 1;  // fail
               handle = max;
               }
             }
@@ -1979,6 +2066,39 @@ int localctics()
       }  
       
     }
+    
+  // set lasthandle
+  psn = 0;
+  do
+    {
+    handle = 0;
+    for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
+      {
+      cp = ctic(0,n);
+      if((cp->psn & 0xFFFF) == psn && (cp->psn & 0x20000) != 0)
+        {
+        if((cp->perm & 0x30) == 0)
+          j = cp->chandle;
+        else
+          j = cp->chandle+1;
+          
+        if(j > handle)
+          handle = j;
+        }
+      }
+    if(handle != 0)
+      {      
+      for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
+        {
+        cp = ctic(0,n);
+        if((cp->psn & 0xFFFF) == psn)
+          cp->lasthandle = handle;
+        }
+      }
+    ++psn;
+    }
+  while(handle != 0);  
+    
   return(1);
   }
 
@@ -2037,7 +2157,7 @@ char *device_address(int node)
   
 
 
-int devnfrombadd(char *badd,int type,int dirn)
+int devnfrombadd(unsigned char *badd,int type,int dirn)
   {
   int n;
   
@@ -2059,14 +2179,14 @@ int devnfrombadd(char *badd,int type,int dirn)
 void mesh_on()
   {  // turn on LE advertising
   sendhci(leadvon,0);
-  statusok(0,leadvon);
+  //statusok(0,leadvon);
   gpar.meshflag |= MESH_W;
   } 
 
 void mesh_off()
   {  // turn off LE advertising
   sendhci(leadvoff,0);
-  statusok(0,leadvoff);
+  //statusok(0,leadvoff);
   gpar.meshflag &= ~MESH_W;
   } 
 
@@ -2075,7 +2195,7 @@ void meshreadon()
   if((gpar.meshflag & MESH_R) != 0)
     return;
   sendhci(lescanon,0);
-  statusok(0,lescanon);
+  //statusok(0,lescanon);
   gpar.meshflag |= MESH_R;
   }
 
@@ -2084,7 +2204,7 @@ void meshreadoff()
   if((gpar.meshflag & MESH_R) == 0)
     return;
   sendhci(lescanoff,0);
-  statusok(0,lescanoff);
+  //statusok(0,lescanoff);
   gpar.meshflag &= ~MESH_R;
   }
 
@@ -2126,8 +2246,10 @@ int write_mesh(char *buf,int count)
   addname();  
     
   sendhci(leadvert,0);
-  if(statusok(0,leadvert) == 0)
-    return(0);
+  readhci(0,0,0,0,0);
+  
+  //if(statusok(0,leadvert) == 0)
+  //  return(0);
   return(count);  
   }
 
@@ -2218,6 +2340,8 @@ struct cticdata *cticalloc(int ndevice)
   cp->notify = 0;
   cp->chandle = 0;
   cp->uuidtype = 0;
+  cp->psn = 0;
+  cp->lasthandle = 0xFFFF;
   cp->iflag = 0;
   cp->nextctic = &cticnull;  // with type = CTIC_END
   cp->callback = NULL;
@@ -2274,7 +2398,10 @@ int devalloc()
   for(j = 0 ; j < 6 ; ++j)
     dp->baddr[j] = 0;
   for(j = 0 ; j < 16 ; ++j)
+    {
     dp->linkey[j] = lkey[j];
+    dp->primaryuuid[j] = baseuuid[j];
+    }
   dp->linkflag = 0;        
   dp->type = 0;
   dev[dn]->name[0] = 0; 
@@ -2307,7 +2434,6 @@ int lescanx()
   unsigned char *rp;
   struct devdata *dp;
   char buf[64];
-  double fac;
   static char *fixran[2] = {"Fixed","Random"};
   static unsigned char advert[8] = { 0,0,0xC0,0xDE,0x99 };
   
@@ -2320,17 +2446,17 @@ int lescanx()
  
   VPRINT "Enable LE scan\n");
   sendhci(lescanonf,0); 
-  if(statusok(0,lescanonf) == 0)
-    {
-    NPRINT "Scan on failed\n");
-    return(0);
-    }
+  //if(statusok(0,lescanonf) == 0)
+  //  {
+  //  NPRINT "Scan on failed\n");
+  //  return(0);
+  //  }
     
   readhci(0,0,IN_LESCAN,10000,0);  // may be multiple scan replies                
   
   VPRINT "Disable LE scan\n");
   sendhci(lescanoff,0);
-  statusok(0,lescanoff);  
+  // statusok(0,lescanoff);  
    
      
   count= 0;
@@ -2375,7 +2501,7 @@ int lescanx()
           tn = 0;
 
         if(rp[j+1] == 0xFF && (rp[j+2] ==  ((rp[2] ^ rp[3]) ^ rp[4]) )  &&
-                              (rp[j+3] == (((rp[5] ^ rp[6]) ^ rp[7]) ) | 0xC0 ) )
+                              (rp[j+3] == (((rp[5] ^ rp[6]) ^ rp[7]) | 0xC0) ) )
           {
           if(bincmp(rp+j+4,advert,5,DIRN_FOR) != 0)
             {
@@ -2488,7 +2614,7 @@ int lescanx()
             if((dev[k]->matchname & 1) != 0)
               {  // MATCH_NAME
               flag = 0;
-              for(i = 0 ; i < strlen(dev[k]->name) && flag == 0 ; ++i)
+              for(i = 0 ; i < (int)strlen(dev[k]->name) && flag == 0 ; ++i)
                 {
                 if(dev[k]->name[i] != buf[i])
                   flag = 1;
@@ -2562,7 +2688,7 @@ int lescanx()
         if(buf[0] == 0)
           {  // no name
           k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-          if(k > 0 && bincmp(dev[k]->name,"Classic node 1",14,DIRN_FOR) == 0)
+          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) == 0)
             strcpy(buf,dev[k]->name);  // is also a classic with name 
           else
             {
@@ -2573,7 +2699,7 @@ int lescanx()
         else
           {  // got name
           k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-          if(k > 0 && bincmp(dev[k]->name,"Classic node 1",14,DIRN_FOR) != 0)
+          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) != 0)
             strcpy(dev[k]->name,buf);  // is also a classic without name 
           }
           
@@ -3054,8 +3180,7 @@ void btle_notifynode(int node)
 
 int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds)
   {
-  int n,dn,nread,key,ndevice,retval,timecount,oldkm,op,cticn,btleds,cbflag;
-  unsigned char ledat[2];
+  int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag;
   struct devdata *dp;
   
   mesh_on();   
@@ -3097,8 +3222,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
         VPRINT "%s has connected\n",dp->name);
         mesh_on();
         dp->btletods = 0;
-        if(dev[0]->datlen > 20)
-          setlelen(ndevice,LEDATLEN,1); 
+        setlelen(ndevice,LEDATLEN,1); 
         }
         
       flushprint();
@@ -3223,7 +3347,9 @@ int node_server(int clientnode,int (*callback)(int clientnode,char *buf,int coun
     }
     
   dp = dev[ndevice];
-  
+
+  dp->setdatlen = 20;
+
   mesh_on();   
   oldkm = setkeymode(1);
   
@@ -3252,8 +3378,9 @@ int node_server(int clientnode,int (*callback)(int clientnode,char *buf,int coun
   popins();  
   setkeymode(oldkm);
 
-  NPRINT "Connected OK\n",dp->name);
+  NPRINT "Connected OK\n");
   NPRINT "Waiting for data from %s (x = stop server)\n",dp->name);
+  setlelen(ndevice,LEDATLEN,0); 
 
   do
     {
@@ -3287,64 +3414,80 @@ int node_server(int clientnode,int (*callback)(int clientnode,char *buf,int coun
 
 int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int count),char endchar,int keyflag)
   {
-  int n,nread,key,ndevice,retval,oldkm,tryflag;
-  char buf[1024];
+  int n,nread,key,ndevice,retval,oldkm,tryflag,keyflagx;
+  char *s,buf[1024];
   struct devdata *dp;
-    
-  ndevice = devn(clientnode);
-  if(ndevice <= 0 || !(dev[ndevice]->type == BTYPE_ME || dev[ndevice]->type == BTYPE_CL))
+  
+  if(clientnode == ANY_DEVICE)
     {
-    NPRINT "Invalid client node\n");
-    flushprint();
-    return(0);
+    ndevice = CL_SERV;
+    dp = NULL;
+    }
+  else
+    {  
+    ndevice = devn(clientnode);
+    if(ndevice <= 0 || !(dev[ndevice]->type == BTYPE_ME || dev[ndevice]->type == BTYPE_CL))
+      {
+      NPRINT "Invalid client node\n");
+      flushprint();
+      return(0);
+      }
+    
+    dp = dev[ndevice];
+   
+    if(dp->conflag != 0)
+      {
+      NPRINT "Already connected\n");
+      flushprint();
+      return(0);
+      }
     }
     
-  dp = dev[ndevice];
-   
-  if(dp->conflag != 0)
-    {
-    NPRINT "Already connected\n");
-    flushprint();
-    return(0);
-    }
-
-  dp->conflag = CON_SERVER;   
-   
-  dp->linkflag &= KEY_FILE | KEY_NEW;
-
-  dp->linkflag |= keyflag & (KEY_ON | PASSKEY_LOCAL | PASSKEY_REMOTE | PASSKEY_OFF);  
 
   VPRINT "Set simple pair mode on\n");
   sendhci(setspm,ndevice);
-  statusok(0,setspm);
 
   flushprint();
   
   oldkm = setkeymode(1);
+  keyflagx = keyflag;
   tryflag = 0;
   
-  while((dp->conflag & CON_RF) == 0)
+  while(dp == NULL || (dp->conflag & CON_RF) == 0)
     {     
     if(tryflag == 0)
       {
-      NPRINT "Listening for %s to connect (x=cancel)\n",dp->name);
+      if(clientnode == ANY_DEVICE)
+        s = "any device";
+      else
+        s = dp->name;
+      NPRINT "Listening for %s to connect (x=cancel)\n",s);
       flushprint();
       }
     retval = 0;
     do
       {     
-      dp->conflag = CON_SERVER;
       readhci(ndevice,IN_CONREQ,0,750,0);
-      n = findhci(IN_CONREQ,ndevice,INS_POP);
+      n = findhci(IN_CONREQ,ndevice & 0xFF,INS_POP);
       if(n >= 0)
-        {
+        {    
+        if(ndevice == CL_SERV)
+          {
+          ndevice = instack[n+3];
+          dp = dev[ndevice];
+          }
         popins();
+        
+        dp->conflag = CON_SERVER;  
+        dp->linkflag &= KEY_FILE | KEY_NEW;
+        dp->linkflag |= keyflagx & (KEY_ON | PASSKEY_LOCAL | PASSKEY_REMOTE | PASSKEY_OFF);
+                        
         retval = classicserverx(ndevice);
         flushprint();
         popins();
         }
       
-      if(tryflag != 0 && (dp->conflag & CON_RF) == 0) 
+      if(tryflag != 0 && dp != NULL && (dp->conflag & CON_RF) == 0) 
         {
         tryflag = 0;
         NPRINT "  The remote device has connected and then disconnected.\n");
@@ -3359,27 +3502,29 @@ int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int c
       key = readkey();
 
       }
-    while((dp->conflag & CON_RF) == 0 && key != 'x' && key != 'k' && retval != 2);
+    while((dp == NULL || (dp->conflag & CON_RF) == 0) && key != 'x' && key != 'k' && retval != 2);
     
-    if((dp->conflag & CON_RF) == 0)
+    if(dp == NULL || (dp->conflag & CON_RF) == 0)
       {
       if(retval == 2)
         {
-        if(dp->type == BTYPE_CL)
-          tryflag = 1;
-        dp->conflag = 0;
-        NPRINT "%s disconnected\n",dp->name);
-        flushprint();
+        if(dp != NULL)
+          {
+          if(dp->type == BTYPE_CL)
+            tryflag = 1;
+          dp->conflag = 0;
+          NPRINT "%s disconnected\n",dp->name);
+          flushprint();
+          }
         }       
       else
-        tryflag = 0;
-          
+        tryflag = 0;     
 
       if(key == 'k')
         {
         // flip KEY
-        dp->linkflag ^= KEY_ON;
-        if((dp->linkflag & KEY_ON) == 0)  
+        keyflagx ^= KEY_ON;
+        if((keyflagx & KEY_ON) == 0)  
           NPRINT "Will not send a link key\n");
         else
           NPRINT "Will send a link key\n");
@@ -3388,7 +3533,8 @@ int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int c
 
       if(key == 'x')
         {
-        dp->conflag = 0;
+        if(dp != NULL)
+          dp->conflag = 0;
         if(key == 'x')
           NPRINT "Cancelled by x press\n");
         flushprint();
@@ -3397,22 +3543,26 @@ int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int c
         return(0);
         }
       }
-
-    }    
-  
+    } 
   
   popins();  
   setkeymode(oldkm);
 
-  NPRINT "Connected OK\n",dp->name);
+  if(dp == NULL)
+    {
+    NPRINT "Connect failed\n");
+    return(0);
+    }
+    
+  NPRINT "Connected OK\n");
   NPRINT "Waiting for data from %s (x = stop server)\n",dp->name);
 
   do
     {
-    nread = read_node_endchar(clientnode,buf,1024,endchar,EXIT_KEY,0);
+    nread = read_node_endchar(dp->node,buf,1024,endchar,EXIT_KEY,0);
     if(nread > 0)
       {
-      retval = (*callback)(clientnode,buf,nread);
+      retval = (*callback)(dp->node,buf,nread);
       }
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
@@ -3429,7 +3579,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int c
         
   flushprint();  
   sleep(2);    // allow time for any last reply sent by callback to transmit      
-  disconnect_node(clientnode);  // sever initiated here
+  disconnect_node(dp->node);  // sever initiated here
                                 // client should be running
                                 // wait_for_disconnect
       
@@ -3562,7 +3712,7 @@ All three serial services are on channel 1
 
 *****************************/
 
-void register_serial(char *uuid,char *name)
+void register_serial(unsigned char *uuid,char *name)
   {
   if(uuid != NULL && name != NULL)
     replysdp(0,0,uuid,name);
@@ -3570,19 +3720,19 @@ void register_serial(char *uuid,char *name)
     NPRINT "NULL parameter\n");
   }
  
-void replysdp(int ndevice,int in,char *uuid,char *name)
+void replysdp(int ndevice,int in,unsigned char *uuid,char *name)
   {
-  int n,sflag,uuidn,aid,aidlen,rn,uuidflag,aidj,aidk,ln,totlen;
+  int n,aidlen,rn,uuidflag,aidj,aidk,ln,totlen;
   struct devdata *dp;
   unsigned char *ssarep,*des;
   unsigned char sdpreply[256];
     
-  static char uuid1200[5] = { 0x35,0x03,0x19,0x12,0x00 };
-  static char uuid0003[5] = { 0x35,0x03,0x19,0x00,0x03 };
-  static char uuid1101[5] = { 0x35,0x03,0x19,0x11,0x01 };
-  static char uuid0100[5] = { 0x35,0x03,0x19,0x01,0x00 };
-  static char aidone[5] =   { 0x35,0x03,0x09 };
-  static char aidrange[5] = { 0x35,0x05,0x0A };
+  static unsigned char uuid1200[5] = { 0x35,0x03,0x19,0x12,0x00 };
+  static unsigned char uuid0003[5] = { 0x35,0x03,0x19,0x00,0x03 };
+  //static char uuid1101[5] = { 0x35,0x03,0x19,0x11,0x01 };
+  static unsigned char uuid0100[5] = { 0x35,0x03,0x19,0x01,0x00 };
+  static unsigned char aidone[5] =   { 0x35,0x03,0x09 };
+  static unsigned char aidrange[5] = { 0x35,0x05,0x0A };
    
 static unsigned char ssaaidfail[32] = { 19,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,0x0E,0x00,
 0x0A,0x00,0x41,0x00,0x05,0x00,0x00,0x00,0x05,0x00,0x02,0x35,0x00,0x00 }; 
@@ -3858,7 +4008,7 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
   sendhci(ssarep,ndevice);  
   }
 
-int addaid(char *sdp,char *aid,int *rn,int aidj,int aidk,int aidn)
+int addaid(unsigned char *sdp,unsigned char *aid,int *rn,int aidj,int aidk,int aidn)
   {
   int n;
   
@@ -3872,7 +4022,7 @@ int addaid(char *sdp,char *aid,int *rn,int aidj,int aidk,int aidn)
   }
 
   
-int bincmp(char *s,char *t,int count,int dirn)
+int bincmp(unsigned char *s,unsigned char *t,int count,int dirn)
   {
   int n;
   
@@ -3917,9 +4067,9 @@ int leconnect(int ndevice)
     mesh_on();
 
   VPRINT "SEND LE connect to %s\n",dp->name);
-    
+
   dp->setdatlen = 20;
-    
+   
   sendhci(leopen,ndevice);
       
   readhci(ndevice,IN_LEHAND,0,5000,gpar.toshort);   
@@ -3929,26 +4079,28 @@ int leconnect(int ndevice)
     if(dp->type == BTYPE_LE || (dp->type == BTYPE_ME && dp->lecflag != 0))
       {
       NPRINT "Connect OK as LE client\n"); 
-      flag = 0;
+      flag = 1;
       }
     else
       {    
       NPRINT "Connect OK as NODE client\n");
-      flag = 1;
+      flag = 0;
       }
     VPRINT "Handle = %02X%02X\n",dp->dhandle[1],dp->dhandle[0]);
-    if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
+
+    setlelen(ndevice,LEDATLEN,flag);    
+
+    // if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
+    if(gpar.leclientwait > 0)
       readhci(0,0,0,gpar.leclientwait,0);  // server may request attributes
 
-    if(flag == 0)
-      setlelen(ndevice,LEDATLEN,1);    
     popins();
     flushprint();
     return(1);
     }      
   
   sendhci(lecancel,0);  // cancel open command
-  statusok(1,lecancel);         // may also return IN_LEHAND with fail status
+  // statusok(1,lecancel);         // may also return IN_LEHAND with fail status
   dp->lecflag = 0;
   
   NPRINT "Fail - no handle\n");
@@ -3987,7 +4139,7 @@ int wait_for_disconnect(int node,int timout)
 
   timstart = timems(TIM_LOCK);
   
-  while(dev[ndevice]->conflag != 0 && timems(TIM_RUN) - timstart < timout)
+  while(dev[ndevice]->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned int)timout)
     {
     readhci(0,0,0,25,0);  
     flushprint();
@@ -4169,6 +4321,8 @@ void close_all()
   
   flushprint();
   flag = 1;  // disable atexit call
+  
+  // printins();   
   }  
   
   
@@ -4205,7 +4359,7 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
   {
   struct cticdata *cp;  // characteristic info structure
   struct devdata *dp;
-  int n,k,chandle,locsize,ndevice;
+  int n,k,devn,chandle,locsize,ndevice,flag;
   unsigned char *cmd;
   
   ndevice = devnp(node);
@@ -4248,45 +4402,83 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
       for(n = 0 ; n < locsize ; ++n)
         cp->value[n] = data[n];
       } 
-   
-      
-    for(n = 1 ; cp->notify != 0 && devok(n) != 0 ; ++n)
+
+  
+    flag = 0;  
+    for(devn = 1 ; cp->notify != 0 && devok(devn) != 0 ; ++devn)
       {  // search all other devices for notify
-      dp = dev[n];
+      dp = dev[devn];
       if((dp->conflag & CON_LX) != 0 && 
          (gpar.btleflag == 0 || gpar.btlenode == 0 || gpar.btlenode == dp->node))
-        {  // device n is connected as LE client
+        {  // device devn is connected as LE client
            // send notification
-        cmd = lenotify + PAKHEADSIZE;         
-        if((cp->perm & 0x10) != 0)
-          {   
-          VPRINT "Send %s notification to %s\n",cp->name,dp->name);
-          cmd[9] = 0x1B;
-          }
-        else
-          {   
-          VPRINT "Send %s indication to %s\n",cp->name,dp->name);
-          cmd[9] = 0x1D;
-          }          
-                          // set characteristic handle
-        cmd[10] = (unsigned char)(cp->chandle & 0xFF);
-        cmd[11] = (unsigned char)((cp->chandle >> 8) & 0xFF);
-        for(k = 0 ; k < locsize ; ++k)     // set data
-          cmd[12+k] = data[k];     // low byte first
+        if(flag == 0)
+          {  // first loop only
+          flag = 1;
+          cmd = lenotify + PAKHEADSIZE;         
+     
+          if((cp->perm & 0x10) != 0)
+            {   
+            VPRINT "Send %s notification to %s\n",cp->name,dp->name);
+            cmd[9] = 0x1B;
+            }
+          else
+            {   
+            VPRINT "Send %s indication to %s\n",cp->name,dp->name);
+            cmd[9] = 0x1D;
+            }          
+       
+          for(k = 0 ; k < locsize ; ++k)     // set data
+            cmd[12+k] = data[k];     // low byte first
 
-        cmd[3] = (locsize+7) & 0xFF;
-        cmd[4] = ((locsize+7) >> 8) & 0xFF;
+          cmd[3] = (locsize+7) & 0xFF;
+          cmd[4] = ((locsize+7) >> 8) & 0xFF;
   
-        cmd[5] = (locsize+3) & 0xFF;
-        cmd[6] = ((locsize+3) >> 8) & 0xFF;
+          cmd[5] = (locsize+3) & 0xFF;
+          cmd[6] = ((locsize+3) >> 8) & 0xFF;
   
-        lenotify[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
-        lenotify[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF);  // 13 for 1 byte
-        
-        sendhci(lenotify,n);         
-        }
+          cmd[10] = (unsigned char)(cp->chandle & 0xFF);
+          cmd[11] = (unsigned char)((cp->chandle >> 8) & 0xFF);
+    
+          lenotify[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
+          lenotify[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF);  // 13 for 1 byte
+          }
+          
+        if((flag & 2) == 0 && (cp->perm & 0x20) != 0)
+          {  // strip indicate acks
+          flag |= 2;
+          do
+            {
+            readhci(0,IN_LEACK,0,0,0);
+            n = findhci(IN_LEACK,0,INS_POP);  
+            }
+          while(n >= 0);
+          }
+
+        sendhci(lenotify,devn);
+  
+        if((cp->perm & 0x20) != 0)
+          {  // wait for ack
+          readhci(devn,IN_LEACK,0,gpar.timout,0);
+          n = findhci(IN_LEACK,devn,INS_POP);  
+          if(n >= 0) 
+            {
+            if(insdatn[0] == 0x01)
+              {     
+              k = insdatn[4]; 
+              if(k > 19)
+                k = 0;  // no errorle text
+              NPRINT "  Error %d %s\n",k,errorle[k]);
+              }
+            popins();
+            }
+          else
+            NPRINT "Indicate response not seen from %s\n",dev[devn]->name);
+          } 
+        }        
       }
      
+    readhci(0,0,0,0,0); 
     return(locsize);
     }
 
@@ -4425,27 +4617,29 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     flushprint();
     }
          
-   // clear input buffer 
-  do
-    {
-    readhci(ndevice,0,IN_ATTDAT,0,0);
-    n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    }
-  while(n >= 0);
-        
+  if((cp->perm & 8) != 0)
+    {  // strip acks
+    do
+      {
+      readhci(0,IN_LEACK,0,0,0);
+      n = findhci(IN_LEACK,0,INS_POP);  
+      }
+    while(n >= 0);
+    }   
+     
   if(sendhci(lewrite,ndevice) == 0)  
     return(0);
     
   if((cp->perm & 8) == 0 || notflag != 0)
     {   // no response or error reply
-    readhci(0,0,0,25,0);  // peek event 13 or notify maybe
+    readhci(0,0,0,0,0);  // peek to clear event 13 or notify maybe
     popins();
     flushprint();   
     return(count);  // OK
     }
 
-  readhci(ndevice,0,IN_ATTDAT,gpar.timout,gpar.toshort);     // 2 replies if acknowledge  
-  n = findhci(IN_ATTDAT,ndevice,INS_POP);  
+  readhci(ndevice,IN_LEACK,0,gpar.timout,0);   
+  n = findhci(IN_LEACK,ndevice,INS_POP);  
   if(n >= 0) 
     {
     if(insdatn[0] == 0x13)
@@ -4455,17 +4649,19 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
       return(count);   // OK 
       }
     if(insdatn[0] == 0x01)  // write ack error
-      { 
-      k = insdatn[4];
+      {
+      k = insdatn[4]; 
       if(k > 19)
         k = 0;  // no errorle text
-      NPRINT "  Error %d %s\n",insdatn[4],errorle[k]);
+      NPRINT "  Error %d %s\n",k,errorle[k]);
       popins();
       flushprint();
       return(0); 
       }  
     }
-  
+  else
+    NPRINT "Write response not seen\n");
+
   popins();
   flushprint();     
   return(count);
@@ -4684,20 +4880,20 @@ int read_ctic(int node,int cticn,unsigned char *data,int datlen)
 
 int sendhci(unsigned char *s,int ndevice)
   {
-  int n,n0,nwrit,ntogo,len,chan,errflag;
+  int n,n0,nwrit,ntogo,len,chan,cmdflag;
   unsigned int timstart;
   unsigned char *cmd;
   struct devdata *dp;
-  char *ms;
+
     
   cmd = s + PAKHEADSIZE;   // skip over header bytes to command 
   len = s[0] + (s[1] << 8);        // length of cmd from header
 
+  cmdflag = 0;
     
   // s[2/3] = flags to set info in cmd string
  
-  errflag = 0;
-  
+ 
   if((s[2] | s[3]) != 0)
     {  // will need board address, handle etc.  
     if(devokp(ndevice) == 0)
@@ -4714,9 +4910,10 @@ int sendhci(unsigned char *s,int ndevice)
         }
       }
             
-            
+         
     if((s[2] & S2_HAND) != 0)  // device handle
-      {          
+      {
+      cmdflag = 1;          
       if(cmd[0] == 2)
         n = 1;   // ACL
       else
@@ -4904,10 +5101,54 @@ int sendhci(unsigned char *s,int ndevice)
     }
   while(ntogo != 0);
   timems(TIM_FREE);
-
+  
+  gpar.cmdcount += cmdflag;
+  
   return(1);
   }
 
+
+/********* COMMAND STACK POINTER ********
+
+Returns the APPROXIMATE number of commands waiting on the Bluetooth stack to be sent.
+It is only approximate because each system sends Command Complete
+events at a different rate, and some operations will not generate the event. 
+So the stack may be empty and ready for more commands, but this function will return
+a non-zero number. 
+See Vol 4 Pt E  7.7.19
+If write commands are sent too quickly they will crash the Bluetooth stack.
+This function can be used to write commands at the maximum possible rate by
+waiting for the stack pointer to reduce to a certain value.
+The following code is an example for sending LE characteristic writes.
+
+int csp;
+
+  // read initial value - may not be
+  // zero even if the stack is empty
+  
+csp = cmd_stack_ptr();   
+
+for(n = 0 ; n < 1000 ; ++n)
+  {
+  
+  // do not send next write until the number of waiting
+  // commands falls below 6 (experiment with this number,
+  // and add a get-out condition in case the while never exits)
+   
+  while(cmd_stack_ptr() >= csp+6)
+    ;
+    
+  write_ctic(......);
+  }
+
+***********************************/
+
+int cmd_stack_ptr()
+  {
+  readhci(0,0,0,0,0);
+  return(gpar.cmdcount);
+  }
+  
 
 /******* STATUS OK ********
 look for standard status OK reply
@@ -5021,18 +5262,21 @@ RETURN
 
 int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout,int toshort)
   {
-  unsigned char b0,b3,*datp,ledat[2];   
-  int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,xdevicen,lesflag,eflag;
-  int gotn,k,j,n0,nxx,chan,mask,xflag,xprintflag,devicen,stopverb,firstpacket;
-  int conreqflag,conreqid,disreqflag,retval,timendms,savtimendms,datlen,ascflag;
+  unsigned char b0,*datp,*rsp,ledat[2];   
+  int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
+  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb,firstpacket;
+  int retval,savtimendms,datlen,ascflag,clsflag;
   long long int locmustflag,gotflag;
-  unsigned int timstart,timx;
+  unsigned int timstart,timx,timendms;
   struct devdata *dp,*condp;
   static long long int sflag;
   static int level = 0;   
   unsigned char buf[2048];
-  
+
+
   lesflag = ndevice & LE_SERV;
+  clsflag = ndevice & CL_SERV;
+  
   ndevice &= 0xFF;
 
   if(ndevice != 0 && (dev[ndevice]->conflag & CON_LX) != 0)
@@ -5079,8 +5323,6 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   xwantlen = 0; 
   xflag = 0;
   xprintflag = 0;
-  conreqflag = 0;
-  disreqflag = 0;
   disflag = 0;
   
   do   
@@ -5160,7 +5402,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
               }
             else
               {
-              if(mustflag != IN_DATA && mustflag != IN_CONREQ && lesflag == 0)
+              if(mustflag != IN_DATA && mustflag != IN_CONREQ && lesflag == 0 && clsflag == 0)
                 VPRINT "Timed out waiting for expected packet\n"); 
  
               retval = 0;
@@ -5200,7 +5442,18 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     if(buf[0] == 4)    // HCI events
       {
       n0 = 0;  // offset of board address or handle for device identify
-      if(buf[1] == 0x3E && buf[3] == 1) 
+  
+      if(buf[1] == 0x13)
+        {
+        // buf[3] = number of handles
+        j = 6;
+        for(k = 0 ; k < buf[3] ; ++k)
+          {
+          gpar.cmdcount -= buf[j] + (buf[j+1] << 8);
+          j += 4;
+          }
+        }
+      else if(buf[1] == 0x3E && buf[3] == 1) 
          {
          n0 = 9;  
          gotflag = IN_LEHAND;
@@ -5225,10 +5478,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         gotflag = IN_PARAMREQ | IN_IMMED;
         }
       else if( (sflag & IN_BADD) != 0 && buf[1] == 0x0E && buf[4] == 0x09 && buf[5] == 0x10)   
-          gotflag = IN_BADD;           // command complete with board address if buf[6]=0                   
-      else if( (sflag & IN_STATOK) != 0 && buf[1] == 0x0E)   //  && buf[6] == 0 )      
-         gotflag = IN_STATOK;            // command complete Status=buf[6]
-      else if(buf[1] == 3)    //  (sflag & IN_CLHAND) != 0 && buf[3] == 0)  // status = 0   
+        gotflag = IN_BADD;           // command complete with board address if buf[6]=0                   
+      else if(buf[1] == 0x0E && (sflag & IN_STATOK) != 0)        
+        gotflag = IN_STATOK;    // if buf[6] = 0 status OK         
+      else if(buf[1] == 3)      //  (sflag & IN_CLHAND) != 0 && buf[3] == 0)  // status = 0   
         {  
         gotflag = IN_CLHAND;
         n0 = 6;
@@ -5417,7 +5670,34 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           
         if((gpar.meshflag & MESH_W) != 0)
           mesh_on();
-        }
+        }  // end IN_LEHAND
+      else if(gotflag == IN_CONREQ)
+        {
+        gotflag = 0;
+        // want=ndevice got=devicen BADD=buf+n0 flag=clsflag
+        if(devicen == 0)  
+          {
+          devicen = devalloc();
+          if(devicen > 0)
+            {            
+            dp = dev[devicen];
+            dp->type = BTYPE_CL; 
+            dp->node = newnode();          
+                             
+            for(k = 0 ; k < 6 ; ++k)
+              dp->baddr[k] = buf[n0+5-k];
+        
+            strcpy(dev[devicen]->name,baddstr(dp->baddr,0));
+            } 
+          }
+        if((clsflag == 0 && devicen == ndevice) || (clsflag != 0 && devicen != 0))
+          {
+          ledat[0] = (unsigned char)devicen;
+          pushins(IN_CONREQ,devicen,1,ledat);
+          }
+        else
+          NPRINT "%s tried to connect - rejected\n",baddstr(buf+n0,1));
+        }  
       else if(gotflag == IN_CLHAND)
         {
         gotflag = 0;  // no store on stack - conflag signals success
@@ -5517,14 +5797,28 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           else if((dev[devicen]->conflag & CON_LX) != 0)
             {  // server
             gotflag = IN_ATTDAT | IN_IMMED;
+           
+            // buf[9]==1  error=buf[13] return
+                         
+            if(buf[9] == 0x1E || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
+              {  // indicate ack 
+              gotflag = IN_LEACK;
+              }
             }
           else if(dev[devicen]->type == BTYPE_ME && (dev[devicen]->conflag & CON_LE) == 0)
             gotflag = IN_DATA;    // mesh data
           else
             {
             if(buf[9] != 3)  // not MTU ack
-              gotflag = IN_ATTDAT;  // LE
-            
+              gotflag = IN_ATTDAT;  // LE        
+                         
+            // buf[9] == 1  error buf[13]
+          
+            if(buf[9] == 0x13 || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
+              {  // writc ctic ack
+              gotflag = IN_LEACK;
+              }
+                     
             if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] & 1) == 0 && buf[9] <= 0x20)
               {  // even opcode = request from server - let odd opcodes go to ATTDAT 
               gotflag = 0;  // ditch
@@ -5623,12 +5917,16 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             gotflag = IN_PNRSP;    
           else if(buf[10] == 0xEF && buf[9] == 0x03 && (buf[12] == 0xE1 || buf[12] == 0xE3 || 
                        buf[12] == 0x93 || buf[12] == 0x91))
-            {     // copy for reply      
+            {     // copy for reply
             gotflag = IN_MSC | IN_IMMED;
             datlen = buf[3] + (buf[4] << 8) + 2;
+            if((buf[12] & 0xF0) == 0xE0)
+              rsp = msccmdrspe;
+            else
+              rsp = msccmdrsp9;
             for(k = 0 ; k < datlen && k < 60 ; ++k)
-              msccmdrsp[PAKHEADSIZE+k+3] = buf[k+3];
-            msccmdrsp[0] = datlen+3;
+              rsp[PAKHEADSIZE+k+3] = buf[k+3];  // same reply
+            rsp[0] = datlen+3; 
             }
           else if( (buf[10] & 0xEF) == 0xEF && add != 0)   // EF or FF
             gotflag = IN_DATA;    
@@ -5880,9 +6178,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
 void immediate(long long lookflag)
   {
-  int n,k,j,devicen,id,ch,psm;
+  int n,j,devicen,id,ch,psm;
   int bn,getout,cticn,chandle;
-  unsigned char buf[16];
+  unsigned char *rsp,buf[16];
+  char sbuf[16];
   long long int gotflag;
   struct devdata *dp;
   struct cticdata *cp;
@@ -6046,12 +6345,18 @@ void immediate(long long lookflag)
       }
     else if(gotflag == IN_MSC)
       {
+      
       j = insdat[n+3];
-      VPRINT "GOT MSC %02X\n",j);
-      VPRINT "SEND MSC reply\n");
-      msccmdrsp[PAKHEADSIZE+9] = 0x01;  // reply
-      msccmdrsp[PAKHEADSIZE+12] = j;  // E3 E1 93 91
-      sendhci(msccmdrsp,devicen);
+      VPRINT "GOT Type %02X\n",j);
+      VPRINT "SEND reply\n");   
+      if((j & 0xF0) == 0xE0)
+        rsp = msccmdrspe;
+      else
+        rsp = msccmdrsp9;
+      
+      rsp[PAKHEADSIZE+9] = 0x01;  // reply
+      rsp[PAKHEADSIZE+12] = j;  // E3 E1 93 91
+      sendhci(rsp,devicen);
       if((lookflag & IN_AUTOEND) != 0 && j == 0xE1)
         {
         buf[0] = AUTO_MSC;
@@ -6189,7 +6494,7 @@ void immediate(long long lookflag)
         }
         
       pincode[PAKHEADSIZE+10] = j;   
-      strcpy(pincode+PAKHEADSIZE+11,dp->pincode);
+      strcpy((char*)pincode+PAKHEADSIZE+11,(char*)dp->pincode);
       VPRINT "SEND PIN code\n");
       VPRINT "  Set [10] PIN length\n");
       VPRINT "  Set [11] PIN = %s\n",dp->pincode);
@@ -6204,12 +6509,12 @@ void immediate(long long lookflag)
       j = setkeymode(0);
       do
         {
-        fgets(buf,16,stdin);
+        fgets(sbuf,16,stdin);
         }
       while(buf[0] == 10);
       setkeymode(j); 
 
-      j = atoi(buf);
+      j = atoi(sbuf);
       passkey[PAKHEADSIZE+10] = j & 0xFF;
       passkey[PAKHEADSIZE+11] = (j >> 8) & 0xFF;
       passkey[PAKHEADSIZE+12] = (j >> 16) & 0xFF;
@@ -6279,16 +6584,14 @@ void immediate(long long lookflag)
       for(j = 0 ; j < 8 ; ++j)
         {
         paramreply[PAKHEADSIZE+j+6] = insdat[n+j+3];
-        // paramset[PAKHEADSIZE+j] = buf[j];
         }
-      // sendhci(paramset,devicen);
       sendhci(paramreply,devicen);                
       }
     else if(gotflag == IN_DATLEN)
       {
-      j = insdat[n+7] + (insdat[n+8] << 8) - 3;
-      VPRINT "%s is requesting a larger data size %d\n",dp->name,j);
-      setlelen(devicen,LEDATLEN,0);
+      VPRINT "%s data length change T %02X R %02X\n",dp->name,insdat[n+3],insdat[n+7]);
+      if(insdat[n+3] < 0xF0)  // local tx
+        setlelen(devicen,LEDATLEN,0);
       }
     else if(gotflag == IN_CONUP5)
       {
@@ -6327,8 +6630,8 @@ handles 0004...  characteristics
 void leserver(int ndevice,int count,unsigned char *dat)
   {
   int n,dn,cticn,flag,notflag,handle,node,start,end,startx;
-  int size,uuidtype,aflag,xflag,acticn,ahandle;
-  unsigned char cmd[2],*s,errcode;
+  int size,uuidtype,aflag,xflag,acticn,ahandle,psn,locsize,datcount;
+  unsigned char cmd[2],*s,*data,errcode;
   struct cticdata *cp;
 
   
@@ -6339,6 +6642,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
   errcode = 0;  
   aflag = 0;   // 0A opcode for non-value
   acticn = 0;
+  ahandle = 0;
   xflag = 0;   // stop error
   node = dev[0]->node;
   
@@ -6349,8 +6653,13 @@ void leserver(int ndevice,int count,unsigned char *dat)
     handle = dat[1] + (dat[2] << 8);
 
     if(dat[0] == 0x0A && handle < 4)
-      aflag = 1;
-
+      {
+      if(handle == 3)
+        aflag = 2;  // 16b PS
+      else
+        aflag = 1;  // 2b PS
+      ahandle = handle;
+      }
     // find cticn of handle
   
     for(cticn = 0 ; ctic(0,cticn)->type == CTIC_ACTIVE && flag == 0 && aflag == 0 ; ++cticn)
@@ -6359,12 +6668,18 @@ void leserver(int ndevice,int count,unsigned char *dat)
 
       if(dat[0] == 0x0A && handle == cp->chandle-1)
         {
-        aflag = 1;   // 0A read of non-value - treat as 08
+        aflag = 3;   // 0A read of INFO - treat as 08
+        acticn = cticn;
+        ahandle = handle;
+        }
+      else if(dat[0] == 0x0A && (cp->psn & 0x10000) != 0 && (cp->psn & 0xFFFF) != 0 && handle == cp->chandle-2)
+        {
+        aflag = 2;   // 0A read of 16b PS - treat as 08
         acticn = cticn;
         ahandle = handle;
         }
       else if(cp->chandle == handle || ((cp->perm & 0x30) != 0 && handle == cp->chandle+1) )
-        {    
+        { 
         if(cp->chandle == handle)
           notflag = 0;
         else
@@ -6382,7 +6697,21 @@ void leserver(int ndevice,int count,unsigned char *dat)
             else
               {
               VPRINT "Received characteristic %s\n",cp->name);
-              write_ctic(node,cticn,dat+3,count-3);
+                           
+              datcount = count-3;
+              data = dat+3;
+              
+              if(datcount == 0 || datcount > cp->size)
+                locsize = cp->size;  // known number of bytes in device info
+              else
+                locsize = datcount;
+
+              if(locsize > LEDATLEN)
+                locsize = LEDATLEN;
+  
+              for(n = 0 ; n < locsize ; ++n)
+                cp->value[n] = data[n];              
+                
               if(dat[0] == 0x12)
                 {  // no check cp->perm & 8 write with ack
                 VPRINT "Send acknowledgement\n");
@@ -6391,7 +6720,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
               cmd[0] = LE_WRITE;
               }
             }
-          else  // notify descriptor
+          else   // notify descriptor
             {
             cp->notify = dat[3];
             if(cp->notify == 0)
@@ -6478,7 +6807,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
     s[5] = 0x06;
     s[10] = 1;  // 2 byte
     if(start >= 1 && start <= 3)
-      {  // handles 1-5  2 byte UUID
+      {  // handles 1-3  2 byte UUID
       s[11] = dat[1];  // handle
       s[12] = dat[2];
       s[13] = 0;
@@ -6489,8 +6818,14 @@ void leserver(int ndevice,int count,unsigned char *dat)
       {    
       cticn = nextctichandle(start,end,&handle);
       if(cticn >= 0)
-        {
+        {  // found handle = one of 4 possible handles associated with cticn
         cp = ctic(0,cticn);
+        if(handle == cp->chandle-2)
+          {  // PS
+          s[13] = 0x00;  // 2800 
+          s[14] = 0x28;
+          flag = 1;
+          }
         if(handle == cp->chandle-1)
           {
           s[13] = 0x03;  // 2803 
@@ -6503,7 +6838,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
           s[14] = 0x29;
           flag = 1;
           }
-        else  // value uuid
+        else if(handle == cp->chandle)  // value uuid
           {
           if(cp->uuidtype == 16)
             {
@@ -6516,8 +6851,8 @@ void leserver(int ndevice,int count,unsigned char *dat)
             s[n+13] = cp->uuid[cp->uuidtype-n-1];
           flag = 1; 
           }           
-        s[11] = dat[1];  // handle
-        s[12] = dat[2];    
+        s[11] = handle & 0xFF;  // handle
+        s[12] = (handle >> 8) & 0xFF;    
         }
       }
          
@@ -6535,11 +6870,14 @@ void leserver(int ndevice,int count,unsigned char *dat)
   else if(dat[0] == 0x08 || dat[0] == 0x10 || aflag != 0)
     { 
     flag = 0;
-    start = dat[1]+(dat[2] << 8);
     if(aflag != 0)
-      end = start;   // dat[1][2] have handle no more dat[]
+      {
+      start = ahandle;
+      end = ahandle;   // dat[1][2] have handle no more dat[]
+      }
     else
       {
+      start = dat[1]+(dat[2] << 8);
       end = dat[3]+(dat[4] << 8);
       uuidtype = count - 5;
       VPRINT "Read attribute info for handles %04X to %04X and\n  UUID ",start,end);
@@ -6553,14 +6891,10 @@ void leserver(int ndevice,int count,unsigned char *dat)
     if(dat[0] == 0x08 || aflag != 0)
       dn = 0;
     else
-      {
       dn = 2;   // insert end of group handle
-      s[13] = 0xFF;
-      s[14] = 0xFF;
-      }
       
     if((start == 1 || start == 2) && (aflag != 0 || (dat[5] == 0 && dat[6] == 0x28)) )
-      {
+      {  // 2b PS
       handle = start;       
       size = 2;
       s[14+dn] = 0x18;
@@ -6584,13 +6918,28 @@ void leserver(int ndevice,int count,unsigned char *dat)
         }
       flag = 1;
       }             
-    else if(start == 3 && (aflag != 0 || (dat[5] == 0 && dat[6] == 0x28)) )
-      {   // ps entry
-      handle = 3; 
+    else if(start == 3 && (aflag != 0 || (dat[5] == 0 && dat[6] == 0x28)))
+      {   // 16b ps0 entry
+      handle = 3;
+      if(dn == 2)
+        {  // insert end of group handle = 1st ctic 
+        cp = ctic(0,0);
+        if(cp->type == CTIC_END)
+          {
+          s[13] = 0xFF;
+          s[14] = 0xFF;
+          }
+        else
+          {
+          s[13] = cp->lasthandle & 0xFF;
+          s[14] = (cp->lasthandle >> 8) & 0xFF;
+          }
+        } 
       size = 16;
+      // psn = 0
       for(n = 0 ; n < 16 ; ++n)
-        s[28-n+dn] = baseuuid[n];
-      // 10 eog = FFFF     
+        s[28-n+dn] = dev[0]->primaryuuid[n];
+         
       flag = 1;
       }
     else
@@ -6611,15 +6960,10 @@ void leserver(int ndevice,int count,unsigned char *dat)
           cp = ctic(0,cticn);
           if(aflag != 0)
             uuidtype = cp->uuidtype;
-            
-          if(handle == cp->chandle-1 && (aflag != 0 || (uuidtype == 2 && dat[5] == 0x03 && dat[6] == 0x28)))
+       
+          if(handle == cp->chandle-1 && (aflag == 3 || (uuidtype == 2 && dat[5] == 0x03 && dat[6] == 0x28)))
             {   // info 2803
             size = cp->uuidtype + 3;  // beyond 09 len handlo handhi
-            s[13+dn] = cp->perm;
-            s[14+dn] = cp->chandle & 0xFF;  // value handle
-            s[15+dn] = cp->chandle >> 8;
-            for(n = 0 ; n < cp->uuidtype ; ++n)
-              s[n+dn+16] = cp->uuid[cp->uuidtype-n-1];
             if(dn != 0)
               {  // end of group = value handle or +1 if notify
               n = cp->chandle;
@@ -6628,26 +6972,53 @@ void leserver(int ndevice,int count,unsigned char *dat)
               s[13] = n & 0xFF;
               s[14] = n >> 8;
               }
+            s[13+dn] = cp->perm;
+            s[14+dn] = cp->chandle & 0xFF;  // value handle
+            s[15+dn] = cp->chandle >> 8;
+            for(n = 0 ; n < cp->uuidtype ; ++n)
+              s[n+dn+16] = cp->uuid[cp->uuidtype-n-1];
             flag = 1;
             }
-          else if(handle == cp->chandle+1 && (aflag != 0 || (uuidtype == 2 && dat[5] == 0x02 && dat[6] == 0x29)))
+          else if(handle == cp->chandle+1 && aflag == 0 && uuidtype == 2 && dat[5] == 0x02 && dat[6] == 0x29)
             { // notify control 2902
             size = 2;
+            if(dn != 0)
+              {  // insert end of group handle  
+              s[13] = cp->lasthandle & 0xFF;
+              s[14] = (cp->lasthandle >> 8) & 0xFF;
+              }
             s[13+dn] = cp->notify & 1; 
             s[14+dn] = 0;
             flag = 1;
-            // 10 eog = FFFF
             }
-          else if(handle == cp->chandle && (aflag != 0 || (uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)))  
+          else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
             {   // value
             size = cp->size;
+            if(dn != 0)
+              {  // insert end of group handle  
+              s[13] = cp->lasthandle & 0xFF;
+              s[14] = (cp->lasthandle >> 8) & 0xFF;
+              }
             if(size > LEDATLEN)
               size = LEDATLEN;
             for(n = 0 ; n < size ; ++n)
               s[13+n+dn] = cp->value[n];
             flag = 1; 
-            // 10 eog = FFFF
             }
+          else if(handle == cp->chandle-2 && (aflag == 2 || ((cp->psn & 0x10000) != 0 && uuidtype == 2 && dat[5] == 0x00 && dat[6] == 0x28)))
+            {  // 16b PS
+            size = 16;
+            if(dn != 0)
+              {  // insert end of group handle  
+              s[13] = cp->lasthandle & 0xFF;
+              s[14] = (cp->lasthandle >> 8) & 0xFF;
+              }
+            psn = (cp->psn & 0xFFFF) << 4;
+            for(n = 0 ; n < 16 ; ++n)
+              s[28-n+dn] = dev[0]->primaryuuid[psn+n];
+            flag = 1;
+            }
+           
           startx = handle + 1;
           }
         }
@@ -6702,10 +7073,17 @@ void leserver(int ndevice,int count,unsigned char *dat)
     lemtu[PAKHEADSIZE+11] = (unsigned char)(((LEDATLEN + 3) >> 8) & 0xFF);
     sendhci(lemtu,ndevice);
     dev[ndevice]->setdatlen = LEDATLEN;
+    }
+  else if(dat[0] == 0x1E)
+    {
+    cmd[0] = 0x1E;
+    cmd[1] = 0;
+    pushins(IN_LEACK,ndevice,2,cmd);
+    // indicate ack
     }  
   else if(xflag == 0)
     { // request not supported
-    if(!(dat[0] == 0x03 || dat[0] == 0x1B || dat[0] == 0x1D || dat[0] == 0x1E || dat[0] == 0xD2 || dat[0] == 0x52))
+    if(!(dat[0] == 0x03 || dat[0] == 0x1B || dat[0] == 0x1D || dat[0] == 0xD2 || dat[0] == 0x52))
       {
       VPRINT "Opcode not supported\n");
       errcode = 0x06;
@@ -6730,7 +7108,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
 
 int nextctichandle(int start,int end,int *handle)
   {
-  int n,cticn,minhandle,del,notdel;
+  int n,cticn,minhandle,del,del0,notdel;
   struct cticdata *cp;
   
   *handle = 0;
@@ -6743,7 +7121,11 @@ int nextctichandle(int start,int end,int *handle)
     notdel = 0;
     if((cp->perm & 0x30) != 0)
       notdel = 1;  // include next handle notify control
-    for(del = -1 ; del <= notdel ; ++del)
+    if((cp->psn & 0x10000) != 0 && (cp->psn & 0xFFFF) != 0)
+      del0 = -2;  // include PS for psn > 0
+    else
+      del0 = -1;  // always include INFO
+    for(del = del0 ; del <= notdel ; ++del)
       {
       if(cp->chandle+del >= start && cp->chandle+del <= end)
         {
@@ -6751,7 +7133,7 @@ int nextctichandle(int start,int end,int *handle)
           {
           minhandle = cp->chandle+del;
           cticn = n;
-          *handle = minhandle;
+          *handle = minhandle;  // 4 possible handles for cticn
           }
         }
       }  
@@ -6768,7 +7150,7 @@ void rwlinkey(int rwflag,int ndevice)
   static char fname[256]; 
   static int count = -1;
   static int delflag = 0;
-  static char *table;
+  static unsigned char *table;
 
   if(count < 0)
     {  // first read
@@ -6804,11 +7186,11 @@ void rwlinkey(int rwflag,int ndevice)
       n = 0;
       count = fgetc(stream);
       k = count*22;
-      table = (char *)malloc(k);
+      table = (unsigned char *)malloc(k);
 
       if(table == NULL)
         n = 1;
-      else if(fread(table,1,k,stream) != k)
+      else if(fread(table,1,k,stream) != (unsigned int)k)
         n = 1;
 
       fclose(stream);
@@ -6945,10 +7327,10 @@ void rwlinkey(int rwflag,int ndevice)
 
   
 
-void printascii(char *s,int len)
+void printascii(unsigned char *s,int len)
   {
   int n,flag;
-  char buf[64],sav;
+  char buf[64];
   
   if(gpar.printflag != PRINT_VERBOSE || len == 0)
     return;
@@ -6983,9 +7365,9 @@ void printascii(char *s,int len)
   }
 
 
-int meshpacket(char *s)
+int meshpacket(unsigned char *s)
   {
-  int k,ndevice,repn,retval;
+  int ndevice,repn,retval;
   unsigned int index;
   unsigned char *rp;
   struct devdata *dp;
@@ -7017,7 +7399,7 @@ int meshpacket(char *s)
     // rp[15] = data
          
     if(rp[10] == 0xFF && (rp[11] ==  ((rp[2] ^ rp[3]) ^ rp[4]) )  &&
-                         (rp[12] == (((rp[5] ^ rp[6]) ^ rp[7]) ) | 0xC0 ) )
+                         (rp[12] == (((rp[5] ^ rp[6]) ^ rp[7])  | 0xC0) ) )
       {  // is a mesh packet
       index = rp[13] + (rp[14] << 8);
      
@@ -7186,7 +7568,7 @@ pop all type = INS_POP
 
 void popins()
   {
-  int n,k,j,lastffn,lastn,del,lastwasff,count;
+  int n,k,lastffn,lastn,lastwasff,count;
   
   // find last FF pop type
   do
@@ -7229,8 +7611,7 @@ void popins()
                      // k is start of first active entry after lastffn
                      // n is last entry terminate 0 
         // move all entries from k and above down to lastffn by (k-lastffn)
-        del = k - lastffn;
-   
+         
         while(k <= n)  // n is final entry type 0 terminate
           {
           instack[lastffn] = instack[k];
@@ -7320,7 +7701,7 @@ void printins()
   
   count= 1;
   n = 0;
-  NPRINT "**INSTACK** \n");
+  NPRINT "**INSTACK** CSP=%d\n",cmd_stack_ptr());
   flushprint();
   while(instack[n] != INS_FREE)
     {
@@ -7374,7 +7755,6 @@ int hcisock()
   {
   int dd;
   struct sockaddr_hci sa;
-  struct hci_filter flt;
 
   if(gpar.hci > 0)
     return(1);
@@ -7422,7 +7802,8 @@ int hcisock()
   statusok(0,setcto);
   sendhci(setpto,0);  // page timeout = 10 sec
   statusok(0,setpto);
-      
+  sendhci(lesuggest,0);
+  statusok(0,lesuggest);    
   VPRINT "HCI Socket OK\n");
   flushprint();
   return(1);
@@ -7444,13 +7825,6 @@ int openremotesdp(int ndevice)
   
 int openremotesdpx(int ndevice)
   {
-  int n,sockflags,retval,serr,len,blockflag;
-  struct sockaddr_l2 sa;
-  int status,s;
-  char *c,*b;
-  fd_set wrset;
-  struct timeval tv;
- 
   NPRINT "Connecting to %s to read classic serial services...\n",dev[ndevice]->name);
 
   if(clconnect0(ndevice) != 0)
@@ -7591,7 +7965,7 @@ int clconnect0(int ndevice)
  
   VPRINT "Set simple pair mode on\n");
   sendhci(setspm,ndevice);
-  statusok(0,setspm);
+  // statusok(0,setspm);
 
   savto = gpar.timout;
   gpar.timout = 10000;  // 10s time out
@@ -7614,7 +7988,7 @@ int clconnect0(int ndevice)
 
 int clconnectxx(int ndevice)
   {
-  int n,k,tryflag;
+  int n,tryflag;
   struct devdata *dp;
   
     
@@ -7643,7 +8017,7 @@ int clconnectxx(int ndevice)
   if(dp->conflag == 0)
     {
     sendhci(clcancel,ndevice);  // cancel open command
-    statusok(1,clcancel);
+    //statusok(1,clcancel);
     NPRINT "Open failed\n");
     return(0);
     }
@@ -7829,8 +8203,8 @@ UUID
   
 int clservices(int ndevice,int flags,char *uuid)
   {
-  int n,j,k,retval,ncont,sn,savto,locndevice,type;
-  int headsz,locuuid,getout,savpf,flag;
+  int n,j,k,ncont,sn,savto,locndevice,type;
+  int headsz,getout,savpf,flag;
   struct devdata *dp;
   unsigned char *cmd,*dat;
   unsigned char sdat[8192];
@@ -8052,7 +8426,7 @@ int clservices(int ndevice,int flags,char *uuid)
     if(flags == SRVC_UUID)
       savpf = set_print_flag(PRINT_VERBOSE);  // verbose during decodesdp
     
-    retval = decodesdp(sdat,sn,serv,SERVDAT);
+    decodesdp(sdat,sn,serv,SERVDAT);
     flushprint();
     
     if(flags == SRVC_UUID)
@@ -8221,7 +8595,7 @@ int leservices(int ndevice,int flag,char *uuid)
   {
   int n,n0,k,j,len,lasth,num,count,getout;
   int loop,chn,locuuid,cancelflag,failcount;
-  unsigned char *cmd,buf[8];
+  unsigned char *cmd;
   struct servicedata serv[SERVDAT];
   struct cticdata *cp;
  
@@ -8323,7 +8697,6 @@ int leservices(int ndevice,int flag,char *uuid)
           if(flag == SRVC_READCTICS)
             {    // UUID = 2803 characteristics      
                  // 2803 data = perm/handle/uuid of characteristic
-            //if((insdatn[n0+2] & 0x0E) != 0)   // r/w permissions
             if(insdatn[n0+2] != 0)   // r/w permissions
               { 
               // handle of value                    
@@ -8508,7 +8881,7 @@ int find_ctic_index(int node,int flag,char *uuid)
 
 int printctics1(int ndevice)
   {
-  int k,j,pn,count,len,del;
+  int k,j,pn,count,len,del,psn;
   struct cticdata *cp;
   
   static char *permsn[16] = {" ? ","r  ","w  ","rw ","wa ","rwa"," ? "," ? ","n  ","rn ","wn ","rwn","wan","rwan","??n","??n"  };
@@ -8523,6 +8896,15 @@ int printctics1(int ndevice)
     if(dev[ndevice]->type == BTYPE_LE)
       NPRINT "     No characteristics - Read services to find\n");
     return(0);
+    }
+  
+  if(ndevice == 0)
+    {
+    psn = 0;  // primary service index
+    NPRINT "   PRIMARY SERVICE = ");
+    for(j = 0 ; j < 16 ; ++j)
+      NPRINT "%02X",dev[ndevice]->primaryuuid[j]);
+    NPRINT "\n");
     }
     
   NPRINT "   ctic\n");
@@ -8544,8 +8926,18 @@ int printctics1(int ndevice)
         perms = permsi;  // indicate  
       }                   
     len = strlen(cp->name);                 
-                     
+    
+    if(ndevice == 0 && (cp->psn & 0xFFFF) != psn)
+      {
+      psn = cp->psn & 0xFFFF;
+      NPRINT "        PRIMARY SERVICE = ");
+      for(j = 0 ; j < 16 ; ++j)
+        NPRINT "%02X",dev[ndevice]->primaryuuid[(psn << 4) + j]);
+      NPRINT "\n");
+      }                 
+
     NPRINT "     %d  %s",k,cp->name);
+     
     if(len < 20)
       del = 20 - len;
     else
@@ -8734,9 +9126,10 @@ int finduuidtext(int uuid2)
 
 int savectic(int devicen,struct servicedata *serv,int servlen)
   {
-  int n,handle,k,j,uuidtype,flag; 
+  int n,handle,k,j,uuidtype; 
   struct cticdata *cp; 
-  char *errs,buf[256];
+  char *errs;
+  unsigned char buf[256];
 
   if(devokp(devicen) == 0 || serv[0].channel == 0)
     return(0);
@@ -8898,23 +9291,28 @@ int setlelen(int ndevice,int len,int flag)
   {
   int xlen;  
 
+  if(gpar.btleflag != 0)
+    return(0);
+
+  VPRINT "Set larger data length\n");  
+  sendhci(datlenset,ndevice);
+
   if(len > LEDATLEN)
     xlen = LEDATLEN;
   else
     xlen = len;
 
-  if(xlen <= dev[ndevice]->setdatlen)
-    return(0);
-        
-  VPRINT "Set larger data size %d\n",xlen);  
-  dev[ndevice]->setdatlen = xlen;
-  xlen += 3;  
-  mtuset[PAKHEADSIZE+10] = (unsigned char)(xlen & 0xFF);
-  mtuset[PAKHEADSIZE+11] = (unsigned char)((xlen >> 8) & 0xFF);
-  sendhci(mtuset,ndevice);
-  
-  // flag = 1 OK to call readhci   
-        
+  if(xlen > dev[ndevice]->setdatlen && flag != 0 && 
+         !(dev[ndevice]->type == BTYPE_ME && (dev[ndevice]->conflag & CON_LE) == 0) )
+    {  // not for node connect       
+    VPRINT "Set MTU\n");  
+    dev[ndevice]->setdatlen = xlen;
+    xlen += 3;  
+    mtuset[PAKHEADSIZE+10] = (unsigned char)(xlen & 0xFF);
+    mtuset[PAKHEADSIZE+11] = (unsigned char)((xlen >> 8) & 0xFF);
+    sendhci(mtuset,ndevice);
+    }
+          
   return(0);  
   }
 
@@ -8927,7 +9325,7 @@ psm = 1  control for readservices
       
 int connectpsm(int psm,int channel,int ndevice)
   {
-  int n,n0,okflag,count;
+  int n,n0;
   struct devdata *dp;
 
  
@@ -8955,13 +9353,11 @@ int connectpsm(int psm,int channel,int ndevice)
   sendhci(conpsm1,ndevice);
 
   readhci(ndevice,IN_L2REPCT,0,gpar.timout,gpar.toshort);
-
- 
-  okflag = 0;     
+  
   n = findhci(IN_L2REPCT,ndevice,INS_POP);
   if(n < 0)  
     {
-    NPRINT "NO L2 connect reply %d %d\n",okflag,count);
+    NPRINT "NO L2 connect reply\n");
     return(0);
     }
     
@@ -9006,7 +9402,6 @@ int connectpsm(int psm,int channel,int ndevice)
 
 int disconnectl2(int ndevice,int psm)
   {
-  int n;
   struct devdata *dp;
   
   dp = dev[ndevice];
@@ -9052,8 +9447,6 @@ int disconnectl2(int ndevice,int psm)
 
 void classic_scan()
   {
-  int n,savto;
-
   clscanx();
   flushprint();
   } 
@@ -9125,7 +9518,7 @@ void clscanx()
         if(j < 0)
           {   // no name
           k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
-          if(k > 0 && bincmp(dev[k]->name,"LE node 1",9,DIRN_FOR) == 0)
+          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"LE node 1",9,DIRN_FOR) == 0)
             strcpy(buf,dev[k]->name);  // is also LE with name
           else
             {
@@ -9152,7 +9545,7 @@ void clscanx()
               if((dev[k]->matchname & 1) != 0)
                 {  // MATCH_NAME
                 flag = 1;
-                for(j = 0 ; j < strlen(dev[k]->name) && flag != 0 ; ++j)
+                for(j = 0 ; j < (int)strlen(dev[k]->name) && flag != 0 ; ++j)
                   {
                   if(dev[k]->name[j] != buf[j])
                     flag = 0;
@@ -9176,7 +9569,7 @@ void clscanx()
           if(flag == 0)
             {
             k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
-            if(k > 0 && bincmp(dev[k]->name,"LE node 1",9,DIRN_FOR) != 0)
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"LE node 1",9,DIRN_FOR) != 0)
               strcpy(dev[k]->name,buf);  // is also LE without name
             }
           }
@@ -9227,8 +9620,8 @@ re-entrant for mulitple des levels
   
 int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,int aidflag,int record,unsigned int callaid)
   {
-  int k,type,size,loop,textflag,ntogo,locaidflag,aidflip,loclevel,prflag,getout,uuidn;
-  unsigned int datlen,uuid;
+  int k,type,size,loop,textflag,ntogo,locaidflag,aidflip,loclevel,prflag,uuidn;
+  unsigned int j,datlen,uuid;
   unsigned char *s;
   static int szlook[8] = {1,2,4,8,16,101,102,104};
    
@@ -9380,14 +9773,14 @@ int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,in
           
       if(sdpp->aid == 0x0100 && (type == 4 || type == 8) && sdpp->chdn >= 0 && sdpp->nameflag != 0)
         {    // aid = 0100 service name text
-        k = 0;
-        while(k < datlen && k < 62)   // data[64]
+        j = 0;
+        while(j < datlen && j < 62)   // data[64]
           {       
-          sdpp->serv[sdpp->chdn].data[k+1] = s[k];  // name to data[1]...
-          ++k;
+          sdpp->serv[sdpp->chdn].data[j+1] = s[j];  // name to data[1]...
+          ++j;
           }
-        sdpp->serv[sdpp->chdn].data[k+1] = 0;
-        sdpp->serv[sdpp->chdn].data[0] = k;  // length to data[0]
+        sdpp->serv[sdpp->chdn].data[j+1] = 0;
+        sdpp->serv[sdpp->chdn].data[0] = j;  // length to data[0]
        
         sdpp->nameflag = 0;
         }
@@ -9397,18 +9790,18 @@ int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,in
         textflag = 0;
         if(type == 4 || type == 8)
           textflag = 1;
-        for(k = 0 ; k < datlen && prflag != 0; ++k)
+        for(j = 0 ; j < datlen && prflag != 0; ++j)
           {
           if(textflag == 0)
             {
-            VPRINT "%02X ",s[k]);
-            if( ((k+1) % 20) == 0)
+            VPRINT "%02X ",s[j]);
+            if( ((j+1) % 20) == 0)
               VPRINT "\n");
             }
           else
             {
-            VPRINT "%c",s[k]);
-            if( ((k+1) % 40) == 0)
+            VPRINT "%c",s[j]);
+            if( ((j+1) % 40) == 0)
               VPRINT "\n");
             }
           }
@@ -9662,7 +10055,7 @@ int sconnectx(int ndevice)
 
 int write_node(int node,unsigned char *outbuff,int count)
   {
-  int n,xlength,datn,nwrit,retval,flag,ndevice,pflag;
+  int n,xlength,datn,retval,flag,ndevice,pflag;
   unsigned char *bs,*dat;
   char buf[128],xbuf[8];
 
@@ -9703,7 +10096,8 @@ int write_node(int node,unsigned char *outbuff,int count)
     dat = attdata + PAKHEADSIZE + 9;
     for(n = 0 ; n < count ; ++n)
       dat[n] = outbuff[n];
-    sendhci(attdata,ndevice);     
+    sendhci(attdata,ndevice);
+    readhci(0,0,0,0,0);     
     return(count);
     } 
       
@@ -9796,6 +10190,7 @@ int write_node(int node,unsigned char *outbuff,int count)
   VPRINT "  Set [%d].. %d data bytes %02X..\n",datn,count,dat[0]);
   flushprint();
   retval = sendhci(blusend,ndevice);
+  readhci(0,0,0,0,0);
   flushprint();
   if(retval == 0)
     return(0);
@@ -9824,7 +10219,7 @@ int read_node_endchar(int node,char *buf,int bufsize,char endchar,int exitflag,i
 
 int read_all_endchar(int *node,char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
   {
-  int locnode,ndevice,retval;
+  int locnode,retval;
   
   locnode = FROM_ALLCON;
   retval = readserial(&locnode,buf,bufsize,endchar,(exitflag & 3) | EXIT_CHAR,timeoutms);
@@ -9839,7 +10234,7 @@ int read_all_endchar(int *node,char *buf,int bufsize,char endchar,int exitflag,i
 
 int read_mesh(int *node,char *buf,int bufsize,int exitflag,int timeoutms)
   {
-  int ndevice,locnode,retval;
+  int locnode,retval;
  
   locnode = FROM_MESH;
   retval = readserial(&locnode,buf,bufsize,0,(exitflag & 3),timeoutms);
@@ -9861,7 +10256,7 @@ int read_error()
 void read_node_clear(int node)
   {
   int n,ndevice;
-  char temp;        
+       
     
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -9911,7 +10306,7 @@ void read_notify(int timeoutms)
     readhci(0,0,0,tox,0);
     key = readkey();
     }
-  while(timems(TIM_RUN) - tim0 < to && key != 'x');
+  while(timems(TIM_RUN) - tim0 < (unsigned int)to && key != 'x');
   timems(TIM_FREE);
   setkeymode(kmsav);
   return;
@@ -9921,8 +10316,7 @@ void read_notify(int timeoutms)
 
 int readserial(int *node,char *inbuff,int count,char endchar,int flag,int timeoutms)
   {
-  int n,nread,meshcon,clcon,onedevn,getout,ndevice,oldkm;
-  unsigned int timstart;
+  int n,nread,meshcon,clcon,onedevn,ndevice,oldkm;
 
   gpar.readerror = ERROR_FATAL;  // fatal error
 
@@ -10019,8 +10413,9 @@ int readserial(int *node,char *inbuff,int count,char endchar,int flag,int timeou
         
 int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeoutms)
   {
-  int n,k,len,getout,devicen,oneloop,flag,gotn,ndev,meshflag;
-  char lastchar,*dat;
+  int n,k,len,getout,devicen,flag,gotn,ndev,meshflag;
+  char lastchar;
+  unsigned char *dat;
   unsigned int timstart;
      
 
@@ -10041,7 +10436,6 @@ int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeo
   flag = inflag;
   lastchar = 0;
   timstart = timems(TIM_LOCK);
-  oneloop = 0;  // stop immediate exit until done one read
 
   do  // until exit from within loop
     {
@@ -10056,10 +10450,10 @@ int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeo
           {
           ndev = instack[n+3];  // from device 
           
-          if(devok(ndev) != 0 &&
-              ( (*ndevice & FROM_MESH)    != 0 && dev[ndev]->type == BTYPE_ME)  ||
-              ( (*ndevice & FROM_CLCON)   != 0 && (dev[ndev]->conflag & CON_RF) != 0) ||
-              ( (*ndevice & FROM_MESHCON) != 0 && (dev[ndev]->conflag & CON_MESH) != 0)  )
+          if( (devok(ndev) != 0) &&
+            (  ( ((*ndevice & FROM_MESH)    != 0) && (dev[ndev]->type == BTYPE_ME)        ) ||
+              ( ((*ndevice & FROM_CLCON)   != 0) && (dev[ndev]->conflag & CON_RF ) != 0  ) ||
+              ( ((*ndevice & FROM_MESHCON) != 0) && (dev[ndev]->conflag & CON_MESH ) != 0) ) )
             {  // read from this device
             devicen = ndev;
             *ndevice = devicen;      // return found device
@@ -10141,7 +10535,7 @@ int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeo
 
     if( (flag & EXIT_TIMEOUT) != 0)
       {
-      if(timems(TIM_RUN) - timstart > timeoutms)
+      if(timems(TIM_RUN) - timstart > (unsigned int)timeoutms)
         {
         VPRINT "Serial read time out\n");
         gpar.readerror = ERROR_TIMEOUT;
@@ -10165,7 +10559,6 @@ int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeo
     
     readhci(devicen,IN_DATA,0,25,0);   
 
-    oneloop = 1;
     flushprint();
               
     }  // loop to read IN_DATA or another readhci
@@ -10612,21 +11005,21 @@ return number of values in val[] array
 
 *************************/
 
-char *strtohex(char *s,int *num)
+unsigned char *strtohex(char *s,int *num)
   {
   return(strtohexx(s,strlen(s),num));
   }
 
-char *strtohexx(char *s,int slen,int *num)
+unsigned char *strtohexx(char *s,int slen,int *num)
   {
   int n,j,j0,k,vn,flag,count,xcount,hxcount,errflag;
-  char *val;
+  unsigned char *val;
   static int del[4] = {0,'0','a'-10,'A'-10};
-  static char val0[64];
-  static char val1[64];
-  static char val2[64];
-  static char val3[64];
-  static char *valx[4] = { val0,val1,val2,val3 };
+  static unsigned char val0[64];
+  static unsigned char val1[64];
+  static unsigned char val2[64];
+  static unsigned char val3[64];
+  static unsigned char *valx[4] = { val0,val1,val2,val3 };
   static int valn = 0;
 
   val = valx[valn];
@@ -10819,33 +11212,43 @@ int readline(FILE *stream,char *s)
 
 void readleatt(int node,int handle)
   {
-  int n,k,uuidtype,ndevice;
+  int n,k,len,uuidtype,ndevice,flag;
   char s[64],sx[8];
+  unsigned char *bd,bdat[256];
   
   static unsigned char opx2[32] = {16,0,S2_HAND,0,2,0x40,0,11,0,7,0,4,0,0x10,0x01,0,0x01,0x00,0x00,0x2A};     
   static unsigned char opx16[40] = {30,0,S2_HAND,0,2,0x40,0,25,0,21,0,4,0,0x10,0x01,0,0x01,0x00,
                                         0x00,0xFF,0xEE,0xDD,0xCC,0xBB,0xAA,0x99,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11};   
   static unsigned char op4[32] = {14,0,S2_HAND,0,2,0x40,0,9,0,5,0,4,0,0x04,0x01,0,0x01,0x00};     
   static unsigned char opa[20] = {12,0,S2_HAND,0,2,0x40,0,7,0,3,0,4,0,0x0A,0x12,0};  
- 
+
   ndevice = devn(node);
   if(ndevice < 0)
     return;
      
+  bd = NULL;
   read_all_clear();
   
   opa[14] = handle;
   sendhci(opa,ndevice);
-  readhci(0,0,0,500,0);
+  readhci(ndevice,IN_ATTDAT,0,2000,0);      
   n = findhci(IN_ATTDAT,ndevice,INS_POP);
-  
+  if(n >= 0 && insdat[n] == 0x0B)
+    {
+    len = instack[n+1]+(instack[n+2] << 8);
+    NPRINT "%02X size %d\n",insdat[n],len);
+    printval(insdat+n+1,len-1,NULL);
+    for(k = 0 ; k < len && k < 256 ; ++k)
+      bdat[k] = insdat[k];
+    bd = bdat+1;  
+    }    
  
   op4[14] = handle;
   op4[16] = handle;
   sendhci(op4,ndevice);  
-  readhci(0,0,0,500,0);
+  readhci(ndevice,IN_ATTDAT,0,2000,0);      
   n = findhci(IN_ATTDAT,ndevice,INS_POP);
-  if(n < 0)
+  if(n < 0 || insdat[n] != 0x05)
     return;
 
   uuidtype = 0;
@@ -10868,9 +11271,8 @@ void readleatt(int node,int handle)
       }
     }
     
-  NPRINT "UUID = %s\n",s);
-  flushprint();
-  
+  NPRINT "%02X H=%02X%02X UUID=%s\n",insdat[n],insdat[n+3],insdat[n+2],s);
+   
   if(uuidtype == 2)
     {
     opx2[14] = handle;
@@ -10880,13 +11282,23 @@ void readleatt(int node,int handle)
     
     opx2[13] = 0x08;
     sendhci(opx2,ndevice);
-    readhci(0,0,0,500,0);
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
     n = findhci(IN_ATTDAT,ndevice,INS_POP);
-
+    if(n >= 0 && insdat[n] == 0x09)
+      {
+      NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
+      printval(insdat+n+4,insdat[n+1]-2,bd);
+      }
+      
     opx2[13] = 0x10;
     sendhci(opx2,ndevice);
-    readhci(0,0,0,500,0);
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
     n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    if(n >= 0 && insdat[n] == 0x11)
+      {
+      NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
+      printval(insdat+n+6,insdat[n+1]-4,bd);
+      }
     }
   else if(uuidtype == 16)
     {
@@ -10896,15 +11308,57 @@ void readleatt(int node,int handle)
       opx16[k+18] = insdat[n+k+4];
   
     opx16[13] = 0x08;
-    sendhci(opx16,devn(node));
-    readhci(0,0,0,500,0);
+    sendhci(opx16,ndevice);
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
     n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    if(n >= 0 && insdat[n] == 0x09)
+      {
+      NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
+      printval(insdat+n+4,insdat[n+1]-2,bd);
+      }
   
     opx16[13] = 0x10;
-    sendhci(opx16,devn(node));
-    readhci(0,0,0,500,0);      
+    sendhci(opx16,ndevice);
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
     n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    if(n >= 0 && insdat[n] == 0x11)
+      {
+      NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
+      printval(insdat+n+6,insdat[n+1]-4,bd);
+      }
     }
-    
+  
+  flushprint();    
   popins();
+  }
+
+
+void printval(unsigned char *s,int len,unsigned char *t)
+  {
+  int n,flag;
+  
+  NPRINT "   V =");
+  for(n = 0 ; n < len && n < 20 ; ++n)
+    NPRINT " %02X",s[n]);
+  if(len > 20)
+    NPRINT "...\n");
+  else
+    NPRINT "\n");
+
+  if(t == NULL)
+    return;
+    
+  flag = 0;
+  for(n = 0 ; n < len && flag == 0 && n < 256 ; ++n)
+    {
+    if(s[n] != t[n])
+      flag = 1;
+    }
+  if(flag == 0)
+    NPRINT "   V match OK\n");
+  else
+    NPRINT "   V match FAIL\n");
+
+
+  flushprint();
   }

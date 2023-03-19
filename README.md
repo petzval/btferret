@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 8*
+*Version 9*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -19,6 +19,7 @@ btferret/btlib Bluetooth Interface
     - [3.10 sample.c](#3-10-sample)
     - [3.11 BeetleIN server](#3-11-beetlein-server)
     - [3.12 Blue Dot server](#3-12-blue-dot-server)
+    - [3.13 File transfer](#3-13-file-transfer)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
     - [4.2 Functions](#4-2-functions)    
@@ -89,10 +90,12 @@ btferret/btlib Bluetooth Interface
         - [5.4.1 Windows COM port](#5-4-1-windows-com-port)
         - [5.4.2 Windows Sockets](#5-4-2-windows-sockets)
         - [5.4.3 Android](#5-4-3-android)
+        - [5.4.4 Python](#5-4-4-python)
     - [5.5 Client Code](#5-5-client-code)
         - [5.5.1 Windows COM port](#5-5-1-windows-com-port)
         - [5.5.2 Windows Sockets](#5-5-2-windows-sockets)
         - [5.5.3 Android](#5-5-3-android)        
+        - [5.5.4 Python](#5-5-4-python)        
         
 - [6 Documentation References](#6-documentation-references)
 
@@ -403,10 +406,11 @@ btferret set up as a node or classic server (via s).
 
 ```
 p - Ping a server for OK reply
-f - Send a file to a server
+f - Send a file to a server, or get a file from a server
 D - Tell a server (or all mesh servers) to disconnect
 ```
 
+File transfer (f) will also work when connected to a device running filetransfer.py.
 The following sections describe how to use these commands to 
 establish connections and exchange data. They also show how to do the
 same thing with your own C code rather than via btferret.c.
@@ -445,10 +449,23 @@ DEVICE = My other Pi  TYPE=MESH NODE=2 ADDRESS=B8:27:EB:F1:50:C3
   ; characteristics when acting as an LE server - see le_server() documentation
   LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=8   ; index 0 r/w no ack 8 bytes 
   LECHAR=Detector HANDLE=0007  PERMIT=06  SIZE=2   ; index 1 r/w no ack 2 bytes
-                                                   ; the UUID will be allocated automatically
+               ; UUIDs of above characteristics will be allocated automatically
   LECHAR=Control  permit=06 size=4 UUID=11223344-5566-7788-99AA-BBCCDDEEFF00
-                                       ; UUID only - the handle will be allocated automatically 
-  
+               ; UUID specified - the handle will be allocated automatically 
+                                       
+DEVICE = LE server Pi   TYPE=MESH NODE=10 ADDRESS=B6:15:EB:F5:50:33   
+     ; for LE server with specified primary service UUIDs
+     ; specify characteristic UUIDs and let the system allocate handles                                   
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00  ; 16-byte UUID
+  LECHAR=Dog     PERMIT=06  SIZE=8 UUID=1111 
+  LECHAR=Cat     PERMIT=06  SIZE=8 UUID=2222     
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF01
+  LECHAR=Vole     PERMIT=06  SIZE=8 UUID=3333    
+  LECHAR=Gerbil   PERMIT=06  SIZE=8 UUID=4444     
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF02    
+  LECHAR=Hamster  PERMIT=06  SIZE=8 UUID=5555    
+  LECHAR=Pig      PERMIT=06  SIZE=8 UUID=6666    
+    
 DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C    ; Fixed address
   LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; characteristic index 0
   LECHAR=Control handle=000E PERMIT=06 SIZE=1   ;                index 1
@@ -501,10 +518,11 @@ will be an LE server (but still type=MESH) see [le server](#4-2-17-le\_server) f
 
 ```
 LECHAR = Characteristic name of your choice
-HANDLE = 000B     2-byte handle in hex - can be automatically allocated
-PERMIT = 06       Permissions in hex
-SIZE = 1          Number of bytes in decimal. Range = 1 to 244
-UUID = 2A00       Not needed if HANDLE specified - can be automatically allocated
+HANDLE = 000B  2-byte handle in hex - can be automatically allocated
+PERMIT = 06    Permissions in hex
+SIZE = 1       Number of bytes in decimal. Range = 1 to 244
+UUID = 2A00    Not needed if HANDLE specified -
+               can be automatically allocated
 UUID = 11223344-5566-7788-99AA-BBCCDDEEFF00    16-byte UUID
 ```
 
@@ -532,6 +550,17 @@ LECHAR=Name  UUID=11223344-5566-7788-99AABBCCDDEEFF00
 
 With this minimum information, when the characteristic is read via find\_ctics or
 read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
+
+For an LE server, primary service UUIDs can be specified as follows. These entries should be on a separate line, with
+no other entries on the same line. This is optional - if a primary service UUID is not specified, it
+will be allocated automatically.
+
+```
+PRIMARY_SERVICE = 11223344-5566-7788-99AA-BBCCDDEEFF00 
+                         16-byte primary service UUID
+                         (optional - for LE servers)
+```
+
 
 ### Match Name
 
@@ -716,7 +745,10 @@ DEVICE=Windows PC  type=classic node=4 address=00:1A:7D:DA:71:13
 
 classic_server(4,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
 
-
+  // or to allow any device to connect rather than a specified node
+  
+classic_server(ANY_DEVICE,classic_callback,10,KEY_ON | PASSKEY_LOCAL);  
+  
 // This classic_callback routine receives packets sent by the client.
 // It works the same way for NODE and CLASSIC connections so the 
 // same code can be used for both.
@@ -1482,7 +1514,14 @@ before starting the Blue Dot app. Run bluedot and follow the help instructions. 
 the Pi will display the commands as the buttons are tapped, and the bdotserver() code in bluedot.c
 may be customised for the desired application.
 
+## 3-13 File Transfer
 
+Two devices running btferret can exchange files (f command). The client can send a file to the server, or get a 
+file from the server. The distribution also includes a filetransfer.py Python file that should run 
+on any Python+Bluetooth capable machine (Windows requires Python 3.9 or later). Its file transfer protocol
+is compatible with btferret's. It can act as a client or a server for another machine running btferret. The
+server listens on RFCOMM channel 16, so when connecting from btferret, connect as a classic client and
+specify channel 16. 
 
 
 ## 4 btlib Library 
@@ -1542,6 +1581,7 @@ These library functions are in btlib.c/btlib.h.
 ```
 classic_scan()
 classic_server(node,classic_callback,endchar,keyflag)
+    node = specified node number or ANY_DEVICE
     keyflag = KEY_ON,KEY_OFF  or  PASSKEY_OFF,PASSKEY_LOCAL,PASSKEY_REMOTE
     classic_callback(node,data[],datlen)
 close_all()
@@ -1626,7 +1666,7 @@ int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag)
 ```
 
 Sets up the local device as a classic server that waits for 
-a specified client (clientnode) to pair or connect, then spends all its time listening
+a specified client (clientnode) or any device to pair or connect, then spends all its time listening
 for packets sent from that client. The client may be a Windows/Android/.. device (maybe
 running a Bluetooth terminal program), or another Mesh Pi acting as a classic client
 and connecting via [connect\_node()](#4-2-4-connect\_node). The packets must have the specified
@@ -1654,6 +1694,7 @@ PARAMETERS
 
 ```
 clientnode = Node number of the client that will connect
+             or ANY_DEVICE (does not need to be in the devices file)
 callback() = Callback function that deals with the received packets
 endchar = termination character of packets sent by the client
 keyflag = Flags to specify the security requirements of the connecting client:
@@ -1762,6 +1803,9 @@ an example of data exchange inside the callback function, and sending an
    // listen for packets from node 4 (another Mesh Pi) with termination character 10
    // do not use a link key or passkey for Pi-Pi connections
 classic_server(4,classic_callback,10,KEY_OFF | PASSKEY_OFF);
+
+   // listen for any device to connect
+classic_server(ANY_DEVICE,classic_callback,10,KEY_ON | PASSKEY_LOCAL);   
 
       // listen for pairing or connection requests from node 2, an
       // Android/Windows.. device. The remote device may pop up a box
@@ -2489,6 +2533,21 @@ DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=Control  PERMIT=06  SIZE=2                ; index 5 Handle and UUID will be assigned automatically 
                                                      (but other Mesh Pis will report this as an error in 
                                                       their devices.txt file - they need a handle or a UUID.)
+
+  In the above case there will be one automatically allocated primary service UUID.
+  As an option, primary service UUIDs can be specified. In this case, specify characteristic
+  UUIDs and let the system allocate handles automatically:
+
+DEVICE = LE server Pi   TYPE=MESH NODE=10 ADDRESS=B6:15:EB:F5:50:33                                   
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00  ; must be 16-byte UUID
+  LECHAR=Dog     PERMIT=06  SIZE=8 UUID=1111    
+  LECHAR=Cat     PERMIT=06  SIZE=8 UUID=2222     
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF01
+  LECHAR=Vole     PERMIT=06  SIZE=8 UUID=3333    
+  LECHAR=Gerbil   PERMIT=06  SIZE=8 UUID=4444     
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF02    
+  LECHAR=Hamster  PERMIT=06  SIZE=8 UUID=5555    
+  LECHAR=Pig      PERMIT=06  SIZE=8 UUID=6666
 ```
 
 
@@ -3551,7 +3610,7 @@ set_print_flag(savflag);  // restore original setting
 ## 4-2-39 strtohex
 
 ```c
-char *strtohex(char *s,int *nbytes)
+unsigned char *strtohex(char *s,int *nbytes)
 ```
 
 Convert an ascii string in hex format to an array of byte values. This can
@@ -3587,7 +3646,7 @@ SAMPLE CODE
 
 ```c
 int n,count,channel;
-char *dat;
+unsigned char *dat;
 
 dat = strtohex("1122334455",&count);
 for(n = 0 ; n < count ; ++n)
@@ -5127,6 +5186,10 @@ SEND UA reply
 < RFCOMM Address:Opcode = 0B:73
       0000  02 0B 00 08 00 04 00 41 - 00 0B 73 01 92 
 
+Clients will send E3/E1 MSC (modem status) commands
+and maybe also 93/91 RPN (remote port negotiation).
+Reply to each by sending back the same data.
+
 > CONTROL Address:Opcode 03:EF
       0000  02 0B 20 0C 00 08 00 43 - 00 03 EF 09 E3 05 0B 8D 
       0010  70 
@@ -5154,6 +5217,33 @@ SEND MSC reply
 < CONTROL Address:Opcode = 01:EF
       0000  02 0B 00 0C 00 08 00 41 - 00 01 EF 09 E1 05 0B 8D 
       0010  AA 
+      
+Some clients will also send 93/91 codes (RPN)      
+      
+> CONTROL Address:Opcode 03:EF
+      0000  02 0B 20 12 00 0E 00 43 - 00 03 EF 15 93 11 0B 07 
+      0010  00 00 00 00 01 00 70 
+GOT Type 93 RPN
+SEND reply
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [22] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0B 00 12 00 0E 00 41 - 00 01 EF 15 93 11 0B 07 
+      0010  00 00 00 00 01 00 AA 
+> CONTROL Address:Opcode 03:EF
+      0000  02 0B 20 12 00 0E 00 43 - 00 03 EF 15 91 11 0B 07 
+      0010  00 00 00 00 01 00 70 
+GOT Type 91 RPN
+SEND reply
+  Set [1][2] handle 0B 00
+  Set [7][8] remote L2CAP channel 41 00
+  Set [22] FCS=AA calculated for 2 bytes from [9]
+  Set [14] RFCOMM address 0B
+< CONTROL Address:Opcode = 01:EF
+      0000  02 0B 00 12 00 0E 00 41 - 00 01 EF 15 91 11 0B 07 
+      0010  00 00 00 00 01 00 AA    
 
 SEND Top up credits
   Set [12] credits = C8
@@ -6857,6 +6947,58 @@ MainActivity.java
 
 ```
 
+## 5-4-4 Python
+
+This is Python code for a classic server that should run on any Python+Bluetooth capable machine.
+Windows requires Python 3.9 or later. The file [filetransfer.py](#3-13-file-transfer)
+is an expanded version of this code.
+
+
+```
+import socket
+
+try:
+  fd = socket.socket(socket.AF_BLUETOOTH,socket.SOCK_STREAM,socket.BTPROTO_RFCOMM)
+except:
+  print("No Bluetooth")
+  quit()
+  
+rfcomm_channel = 16  # change this if another program is using channel 16
+try:
+  fd.bind(("00:00:00:00:00:00",rfcomm_channel))
+except:
+  print("No Bluetooth, or channel " + str(rfcomm_channel) + " in use")
+  print("Turn Bluetooth off/on or edit code to use a different rfcomm_channel")
+  fd.close()
+  quit()
+  
+fd.listen()
+print("Waiting for remote device to connect on RFCOMM channel " + str(rfcomm_channel)) 
+fd.settimeout(3.0)  # unblock socket so CTL-C terminates program
+flag = 0
+while flag == 0:
+  flag = 1
+  try:
+    (node,add) = dd.accept()
+  except TimeoutError:
+    flag = 0
+  except OSError:
+    flag = 0
+  except:
+    fd.close()
+    quit()  
+    
+    # read/write
+dat = node.recv(512)
+node.send(b'Hello\n')
+
+node.close()
+fd.close()  
+```
+
+
+
+
 ## 5-5 Client Code
 
 The following sections are intended as a brief guide to writing client
@@ -7127,6 +7269,42 @@ MainActivity.java
   outstream.close();
   mmSocket.close();             
     
+```
+
+
+## 5-5-4 Python
+
+This is Python code for a classic client that should run on any Python+Bluetooth capable machine.
+Windows requires Python 3.9 or later. The file [filetransfer.py](#3-13-file-transfer)
+is an expanded version of this code.
+
+```
+import socket
+
+try:
+  node = socket.socket(socket.AF_BLUETOOTH,socket.SOCK_STREAM,socket.BTPROTO_RFCOMM)
+except:
+  print("No Bluetooth")
+  quit()
+  
+node_address = "DC:A6:32:04:DB:56"  
+rfcomm_channel = 16  # btferret will connect on any channel
+print("Trying to connect to " + node_address + " on channel " + str(rfcomm_channel) + "...")
+try:
+  node.connect((node_address,rfcomm_channel))
+except:
+  node.close()
+  quit()
+   
+node.settimeout(3.0)  # unblock socket  
+print("Connected OK")   
+  
+  # read/write
+
+node.send(b'Hello\n')  
+dat = node.recv(512)
+  
+node.close()  
 ```
 
 ## 6 Documentation References
