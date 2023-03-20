@@ -5402,7 +5402,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
               }
             else
               {
-              if(mustflag != IN_DATA && mustflag != IN_CONREQ && lesflag == 0 && clsflag == 0)
+              if(mustflag != IN_DATA && mustflag != IN_CONREQ && mustflag != IN_LEACK && lesflag == 0 && clsflag == 0)
                 VPRINT "Timed out waiting for expected packet\n"); 
  
               retval = 0;
