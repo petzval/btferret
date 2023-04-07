@@ -464,6 +464,7 @@ def client(node):
     print("Input one of the following options")
     print("  s = Send file to btferret device")
     print("  g = Get file from btferret device")
+    print("  p = Ping server")
     print("  x = Disconnect and exit")
     inp = input("? ")
 
@@ -491,6 +492,24 @@ def client(node):
         elif inp[0] == 'g': 
           # get file from server to this machine
           get_file(node,filname,ddir,400)
+
+
+    if inp[0] == 'p':
+      # send p for Ping 
+      node.send(b'p\n')      
+      # expect reply
+      reply = b''
+      dat = b''
+      while len(dat) == 0:
+        try:
+          dat = node.recv(1)
+        except:
+          dat = b'\n'
+        if(len(dat) == 1 and dat[0] != 10):
+          reply = reply + dat      
+          dat = b''
+        # loop until endchar=10
+      print("Reply = " + reply.decode()) 
      
     # end when input = x
     
