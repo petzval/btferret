@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include "btlib.h"  
+#include "btlib.h"     
 
 /********** BLUETOOTH defines ********/
   
@@ -74,7 +74,7 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 9
+#define VERSION 10
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -129,6 +129,7 @@ struct devdata
   int method;                 // connection method BLUEZ/HCI
   int credits;                // serial data credits
   int nx;                     // extra data stack index
+  int xwantlen;               // missing extra data
   int btletods;               // BTLE command time out deci seconds
   int dhandle[2];             // handle returned by connect  [0]=lo [1]=hi
   int linkflag;
@@ -265,6 +266,8 @@ struct globpar
   int meshflag;        // 1=R 2=W
   int readerror;       // 0=none 1=time out 2=key press  
   int lebufsize;
+  int leintervalmin;
+  int leintervalmax;
   int leclientwait;    // delay when connect as LE client
                        // to see any requests from server
               // screen print buffer 
@@ -404,6 +407,8 @@ unsigned char *strtohexx(char *s,int slen,int *num);
 
 void readleatt(int node,int handle);
 void printval(unsigned char *s,int len,unsigned char *t);
+int splitcmd(unsigned char *s);
+int splitwrite(unsigned char *cmd,int len);
 
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
@@ -506,8 +511,8 @@ unsigned char locbadd[10] = {4,0,0,0,0x01,0x09,0x10,0};
 unsigned char lesuggest[16] = { 8,0,0,0,1,0x24,0x20,4,0xF8,0,TRANSMITUS & 0xFF,(TRANSMITUS >> 8) & 0xFF};
 unsigned char leopen[40] = {29,0,S2_BADD,0,
   1,0x0D,0x20,0x19,0x60,0,0x60,0,0,0,0x7C,0x17,0x2D,0xC0,0x1E,0,0,0x18,0,0x28,0,0,0,0x11,0x01,0,0,0,0}; // len 29
-unsigned char leupdate[40] = {18,0,0,0,
-  1,0x13,0x20,0x0E,0,0,0x18,0,0x28,0,0,0,0x11,0x01,0,0,0,0}; // len 18
+unsigned char leconnup[32] = {21,0,S2_HAND,0,2,0x40,0,0x10,0,0x0C,0,0x05,0,0x12,0x03,0x08,0x00,0x06,0x00,0x06,0x00,0,0,0xF4,0x01};
+unsigned char leupdate[32] = {18,0,S2_HAND,0,1,0x13,0x20,0x0E,0,0,0x18,0,0x28,0,0,0,0xF4,0x01,0,0,0,0}; // len 18
 unsigned char lerrf[20] = {6,0,0,0,1,0x16,0x20,0x02,0,0}; // len 6
                                  // LE open [10]... board address     [23][24] = timeout x 10ms
 unsigned char lecancel[8] = {4,0,0,0,0x01,0x0E,0x20,0};
@@ -1243,7 +1248,8 @@ int init_blue_ex(char *filename,int hcin)
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
   gpar.leclientwait = 750;
-    
+  gpar.leintervalmin = 0x18;
+  gpar.leintervalmax = 0x28;  
   gpar.prtp = 0;   // current end of buffer
   gpar.dump = PRBUFSZ-PRLINESZ;  // dump destination
   gpar.dumpn = 0;  // char count
@@ -2390,6 +2396,7 @@ int devalloc()
   dp->dhandle[0] = 0;
   dp->dhandle[1] = 0;
   dp->nx = -1;
+  dp->xwantlen = 0;
   dp->btletods = 0;
   dp->matchname = 0;
   dp->datlen = 20;
@@ -4063,29 +4070,41 @@ int leconnect(int ndevice)
      //      dp->lecflag = 0  connect as node client to mesh device listening as node server
      //                    1  connect as LE client to mesh device listening as LE server
   
+  if(dp->type == BTYPE_LE || (dp->type == BTYPE_ME && dp->lecflag != 0))
+    {
+    flag = 1;  // LE client
+    leopen[PAKHEADSIZE+17] = gpar.leintervalmin & 0xFF;
+    leopen[PAKHEADSIZE+18] = (gpar.leintervalmin >> 8) & 0xFF;
+    leopen[PAKHEADSIZE+19] = gpar.leintervalmax & 0xFF;
+    leopen[PAKHEADSIZE+20] = (gpar.leintervalmax >> 8) & 0xFF;
+    }
+   else
+    {
+    flag = 0;  // node client
+    leopen[PAKHEADSIZE+17] = 6;
+    leopen[PAKHEADSIZE+18] = 0;
+    leopen[PAKHEADSIZE+19] = 6;
+    leopen[PAKHEADSIZE+20] = 0;
+    }
+    
   if(dev[ndevice]->type == BTYPE_ME)
     mesh_on();
 
   VPRINT "SEND LE connect to %s\n",dp->name);
 
   dp->setdatlen = 20;
-   
+     
   sendhci(leopen,ndevice);
       
   readhci(ndevice,IN_LEHAND,0,5000,gpar.toshort);   
   
   if(dp->conflag != 0)
     {    // IN_LEHAND not saved to stack
-    if(dp->type == BTYPE_LE || (dp->type == BTYPE_ME && dp->lecflag != 0))
-      {
-      NPRINT "Connect OK as LE client\n"); 
-      flag = 1;
-      }
-    else
-      {    
+    if(flag == 0)
       NPRINT "Connect OK as NODE client\n");
-      flag = 0;
-      }
+    else
+      NPRINT "Connect OK as LE client\n"); 
+
     VPRINT "Handle = %02X%02X\n",dp->dhandle[1],dp->dhandle[0]);
 
     setlelen(ndevice,LEDATLEN,flag);    
@@ -4117,6 +4136,79 @@ int leconnect(int ndevice)
   return(0);      
   }
 
+int set_le_interval(int min,int max)
+  {
+  if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
+    {
+    NPRINT "Invalid intervals\n");
+    flushprint();
+    return(0);
+    } 
+  gpar.leintervalmin = min;
+  gpar.leintervalmax = max;
+  return(1);
+  }
+  
+
+int set_le_interval_update(int node,int min,int max)
+  {
+  int ndevice,cflag;
+ 
+  if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
+    {
+    NPRINT "Invalid intervals\n");
+    flushprint();
+    return(0);
+    } 
+    
+  ndevice = devn(node);
+  if(ndevice <= 0)
+    return(0);
+    
+  cflag = dev[ndevice]->conflag;
+  if(cflag & (CON_LE | CON_LX | CON_MESH) == 0)
+    return(0);  
+     
+  // request interval     
+  leupdate[PAKHEADSIZE+6] = min & 0xFF;
+  leupdate[PAKHEADSIZE+7] = (min >> 8) & 0xFF;
+  leupdate[PAKHEADSIZE+8] = max & 0xFF;
+  leupdate[PAKHEADSIZE+9] = (max >> 8) & 0xFF;
+  sendhci(leupdate,ndevice);
+  readhci(0,0,0,250,0);
+  return(1);
+  }  
+
+
+int set_le_interval_server(int node,int min,int max)
+  {
+  int ndevice,cflag;
+ 
+  if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
+    {
+    NPRINT "Invalid intervals\n");
+    flushprint();
+    return(0);
+    } 
+    
+  ndevice = devn(node);
+  if(ndevice <= 0)
+    return(0);
+    
+  cflag = dev[ndevice]->conflag;
+  if(cflag & (CON_LE | CON_LX | CON_MESH) == 0)
+    return(0);  
+     
+  // request interval via chan 5     
+  leconnup[PAKHEADSIZE+13] = min & 0xFF;
+  leconnup[PAKHEADSIZE+14] = (min >> 8) & 0xFF;
+  leconnup[PAKHEADSIZE+15] = max & 0xFF;
+  leconnup[PAKHEADSIZE+16] = (max >> 8) & 0xFF;
+  sendhci(leconnup,ndevice);
+  readhci(0,0,0,250,0);
+  return(1);
+  }  
+  
 
 /*********** WAIT FOE DISCONNECT ***********
 expecting remote server to initiate disconnection by sending
@@ -4443,18 +4535,8 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
           lenotify[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
           lenotify[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF);  // 13 for 1 byte
           }
-          
-        if((flag & 2) == 0 && (cp->perm & 0x20) != 0)
-          {  // strip indicate acks
-          flag |= 2;
-          do
-            {
-            readhci(0,IN_LEACK,0,0,0);
-            n = findhci(IN_LEACK,0,INS_POP);  
-            }
-          while(n >= 0);
-          }
-
+        
+        
         sendhci(lenotify,devn);
   
         if((cp->perm & 0x20) != 0)
@@ -4477,8 +4559,9 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
           } 
         }        
       }
-     
-    readhci(0,0,0,0,0); 
+    
+    if(flag != 0) 
+      readhci(0,0,0,0,0); 
     return(locsize);
     }
 
@@ -4617,15 +4700,6 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     flushprint();
     }
          
-  if((cp->perm & 8) != 0)
-    {  // strip acks
-    do
-      {
-      readhci(0,IN_LEACK,0,0,0);
-      n = findhci(IN_LEACK,0,INS_POP);  
-      }
-    while(n >= 0);
-    }   
      
   if(sendhci(lewrite,ndevice) == 0)  
     return(0);
@@ -5086,11 +5160,11 @@ int sendhci(unsigned char *s,int ndevice)
   do
     {
     nwrit = write(gpar.hci,cmd,ntogo);
-    
+ 
     if(nwrit > 0)
       {
       ntogo -= nwrit;
-      s += nwrit;
+      cmd += nwrit;
       }   
     if(timems(TIM_RUN) - timstart > 2000)   // 2 sec timeout
       {
@@ -5108,6 +5182,102 @@ int sendhci(unsigned char *s,int ndevice)
   }
 
 
+
+int splitcmd(unsigned char *s)
+  {
+  int n,k,sn,tn,tn0,t20,len,numx,remx,kx,flag;
+  unsigned char t[512];
+  
+  
+  len = s[5] + (s[6] << 8) - 3;
+  if(len <= 20)
+    return(0);  
+    
+ 
+  flag = 1;   // 0 = send all packets as one write
+              // 1 = send each packet as a separate write
+  
+  for(n = 0 ; n < 32 ; ++n)
+    t[n] = s[n];
+    
+  t20 = t[2];
+  tn = len+12;  
+  t[3] = 0x1B;
+  t[4] = 0;
+  numx = (len-20)/27;
+  remx = (len-20)%27;
+  if(remx > 0)
+    ++numx;
+  sn = 32;
+  tn = 32;
+  if(flag != 0)  
+    splitwrite(t,32);
+  for(n = 0 ; n < numx ; ++n)
+    {
+    ++gpar.cmdcount;
+    tn0 = tn;
+    t[tn] = 0x02;
+    t[tn+1] = t[1];
+    t[tn+2] = t20 | 0x10;
+    if(n == numx-1 && remx > 0)
+      {
+      t[tn+3] = remx;
+      kx = remx;
+      }
+    else
+      {
+      t[tn+3] = 0x1B;
+      kx = 27;
+      }
+    t[tn+4] = 0;
+    tn += 5;
+
+    for(k = 0 ; k < kx ; ++k)
+      {
+      t[tn] = s[sn];
+      ++tn;
+      ++sn;
+      }
+    if(flag != 0)   
+      splitwrite(t+32*(n+1),kx+5);
+    }
+  if(flag == 0)
+    splitwrite(t,tn);
+  ++gpar.cmdcount;
+  return(1);
+  }
+
+int splitwrite(unsigned char *cmd,int len)
+  {
+  int ntogo,nwrit;
+  unsigned int timstart;
+  unsigned char *cmdx;
+   
+  ntogo = len;
+  cmdx = cmd;  
+  timstart = timems(TIM_LOCK);  
+  do
+    {
+    nwrit = write(gpar.hci,cmdx,ntogo);
+ 
+    if(nwrit > 0)
+      {
+      ntogo -= nwrit;
+      cmdx += nwrit;
+      }   
+    if(timems(TIM_RUN) - timstart > 2000)   // 2 sec timeout
+      {
+      NPRINT "Send CMD timeout\n");
+      timems(TIM_FREE);
+      return(0);
+      }
+    }
+  while(ntogo != 0);
+  timems(TIM_FREE);
+  return(1);
+  }
+
+
 /********* COMMAND STACK POINTER ********
 
 Returns the APPROXIMATE number of commands waiting on the Bluetooth stack to be sent.
@@ -5116,30 +5286,6 @@ events at a different rate, and some operations will not generate the event.
 So the stack may be empty and ready for more commands, but this function will return
 a non-zero number. 
 See Vol 4 Pt E  7.7.19
-If write commands are sent too quickly they will crash the Bluetooth stack.
-This function can be used to write commands at the maximum possible rate by
-waiting for the stack pointer to reduce to a certain value.
-The following code is an example for sending LE characteristic writes.
-
-int csp;
-
-  // read initial value - may not be
-  // zero even if the stack is empty
-  
-csp = cmd_stack_ptr();   
-
-for(n = 0 ; n < 1000 ; ++n)
-  {
-  
-  // do not send next write until the number of waiting
-  // commands falls below 6 (experiment with this number,
-  // and add a get-out condition in case the while never exits)
-   
-  while(cmd_stack_ptr() >= csp+6)
-    ;
-    
-  write_ctic(......);
-  }
 
 ***********************************/
 
@@ -5264,7 +5410,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   {
   unsigned char b0,*datp,*rsp,ledat[2];   
   int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
-  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb,firstpacket;
+  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb;
   int retval,savtimendms,datlen,ascflag,clsflag;
   long long int locmustflag,gotflag;
   unsigned int timstart,timx,timendms;
@@ -5273,6 +5419,8 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   static int level = 0;   
   unsigned char buf[2048];
 
+  //if(level > 0 && ndevice == 0 && mustflag == 0 && lookflag == 0 && timout == 0 && toshort == 0)
+  //  return(0);
 
   lesflag = ndevice & LE_SERV;
   clsflag = ndevice & CL_SERV;
@@ -5282,10 +5430,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   if(ndevice != 0 && (dev[ndevice]->conflag & CON_LX) != 0)
     lesflag = 1;   // mesh device is LE server
     
-
   if(level > 8)
     {
-    NPRINT "ERROR - Notify callback has spawned too many nested reads\n"); 
+    NPRINT "ERROR - Callback has spawned too many nested operations\n"); 
     flushprint();
     return(0);
     }
@@ -5311,7 +5458,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   ++level;
     
   for(k = 0 ; devok(k) != 0 ; ++k)
+    {
     dev[k]->nx = -1;  // extra data
+    dev[k]->xwantlen = 0;
+    }
              
   timstart = timems(TIM_LOCK);         
    
@@ -5414,6 +5564,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             --level;
             
             timems(TIM_FREE);
+            for(k = 0 ; devok(k) != 0 ; ++k)
+              dev[k]->xwantlen = 0;
+
+            if(xflag != 0)
+              {
+              NPRINT "Missing extra data\n");
+              immediate(lookflag | locmustflag);
+              }
+              
             return(retval);     
             }
           }
@@ -5438,7 +5597,8 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     chan = 0;
     xprintflag = 0;
     devicen = 0;      // sending device unknown
-  
+    xwantlen = 0;
+    
     if(buf[0] == 4)    // HCI events
       {
       n0 = 0;  // offset of board address or handle for device identify
@@ -5742,7 +5902,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
      
                       
       if(gotflag != 0 && gotflag != IN_CNAME)
-        nxx = pushins(gotflag,devicen,buf[2],&buf[3]);
+        dev[devicen]->nx = pushins(gotflag,devicen,buf[2],&buf[3]);
            
       if(disflag != 0 && devicen != 0)
         {
@@ -5776,14 +5936,65 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           }
         }
 
-      if(dev[devicen]->nx != -1)
-        {
-        gotflag = IN_DATA;   // extra LE data
-        firstpacket = 0;
+      if((buf[2] & 0x30) == 0x10)
+        {  // extra data
+        //gotflag = IN_DATA;   // extra LE data
+        //firstpacket = 0;
+        // add to existing stack entry
+        if(xflag == 0 || dev[devicen]->xwantlen == 0)
+          NPRINT "Unexpected extra data\n");
+        else
+          {
+          datlen = buf[3] + (buf[4] << 8);  // length
+          VPRINT "Following packet [3][4] = %04X extra bytes from [5]..\n",datlen);
+          datp = buf+5;
+          dev[devicen]->xwantlen -= datlen;
+          xwantlen = dev[devicen]->xwantlen;  // for print
+          nxx = dev[devicen]->nx;
+          if(dev[devicen]->xwantlen <= 0 && datlen > 0 && nxx >= 0 && ((long long int)1 << instack[nxx]) == IN_DATA && (dev[devicen]->conflag & CON_RF) != 0)
+            --datlen;  // last packet of serial data - not FCS  
+          if(nxx >= 0 && datlen > 0)
+            dev[devicen]->nx = addins(nxx,datlen,datp);  
+          if(dev[devicen]->xwantlen <= 0)
+            {
+            if(xflag > 0)
+              --xflag;  // got all extra bytes 
+            dev[devicen]->nx = -1;
+            dev[devicen]->xwantlen = 0;
+            if(xflag == 0)
+              timendms = savtimendms;
+            }  
+          xprintflag = 2;         
+          ascflag = 1;
+          }
         }
       else
         {   // first packet
-        firstpacket = 1;        
+        // firstpacket = 1;
+        if(dev[devicen]->xwantlen > 0 && xflag > 0)
+          {  
+          NPRINT "Missing extra data\n");
+          dev[devicen]->xwantlen = 0;
+          dev[devicen]->nx = -1;
+          --xflag;
+          if(xflag == 0)
+            timendms = savtimendms;
+          }
+                   
+        k = buf[5] + (buf[6] << 8) + 9 - wantlen;  // extra needed in next messages
+        if(k > 0)
+          {  // need more
+          dev[devicen]->nx = -1;  // pushins will change
+          dev[devicen]->xwantlen = k;
+          xwantlen = k;  // for print
+          if(xflag == 0)
+            {
+            savtimendms = timendms;  // restore when got entire packet
+            timendms += 500;         // more time       
+            }
+          ++xflag;
+          }
+        
         chan = (buf[7] + (buf[8]<<8));  // channel
         
         if(chan == 4)    // LE or mesh
@@ -5941,39 +6152,17 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           
         }  // end not extra
    
-      nxx = -2;   // stack index
+      //nxx = -2;   // stack index
           
       if(gotflag != 0)
         {        
         if(gotflag == IN_DATA)
-          {
-          if(firstpacket == 0)   // extra data
-            {
-            // add to existing stack entry
-            datlen = buf[3] + (buf[4] << 8);  // length
-            VPRINT "Following packet [3][4] = %04X extra bytes from [5]..\n",datlen);
-            datp = buf+5;
-            xwantlen -= datlen;
-            nxx = dev[devicen]->nx;
-            if(xwantlen <= 0 && datlen > 0 && nxx >= 0 && ((long long int)1 << instack[nxx]) == IN_DATA && (dev[devicen]->conflag & CON_RF) != 0)
-              --datlen;  // last packet of serial data - not FCS  
-            if(nxx >= 0 && datlen > 0)
-              dev[devicen]->nx = addins(nxx,datlen,datp);  // nx may change
-            if(xwantlen <= 0)
-              {
-              --xflag;  // got all extra bytes
-              dev[devicen]->nx = -1;
-              if(xflag == 0)
-                timendms = savtimendms;
-              }  
-            xprintflag = 2;         
-            ascflag = 1;
-            }
-          else if(chan == 4)   // ATT LE node first data
+          {            
+          if(chan == 4)   // ATT LE node first data
             {
             datlen = buf[3] + (buf[4] << 8) - 4;
             datp = buf+9;
-            nxx = pushins(gotflag,devicen,datlen,datp);
+            dev[devicen]->nx = pushins(gotflag,devicen,datlen,datp);
             xprintflag = 1;
             ascflag = 1;
             }
@@ -6003,32 +6192,16 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                 datlen = wantlen - 12 - k; 
                 }
               if(datlen > 0)
-                nxx = pushins(gotflag,devicen,datlen,datp);
+                dev[devicen]->nx = pushins(gotflag,devicen,datlen,datp);
               ascflag = 1;  // may print ascii with hexdump          
               }
             }
           }   // end IN_DATA 
         else
           {   // normal push
-          nxx = pushins(gotflag,devicen,buf[3] + (buf[4] << 8) - 4,buf+9);
+          dev[devicen]->nx = pushins(gotflag,devicen,buf[3] + (buf[4] << 8) - 4,buf+9);
           }
         }  // end gotflag
-     
-      if(firstpacket != 0)
-        {  // first packet   
-        xwantlen = buf[5] + (buf[6] << 8) + 9 - wantlen;  // extra needed in next messages
-        if(xwantlen > 0)
-          {  // need more
-          dev[devicen]->nx = nxx;  // may be -2 - data read but not stored
-          if(xflag == 0)
-            {
-            savtimendms = timendms;  // restore when got entire packet
-            timendms += 500;         // more time       
-            }
-          ++xflag;
-          }
-        }  
-                  
       }  // end 02 packet   
   
     if(ndevice == 0 || (ndevice != 0 && devicen != 0 && ndevice == devicen))      
@@ -6065,6 +6238,13 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           if(k > 69)
             k = 0;  // no error0f text
           VPRINT "*** FAIL *** CMD %02X %02X Error %02X %s\n",buf[5],buf[6],buf[3],error0f[k]);
+          }
+        if(buf[1] == 0x3E && buf[3] == 0x03)
+          {
+          if(buf[4] == 0)
+            VPRINT "Interval changed to %02X%02X\n",buf[8],buf[7]);
+          else
+            VPRINT "Interval change failed\n");
           }       
         }
       else if(b0 == 2)
@@ -6128,7 +6308,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         printascii(datp,datlen);
       
     
-      if(xflag != 0)
+      if(xwantlen != 0)
         {
         VPRINT "Need an extra %04X bytes\n",xwantlen);
         }
@@ -7570,6 +7750,13 @@ void popins()
   {
   int n,k,lastffn,lastn,lastwasff,count;
   
+  
+  for(k = 0 ; devok(k) != 0 ; ++k)
+    {
+    if(dev[k]->xwantlen != 0 && dev[k]->nx >= 0)
+      return;  // waiting for extra - do not move nx
+    }
+    
   // find last FF pop type
   do
     {

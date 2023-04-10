@@ -72,3 +72,8 @@ from 245 to 244 to deal with this.
 that should run on any Python/Bluetooth capable device, and is compatible with btferret's file 
 transfer protocol. It can act as a classic client or server for btferret.
 5. Bug fix. Under some circumstances, a Windows COM port would disconnect unexpectedly.
+
+### Version 10
+1. New functions: set\_le\_interval(), set\_le\_interval\_update(), and set\_le\_interval\_server().
+Set the LE connection interval which controls the speed of multiple read/writes.
+2. Bug fix. Rapid writes of large LE characteristics could sometimes crash the system.

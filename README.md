@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 9*
+*Version 10*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -59,13 +59,14 @@ btferret/btlib Bluetooth Interface
         - [4.2.34 read\_notify](#4-2-34-read\_notify)
         - [4.2.35 register\_serial](#4-2-35-register\_serial)
         - [4.2.36 scroll\_back-forward](#4-2-36-scroll\_back-forward)
-        - [4.2.37 set\_le\_wait](#4-2-37-set\_le\_wait)
-        - [4.2.38 set\_print\_flag](#4-2-38-set\_print\_flag)
-        - [4.2.39 strtohex](#4-2-39-strtohex)
-        - [4.2.40 wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect)
-        - [4.2.41 write\_ctic](#4-2-41-write\_ctic)
-        - [4.2.42 write\_mesh](#4-2-42-write\_mesh)
-        - [4.2.43 write\_node](#4-2-43-write\_node) 
+        - [4.2.37 set\_le\_interval](#4-2-37-set\_le\_interval)        
+        - [4.2.38 set\_le\_wait](#4-2-38-set\_le\_wait)
+        - [4.2.39 set\_print\_flag](#4-2-39-set\_print\_flag)
+        - [4.2.40 strtohex](#4-2-40-strtohex)
+        - [4.2.41 wait\_for\_disconnect](#4-2-41-wait\_for\_disconnect)
+        - [4.2.42 write\_ctic](#4-2-42-write\_ctic)
+        - [4.2.43 write\_mesh](#4-2-43-write\_mesh)
+        - [4.2.44 write\_node](#4-2-44-write\_node) 
 - [5 Reference](#5-reference)
     - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids)
     - [5.2 Packet formats](#5-2-packet-formats)
@@ -790,7 +791,7 @@ second code example below and [devices file](#3-3-devices-file) for more details
 A device with a random address can be found from btferret via an LE scan (b) and a service read (v).
 Some LE servers need to be given time to complete the
 connection, or they will connect, but then disconnect soon after. When using the btferret connect command, you will
-be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-37-set\_le\_wait) function
+be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-38-set\_le\_wait) function
 sets this time. Zero may work, otherwise find the shortest time that prevents disconnection.
 
 ```
@@ -1549,11 +1550,11 @@ These library functions are in btlib.c/btlib.h.
 [find\_channel](#4-2-12-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
 [find\_ctics](#4-2-13-find\_ctics) - Read all characteristic info from LE device<br/>
 [find\_ctic\_index](#4-2-14-find\_ctic\_index) - Find characteristic index of UUID<br/>
-[write\_ctic](#4-2-41-write\_ctic) - Write characteristic to an LE device<br/>
+[write\_ctic](#4-2-42-write\_ctic) - Write characteristic to an LE device<br/>
 [read\_ctic](#4-2-28-read\_ctic) - Read characteristic from an LE device<br/>
 [notify\_ctic](#4-2-26-notify\_ctic) - Enable/disable LE characteristic notify/indicate<br/>
-[write\_node](#4-2-43-write\_node) - Write serial data to connected node device<br/>
-[write\_mesh](#4-2-42-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
+[write\_node](#4-2-44-write\_node) - Write serial data to connected node device<br/>
+[write\_mesh](#4-2-43-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
 [read\_mesh](#4-2-30-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
 [read\_node\_count](#4-2-31-read\_node\_count) - Read a specified byte count from specified node<br/>
 [read\_node/all\_endchar](#4-2-32-read\_node-all\_endchar) - Read from specified or all nodes until end char received<br/>
@@ -1566,12 +1567,13 @@ These library functions are in btlib.c/btlib.h.
 [ctic\_ok](#4-2-6-cti\c_ok) - Return LE characteristic valid flag<br/>
 [ctic\_name](#4-2-5-ctic\_name) - Return LE characteristic name string<br/>
 [disconnect\_node](#4-2-11-disconnect\_node) - Disconnect initiated by client<br/>
-[wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
+[wait\_for\_disconnect](#4-2-41-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
 [scroll\_back/forward](#4-2-36-scroll\_back-forward) - Scroll screen back/forward<br/>
-[set\_le\_wait](#4-2-37-set\_le\_wait) - Set LE server connection wait time<br/>
-[set\_print\_flag](#4-2-38-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
+[set\_le\_interval](#4-2-37-set\_le\_interval) - Set LE connection interval<br/>
+[set\_le\_wait](#4-2-38-set\_le\_wait) - Set LE server connection wait time<br/>
+[set\_print\_flag](#4-2-39-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
 [output\_file](#4-2-27-output\_file) - Save all recent screen output to a file<br/>
-[strtohex](#4-2-39-strtohex) - Convert ascii string to array of hex values<br/>
+[strtohex](#4-2-40-strtohex) - Convert ascii string to array of hex values<br/>
 [mesh\_on](#4-2-22-mesh\_on) - Turn mesh transmission on<br/>
 [mesh\_off](#4-2-23-mesh\_off) - Turn mesh transmission off<br/>
 
@@ -1638,6 +1640,9 @@ read_notify(timeoutms)
 register_serial(uuid[],"name")
 scroll_back()
 scroll_forward()
+set_le_interval(min,max)
+set_le_interval_update(node,min,max)
+set_le_interval_server(node,min,max)
 set_le_wait(waitms)
 set_print_flag(flag)
      flag = PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
@@ -1882,7 +1887,7 @@ Some devices have fixed RFCOMM channels which are permanent and known, while oth
 them as needed and can only be found by reading the remote device services at connection time.
 
 When connecting to an LE server (CHANNEL_LE) a waiting delay is sometimes required as explained
-in [set\_le\_wait](#4-2-37-set\_le\_wait).
+in [set\_le\_wait](#4-2-38-set\_le\_wait).
 
 RETURN
 
@@ -2164,7 +2169,7 @@ disconnected.
 The solution is to send the server a message that it interprets as an instruction
 to disconnect. The server then initiates
 the disconnection and the client must wait for a disconnection sequence from the server to 
-complete the process gracefully - and [wait\_for\_disconnect](#4-2-40-wait\_for\_disconnect)
+complete the process gracefully - and [wait\_for\_disconnect](#4-2-41-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
 [node client/server connection](#3-8-pi-pi-client-server-connection).
@@ -2289,7 +2294,7 @@ call [find\_ctics](#4-2-13-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
 Use the characteristic index in [read\_ctic](#4-2-28-read\_ctic)
-and [write\_ctic](#4-2-41-write\_ctic).
+and [write\_ctic](#4-2-42-write\_ctic).
 
 
 PARAMETERS
@@ -2473,7 +2478,7 @@ an LE client app or other Pis running btferret/btlib.
 
 The local device's characteristics are
 defined in the [devices file](#3-3-devices-file). The local device reads and writes them
-by using [read\_ctic](#4-2-28-read\_ctic) and [write\_ctic](#4-2-41-write\_ctic) with
+by using [read\_ctic](#4-2-28-read\_ctic) and [write\_ctic](#4-2-42-write\_ctic) with
 [localnode()](#4-2-21-localnode) as follows:
 
 ```
@@ -2755,7 +2760,7 @@ void mesh_on(void)
 
 Turn on mesh transmission. The local device will continuously send the last
 mesh packet set via write\_mesh. Mesh transmission is automatically enabled
-by calling [write\_mesh](#4-2-42-write\_mesh), or [read\_mesh](#4-2-30-read\_mesh),
+by calling [write\_mesh](#4-2-43-write\_mesh), or [read\_mesh](#4-2-30-read\_mesh),
 or [mesh\_server](#4-2-24-mesh\_server), or [node\_server](#4-2-25-node\_server),
 so it is usually not necessary to call mesh\_on explicitly. Mesh must be on for
 another mesh device to connect.
@@ -2778,7 +2783,7 @@ void mesh_server(int (*callback)())
 ```
 
 Sets up the local device as a mesh server which spends all its time listening
-for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-42-write\_mesh).
+for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-43-write\_mesh).
 The packets are limited to a maximum size of
 25 bytes. When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling mesh\_server to continue
@@ -2829,7 +2834,7 @@ int node_server(int clientnode,int (*callback)(),char endchar)
 
 Sets up the local device as a node server that waits for 
 a specified client (clientnode) to connect, then spends all its time listening
-for node packets sent from that client via [write\_node](#4-2-43-write\_node).
+for node packets sent from that client via [write\_node](#4-2-44-write\_node).
 The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 400 bytes.
 When a packet is received,
@@ -3183,7 +3188,7 @@ int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
 Read node packet from a specified node connected as CLASSIC or NODE until a specified 
-number of bytes (count) is received (sent via [write\_node](#4-2-43-write\_node)).
+number of bytes (count) is received (sent via [write\_node](#4-2-44-write\_node)).
 If no such packet is received, the
 function terminates via a time out or x key press. The [read\_error](#4-2-29-read\_error)
 function returns
@@ -3331,7 +3336,7 @@ int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag
 
 Read node packet from a specified node (connected as CLASSIC or NODE), or all connected nodes,
 until a specified 
-termination character (endchar) is received (sent via [write\_node](#4-2-43-write\_node)).
+termination character (endchar) is received (sent via [write\_node](#4-2-44-write\_node)).
 If no such packet is received, the function terminates via a time out or x key press.
 The [read\_error](#4-2-29-read\_error) function returns
 the error state. The read\_all\_node function listens to all connected nodes and
@@ -3508,7 +3513,7 @@ void scroll_forward(void)
 
 Screen prints performed by btlib.c funtions are saved in a buffer. These functions
 scroll the screen backwards and forwards through this buffer. Screen prints can
-be controlled via [set\_print\_flag](#4-2-38-set\_print\_flag).
+be controlled via [set\_print\_flag](#4-2-39-set\_print\_flag).
 The buffer can be saved to a file via [output\_file](#4-2-27-output\_file).
 
 SAMPLE CODE
@@ -3518,7 +3523,82 @@ scroll_back();      // scroll screen back through print buffer
 scroll_forward();   // scroll screen forwards through print buffer
 ```
 
-## 4-2-37 set\_le\_wait
+
+## 4-2-37 set\_le\_interval
+
+```c
+int set_le_interval(int min,int max)
+int set_le_interval_update(int node,int min,int max)
+int set_le_interval_server(int node,int min,int max)
+```
+
+Sets the LE connection interval which controls how fast multiple reads/writes will complete.
+Small intervals will run faster, but large intervals will save power if the server is
+battery powered. There are three versions:
+
+```
+set_le_interval         Called by a client before connection
+                        All subsequent connections will use the interval
+                        Has no effect if the device will be a server
+set_le_interval_update  Called by a client after connection to change the interval
+set_le_interval_server  Called by a server after connection to change the interval
+                        Normally, the client sets the interval
+```
+
+When a client first connects, it often reads the server's services (find_ctics), which
+involves the exchange of multiple packets. To speed up the process it is common for the
+client to change the interval to a small number and then back again when the services have
+been read. There are two parameters (min and max). A request is sent to the Bluetooth system
+for an interval between these values, but it may or may not be allowed.
+ 
+
+PARAMETERS
+
+```
+min = minimum interval (count of 1.25ms)
+        Default = 24
+        Minimum value = 6 (7.5ms)
+        Maximum value = 3200 (4s)  
+max = maximum interval (as above)
+        Default = 40
+
+node = node of remote connected device         
+```
+
+RETURN 
+
+```
+0 = Fail
+1 = OK
+```
+
+SAMPLE CODE
+
+```c
+LE CLIENT
+
+set_le_interval(24,40);    // set interval for all subsequent connections
+connect_node(3,CHANNEL_LE,0); // connect to LE server node 3       
+
+  // set short interval to read server's services
+set_le_interval_update(3,6,6);
+  // read services
+find_ctics(3);
+  // restore default values
+set_le_interval_update(3,24,40);
+
+
+LE SERVER
+
+int lecallback(int clientnode,int op,int cticn)
+  {
+  if(op == LE_CONNECT)
+    set_le_interval_server(clientnode,6,6);  
+  }
+
+```
+
+## 4-2-38 set\_le\_wait
 
 ```c
 int set_le_wait(int waitms)
@@ -3565,7 +3645,7 @@ connect_node(3,CHANNEL_LE,0);  // connect to LE server node 3
 ```
 
 
-## 4-2-38 set\_print\_flag
+## 4-2-39 set\_print\_flag
 
 ```c
 int set_print_flag(int flag)
@@ -3607,7 +3687,7 @@ savflag = set_print_flag(PRINT_VERBOSE);
 set_print_flag(savflag);  // restore original setting
 ```
 
-## 4-2-39 strtohex
+## 4-2-40 strtohex
 
 ```c
 unsigned char *strtohex(char *s,int *nbytes)
@@ -3658,7 +3738,7 @@ channel = find_channel(5,strtohex("1101",NULL));
 
 ```
 
-## 4-2-40 wait\_for\_disconnect
+## 4-2-41 wait\_for\_disconnect
 
 ```c
 int wait_for_disconnect(int node,int timout)
@@ -3683,7 +3763,7 @@ RETURN
 1 = OK
 ```
 
-## 4-2-41 write\_ctic
+## 4-2-42 write\_ctic
 
 ```c
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
@@ -3745,7 +3825,7 @@ write_ctic(4,cticn,data,1);
 disconnect_node(4);
 ```
 
-## 4-2-42 write\_mesh
+## 4-2-43 write\_mesh
 
 ```c
 int write_mesh(char *outbuf,int count)
@@ -3809,7 +3889,7 @@ sleep(1);  // 1 second delay to allow packet to be sent
 ```
 
 
-## 4-2-43 write\_node
+## 4-2-44 write\_node
 
 ```c
 int write_node(int node,unsigned char *outbuf,int count)
@@ -3952,7 +4032,7 @@ to find the characteristic
 index of a specified UUID in the device information. Functions to
 read and write characteristics
 [read\_ctic](#4-2-28-read\_ctic),
-[write\_ctic](#4-2-41-write\_ctic)
+[write\_ctic](#4-2-42-write\_ctic)
 need this index. 
 
  
@@ -4076,7 +4156,7 @@ The relevant opcodes for LE commands are
 ```
 
 This packet format is also used for data packets sent via
-[write\_node](#4-2-43-write\_node) to a connected mesh device acting as a node
+[write\_node](#4-2-44-write\_node) to a connected mesh device acting as a node
 server (it is an LE connection and the data is sent as LE packets). 
 In this case there is no opcode - just data as shown in
 the multiple packets example next.

@@ -1,7 +1,7 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h Version 9
+  btlib.c/h 
 COMPILE
   gcc bterret.c btlib.c -o btferret
 EDIT

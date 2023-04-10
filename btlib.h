@@ -1,4 +1,4 @@
-  // for btlib.c Version 9
+  // for btlib.c Version 10
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -139,6 +139,9 @@ void register_serial(unsigned char *uuid,char *name);
 
 void scroll_back(void);
 void scroll_forward(void);
+int set_le_interval(int min,int max);
+int set_le_interval_update(int node,int min,int max);
+int set_le_interval_server(int node,int min,int max);
 int set_le_wait(int waitms);
 int set_print_flag(int flag);
 unsigned char *strtohex(char *s,int *num);
