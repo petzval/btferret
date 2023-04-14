@@ -362,7 +362,7 @@ An LE server can be connected by multiple clients simultaneously. A mesh
 transmission sends to all listening mesh servers.
 
 Don't expect too much of the speeds here. The mesh packet repeat rate may only be around once per
-second, btferret's file transfer speed is about 2000 bytes/s for a NODE
+second, btferret's file transfer speed is about 20,000 bytes/s for a NODE
 connection and about 50,000 bytes/s for a CLASSIC connection.
 
 The following diagram shows these connections
@@ -3542,6 +3542,7 @@ set_le_interval         Called by a client before connection
                         Has no effect if the device will be a server
 set_le_interval_update  Called by a client after connection to change the interval
 set_le_interval_server  Called by a server after connection to change the interval
+                        for systems in which set_le_interval_update does not work.
                         Normally, the client sets the interval
 ```
 
@@ -3592,8 +3593,12 @@ LE SERVER
 
 int lecallback(int clientnode,int op,int cticn)
   {
-  if(op == LE_CONNECT)
-    set_le_interval_server(clientnode,6,6);  
+  if(op == LE_READ)
+    {  // use characteristic read to trigger interval change
+    set_le_interval_update(clientnode,6,6); 
+       // BUT may not work - so use _server version....
+    set_le_interval_server(clientnode,6,6);
+    }  
   }
 
 ```

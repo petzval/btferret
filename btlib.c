@@ -4166,7 +4166,7 @@ int set_le_interval_update(int node,int min,int max)
     return(0);
     
   cflag = dev[ndevice]->conflag;
-  if(cflag & (CON_LE | CON_LX | CON_MESH) == 0)
+  if((cflag & (CON_LE | CON_LX | CON_MESH)) == 0)
     return(0);  
      
   // request interval     
@@ -4196,7 +4196,7 @@ int set_le_interval_server(int node,int min,int max)
     return(0);
     
   cflag = dev[ndevice]->conflag;
-  if(cflag & (CON_LE | CON_LX | CON_MESH) == 0)
+  if((cflag & (CON_LE | CON_LX | CON_MESH)) == 0)
     return(0);  
      
   // request interval via chan 5     
