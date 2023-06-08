@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 10*
+*Version 11*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -9,7 +9,7 @@ btferret/btlib Bluetooth Interface
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
-    - [3.3 devices.txt file](#3-3-devices-file)    
+    - [3.3 devices.txt file](#3-3-devices-file)
     - [3.4 Windows-Android-HC-05 Classic servers](#3-4-windows-android-hc-05-classic-servers) 
     - [3.5 Windows-Android Classic clients](#3-5-windows-android-classic-clients)        
     - [3.6 LE client](#3-6-le-client) 
@@ -446,49 +446,44 @@ Devices file example:
 
 DEVICE = My Pi        TYPE=MESH NODE=1 ADDRESS=B6:15:EB:F5:50:53
 
-DEVICE = My other Pi  TYPE=MESH NODE=2 ADDRESS=B8:27:EB:F1:50:C3
-  ; characteristics when acting as an LE server - see le_server() documentation
-  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=8   ; index 0 r/w no ack 8 bytes 
-  LECHAR=Detector HANDLE=0007  PERMIT=06  SIZE=2   ; index 1 r/w no ack 2 bytes
-               ; UUIDs of above characteristics will be allocated automatically
-  LECHAR=Control  permit=06 size=4 UUID=11223344-5566-7788-99AA-BBCCDDEEFF00
-               ; UUID specified - the handle will be allocated automatically 
-                                       
-DEVICE = LE server Pi   TYPE=MESH NODE=10 ADDRESS=B6:15:EB:F5:50:33   
-     ; for LE server with specified primary service UUIDs
-     ; specify characteristic UUIDs and let the system allocate handles                                   
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00  ; 16-byte UUID
-  LECHAR=Dog     PERMIT=06  SIZE=8 UUID=1111 
-  LECHAR=Cat     PERMIT=06  SIZE=8 UUID=2222     
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF01
-  LECHAR=Vole     PERMIT=06  SIZE=8 UUID=3333    
-  LECHAR=Gerbil   PERMIT=06  SIZE=8 UUID=4444     
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF02    
-  LECHAR=Hamster  PERMIT=06  SIZE=8 UUID=5555    
-  LECHAR=Pig      PERMIT=06  SIZE=8 UUID=6666    
-    
-DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C    ; Fixed address
-  LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; characteristic index 0
-  LECHAR=Control handle=000E PERMIT=06 SIZE=1   ;                index 1
-  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ;                index 2
-  LECHAR=Name    UUID=2A00                      ;                index 3  
-                                       
-DEVICE = My Android  TYPE=LE NODE=5 ADDRESS = MATCH_NAME  
-  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   
-                               ; use MATCH_NAME for devices with random address
-                               ; that changes, and run a scan to find the current address
-                                                                              
-DEVICE = nRF52840  TYPE=LE NODE=8  ADDRESS=CD:01:87:91:DF:39  RANDOM=UNCHANGED  
-  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2                                           
-                               ; use RANDOM=UNCHANGED for random address devices that
-                               ; do not change their address (no scan required)
-                                        
-                                                 
 DEVICE = Windows PC  TYPE=classic node=10 address=00:1A:7D:DA:71:13
 
 DEVICE = HC-05 TYPE=CLASSIC NODE=7 PIN=1234 CHANNEL=1 ADDRESS = 98:D3:32:31:59:84
 
 DEVICE = Android phone TYPE=CLASSIC NODE=4 ADDRESS = 4C:4E:03:83:CE:B9
+
+DEVICE = My Other Pi   TYPE=mesh NODE=2  ADDRESS = DC:A6:32:04:DB:56
+  ; LE characteristics when acting as an LE server
+  ; Specify UUIDs and let system allocate handles
+  PRIMARY_SERVICE = 1800
+    LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0 
+    LECHAR = Appearance   PERMIT=02 SIZE=2  UUID=2A01   ; index 1 
+  PRIMARY_SERVICE = 1801
+    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; index 2  
+  PRIMARY_SERVICE = 180A
+    LECHAR = PnP ID          PERMIT=02 SIZE=7 UUID=2A50 ; index 3 
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00 
+    LECHAR = Control  PERMIT=06 SIZE=8 UUID=ABCD        ; index 4
+    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; index 5
+    
+DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C    ; Fixed address
+  ; Specify UUID, but find_ctics() must be called to find handle  
+  LECHAR=Name    UUID=2A00                      ; index 0  
+  ; If handles are known and specifed, find_ctics() is not needed
+  LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; index 1
+  LECHAR=Control handle=000E PERMIT=06 SIZE=1   ; index 2
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ; index 3                                           
+
+
+DEVICE = My Android  TYPE=LE NODE=5 ADDRESS = MATCH_NAME  
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   
+                               ; use MATCH_NAME for devices with random address
+                               ; that changes, and run an le_scan to find the current address
+                                                                              
+DEVICE = nRF52840  TYPE=LE NODE=8  ADDRESS=CD:01:87:91:DF:39  RANDOM=UNCHANGED  
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2                                           
+                               ; use RANDOM=UNCHANGED for random address devices that
+                               ; do not change their address (no scan required)
 ```
 
 These are the parameters that can be set for each device.
@@ -514,16 +509,23 @@ CHANNEL = 4                   RFCOMM channel for CLASSIC servers (optional)
 PIN = 1234                    PIN code for CLASSIC servers (optional)
 ```
 
-LE device entries can be followed by any number of characteristic entries as follows. If the local device
-will be an LE server (but still type=MESH) see [le server](#4-2-17-le\_server) for full details of handle and UUID settings.
+LE device entries can be followed by primary service and characteristic entries.
+For an LE server, primary service UUIDs can be specified as follows.
+These entries should be on a separate line, with
+no other entries on the same line.
+
+```
+PRIMARY_SERVICE = 11223344-5566-7788-99AA-BBCCDDEEFF00 
+```
+
+Characteristic information is as follows, each LECHAR and its specification on one line:
 
 ```
 LECHAR = Characteristic name of your choice
-HANDLE = 000B  2-byte handle in hex - can be automatically allocated
+HANDLE = 000B  2-byte handle in hex
 PERMIT = 06    Permissions in hex
 SIZE = 1       Number of bytes in decimal. Range = 1 to 244
-UUID = 2A00    Not needed if HANDLE specified -
-               can be automatically allocated
+UUID = 2A00    2-byte UUID
 UUID = 11223344-5566-7788-99AA-BBCCDDEEFF00    16-byte UUID
 ```
 
@@ -540,27 +542,126 @@ PERMIT permissions should be one of the following bit combinations:
 20 = i   Indicate capable
 ```
 
-If PERMIT is not known, find_ctics will
-find it and save it in the device information. 
+The following LE client and LE server sections describe what information is required in each case:
 
-If HANDLE is not known, the UUID can be specified instead.
+### LE client
 
-```
-LECHAR=Name  UUID=11223344-5566-7788-99AABBCCDDEEFF00
-```
-
-With this minimum information, when the characteristic is read via find\_ctics or
-read_ctic, the code will find the HANDLE and SIZE and save them in the device information.
-
-For an LE server, primary service UUIDs can be specified as follows. These entries should be on a separate line, with
-no other entries on the same line. This is optional - if a primary service UUID is not specified, it
-will be allocated automatically.
+If the Pi is an LE client, and the devices.txt information describes the characteristics of an LE server
+that it will connect to, the following information should be provided.
+To read/write a characteristic, the client only needs to know the handle, and does not need the UUID.
+So if the handle is known, the following information allows the client to read/write characteristics
+immediately on connection.
 
 ```
-PRIMARY_SERVICE = 11223344-5566-7788-99AA-BBCCDDEEFF00 
-                         16-byte primary service UUID
-                         (optional - for LE servers)
+  LECHAR=Test HANDLE=000B PERMIT=06 size=8   
 ```
+
+The characteristic will have a UUID, but the client does not need to know it.
+If the handles are not known, they must be found by first calling find\_ctics which reads the information from
+the server. In this case, the UUID must be known and the following information is the minimum needed.
+
+
+```
+LECHAR=Test  UUID=11223344-5566-7788-99AABBCCDDEEFF00
+```
+
+The remaining information (handle/permit/size) is found by find\_ctics and read\_ctic. For an LE client, primary service UUIDs are
+irrelevant and are not needed.
+
+
+### LE server
+
+If the Pi is an LE server, and the devices.txt information describes its own characteristics, the following
+information should be provided.
+Primary service UUIDs can be specified, but they are optional. If not specified,
+a single primary service UUID will be allocated automatically. 
+
+```
+DEVICE = LE server Pi  TYPE=MESH NODE=1 ADDRESS = 00:1E:C0:2D:17:7C 
+  ; no PRIMARY_SERVICE defined
+  LECHAR=Control PERMIT=06 SIZE=1  UUID=ABCD  ; you choose characteristic UUID
+```
+      
+The characteristic UUID is a 2 or 16-byte number that you choose. The characteristic handles will be
+allocated automatically. If no primary service UUIDs are specified, it
+is possible to specify the characteristic handles yourself - see [DIY handles](#diy-handles).
+
+
+Primary service UUIDs can be
+2 or 16-byte. Some 2-byte UUIDs have standard meanings, and are common to all LE servers. See 
+[16-bit UUID Numbers](https://www.bluetooth.com/specifications/assigned-numbers/).
+
+```
+DEVICE = My Other Pi   TYPE=mesh NODE=2  ADDRESS = DC:A6:32:04:DB:56
+  ; LE characteristics when acting as an LE server
+  ; Specify UUIDs and let system allocate handles
+  PRIMARY_SERVICE = 1800                                ; 1800=Generic access
+    LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; 2A00=Device name 
+    LECHAR = Appearance   PERMIT=02 SIZE=2  UUID=2A01   ; 2A01=Appearance
+  PRIMARY_SERVICE = 1801                                ; 1801=Generic attributes
+    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; 2A05=Service changed
+  PRIMARY_SERVICE = 180A                                ; 180A=Device information
+    LECHAR = PnP ID          PERMIT=02 SIZE=7 UUID=2A50 ; 2A50=PnP ID 
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00    ; private service, you choose UUID
+    LECHAR = Control  PERMIT=06 SIZE=8 UUID=ABCD        ; private characteristic, you choose UUID
+    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; private characteristic, you choose UUID
+```    
+
+If multiple primary services are defined like this, it is not possible to specify the handles yourself -
+the system will set the handles. You must specify permit and size.
+
+ 
+### DIY handles
+
+For LE servers where the devices.txt file describes the Pi's own characteristics, and no primary services
+are specified, the handles can be specified.
+(Normally, specify UUIDs and let the system set the handles).
+The advantage of choosing the handles is that they can be listed in all
+mesh Pi devices.txt files
+and connecting Pis do not need to read the services via find\_ctics to find the handles.
+Connecting Android/Windows devices
+will always read the services to find the handles.
+If the handles are specified, the first available one is 0005, and
+each characteristic also uses one other handle, or two others if notification is enabled.
+So if handle=0005 is chosen,
+it also uses the previous handle 0004, and if it has notify enabled it also uses the following
+handle 0006. So for a sequence of characteristics
+without notify capability, use:
+
+```
+0005   (also uses 0004)
+0007   (also uses 0006)
+0009   (also uses 0008)
+000B   (also uses 000A)
+
+```
+
+For a sequence, all with notify capability, use
+
+```
+0005  (also uses 0004 and 0006)
+0008  (also uses 0007 and 0009)
+000B  (also uses 000A and 000C)
+
+```
+
+The characteristic UUIDs can be specified or not. If not, the system will allocate them automatically and 
+the last four bytes will be the handle and the characteristic index. The UUID can be one of the
+standard defined [16-bit UUID Numbers](https://www.bluetooth.com/specifications/assigned-numbers/), and the
+connecting device will recognise it as such. 
+
+Here is a sample devices.txt entry for a mesh Pi that will act as an LE server.
+
+```
+DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
+  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes 
+  LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable (uses 3 handles)
+  LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte         (uses 2 handles)
+  LECHAR=Message  HANDLE=000C  PERMIT=06  SIZE=8 UUID=00112233445566778899AABBCCDDEEFF   ; r/w 8 bytes
+```
+
+In the above case there will be one automatically allocated primary service UUID, and UUIDs will be
+automatically allocated for the first three characteristics.
 
 
 ### Match Name
@@ -599,6 +700,50 @@ DEVICE = Galaxy  TYPE=LE  NODE=7   ADDRESS = MATCH_NAME
 
 DEVICE = nRF52840  TYPE=LE NODE=8  ADDRESS=CD:01:87:91:DF:39  RANDOM=UNCHANGED  
 ```
+
+
+### SERVICES CHANGED
+
+There is a special characteristic that signals to the client that the characteristic services have changed
+(not the characteristic values, but the handles, permissions, UUIDs, sizes). This should prompt the client
+to re-read all the characteristic info. However, many systems don't respond in this way, and sending a
+Service Changed message is a fool's errand.
+
+One situation where this might be needed is when the client is an Android or Apple device. When an Android
+first connects to a Bluetooth LE server, it reads the characteristics (like find\_ctics) and stores the
+information in a cache. Next time it connects, it assumes that the characteristics are still the same, and
+instead of reading the characteristics again it gets the information from its cache. So, if your Pi LE server
+has a new set of characteristics, the Android will not see them. Sending a Service Changed message should fix
+this, but it often doesn't. Clearing the Android's cache fixes it, but it's messy to code, and turning the Android's
+Bluetooth off and on may be the only method. The problem seems to have been fixed with Android 12.
+
+
+For what it's worth, send a Service Changed message to the client as follows: 
+  
+```
+In the devices.txt file, define a Service Changed characteristic
+with a UUID of 2A05, permission 20 and size 4
+
+DEVICE = My Pi  TYPE=Mesh  node=1  ADDRESS=11:22:33:44:55:66
+  LECHAR=Serv change   permit=20  size=4  UUID=2A05    ; index 0
+  
+ 
+Somewhere in your le_callback code, write to the local characteristic
+(index 0) to signal that all handles from 0x0001 to 0xFFFF have changed. 
+An indication (permission 20) will be sent to the client.
+
+
+unsigned char dat[4];
+
+dat[0] = 1;   // start handle
+dat[1] = 0;
+dat[2] = 0xFF;  // end handle
+dat[3] = 0xFF;
+write_ctic(localnode(),0,dat,0);
+
+```
+
+
 
 ## 3-4 Windows-Android-HC-05 Classic servers
 
@@ -935,7 +1080,7 @@ d - Disconnect
 ```
 
 The server's characteristics are defined in the devices.txt file, full details
-in [devices file](#3-3-devices-file) and [le\_server](#4-2-17-le\_server).
+in [devices file](#3-3-devices-file).
 
 Starting the server and reading/writing the local characteristics are programmed via btlib funtions as follows:
 
@@ -1085,48 +1230,6 @@ int notify_callback(int lenode,int cticn,char *buf,int nread)
   
 ```
 
-### SERVICES CHANGED
-
-There is a special characteristic that signals to the client that the characteristic services have changed
-(not the characteristic values, but the handles, permissions, UUIDs, sizes). This should prompt the client
-to re-read all the characteristic info. However, many systems don't respond in this way, and sending a
-Service Changed message is a fool's errand.
-
-One situation where this might be needed is when the client is an Android or Apple device. When an Android
-first connects to a Bluetooth LE server, it reads the characteristics (like find\_ctics) and stores the
-information in a cache. Next time it connects, it assumes that the characteristics are still the same, and
-instead of reading the characteristics again it gets the information from its cache. So, if your Pi LE server
-has a new set of characteristics, the Android will not see them. Sending a Service Changed message should fix
-this, but it often doesn't. Clearing the Android's cache fixes it, but it's messy to code, and turning the Android's
-Bluetooth off and on may be the only method. The problem seems to have been fixed with Android 12.
-
-
-For what it's worth, send a Service Changed message to the client as follows: 
-  
-```
-In the devices.txt file, define a Service Changed characteristic
-with a UUID of 2A05, permission 20 and size 4
-It makes sense to declare this first, so it has an index of 0
-
-
-DEVICE = My Pi  TYPE=Mesh  node=1  ADDRESS=11:22:33:44:55:66
-  LECHAR=Serv change   permit=20  size=4  UUID=2A05    ; index 0
-  
- 
-Somewhere in your le_callback code, write to the local characteristic
-(index 0) to signal that all handles from 0x0001 to 0xFFFF have changed. 
-An indication (permission 20) will be sent to the client.
-
-
-unsigned char dat[4];
-
-dat[0] = 1;   // start handle
-dat[1] = 0;
-dat[2] = 0xFF;  // end handle
-dat[3] = 0xFF;
-write_ctic(localnode(),0,dat,0);
-
-```
 
 ## 3-8 Pi-Pi client-server connection
 
@@ -2409,8 +2512,8 @@ LE clients to connect, then spends all its time listening
 for operations sent from those clients. When a remote device connects,
 reads/writes a characteristic, or disconnects, a callback function is called, and this can
 be used to trigger code execution by the server, allowing the server to be controlled by
-the LE client. The characteristics are defined in the devices.txt file, details below.
-
+the LE client. The characteristics are defined in the [devices file](#3-3-devices-file).
+A timer may be specified that calls the callback function at regular intervals.
 
 The connecting device may be another Pi acting as an LE client, or a phone app such
 as [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile).
@@ -2490,70 +2593,8 @@ write_ctic(localnode(),2,buf,0);           // write SIZE= number of bytes
 ```
 
 They can also be read and written by a connected LE client.
-In the devices.txt file, the characteristic handles can be specified or not.
-If not, the system will allocate them automatically.
-The advantage of choosing the handles is that they can be listed in all
-mesh Pi devices.txt files
-and connecting Pis do not need to read the services to find the handles. Connecting Android/Windows devices
-will read the services to find the handles.
-If the handles are specified, the first available one is 0005, and
-each characteristic also uses one other handle, or two others if notification is enabled.
-So if handle=0005 is chosen,
-it also uses the previous handle 0004, and if it has notify enabled it also uses the following
-handle 0006. So for a sequence of characteristics
-without notify capability, use:
 
-```
-0005   (also uses 0004)
-0007   (also uses 0006)
-0009   (also uses 0008)
-000B   (also uses 000A)
 
-```
-
-For a sequence, all with notify capability, use
-
-```
-0005  (also uses 0004 and 0006)
-0008  (also uses 0007 and 0009)
-000B  (also uses 000A and 000C)
-
-```
-
-The characteristic UUIDs can be specified or not. If not, the system will allocate them automatically and 
-the last four bytes will be the handle and the characteristic index. The UUID can be one of the
-standard defined [16-bit UUID Numbers](https://www.bluetooth.com/specifications/assigned-numbers/), and the
-connecting device will recognise it as such. 
-
-Here is a sample devices.txt entry for a mesh Pi that will act as an LE server. There is more information
-about devices.txt LE characteristic entries in [devices file](#3-3-devices-file).
-
-```
-DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes 
-  LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable (uses 3 handles)
-  LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte         (uses 2 handles)
-  LECHAR=Message  HANDLE=000C  PERMIT=06  SIZE=8 UUID=00112233445566778899AABBCCDDEEFF   ; r/w 8 bytes
-  LECHAR=Name     PERMIT=06  SIZE=16 UUID=2A00     ; 2A00 is the standard UUID for Device Name
-  LECHAR=Control  PERMIT=06  SIZE=2                ; index 5 Handle and UUID will be assigned automatically 
-                                                     (but other Mesh Pis will report this as an error in 
-                                                      their devices.txt file - they need a handle or a UUID.)
-
-  In the above case there will be one automatically allocated primary service UUID.
-  As an option, primary service UUIDs can be specified. In this case, specify characteristic
-  UUIDs and let the system allocate handles automatically:
-
-DEVICE = LE server Pi   TYPE=MESH NODE=10 ADDRESS=B6:15:EB:F5:50:33                                   
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00  ; must be 16-byte UUID
-  LECHAR=Dog     PERMIT=06  SIZE=8 UUID=1111    
-  LECHAR=Cat     PERMIT=06  SIZE=8 UUID=2222     
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF01
-  LECHAR=Vole     PERMIT=06  SIZE=8 UUID=3333    
-  LECHAR=Gerbil   PERMIT=06  SIZE=8 UUID=4444     
-  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF02    
-  LECHAR=Hamster  PERMIT=06  SIZE=8 UUID=5555    
-  LECHAR=Pig      PERMIT=06  SIZE=8 UUID=6666
-```
 
 
 SAMPLE CODE

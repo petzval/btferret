@@ -1,15 +1,44 @@
      ; semicolon is comment char
      ; This file must list all network devices - here are some examples
 DEVICE = My Pi         TYPE=MESH node=1  ADDRESS = B8:27:EB:F1:50:C3
+
+DEVICE = Windows PC    TYPE=classic node=4   address=00:1A:7D:DA:71:13
+
+DEVICE = Android phone TYPE=CLASSIC node=10  ADDRESS = 98:80:EE:75:4D:EB
+
+DEVICE = HC-05 TYPE=CLASSIC node=9 PIN=1234 channel=1 ADDRESS=98:D3:32:31:59:84
+
 DEVICE = My Other Pi   TYPE=mesh NODE=2  ADDRESS = DC:A6:32:04:DB:56
   ; LE characteristics when acting as an LE server
-  LECHAR = Control  PERMIT=06 SIZE=8   HANDLE=0005            ; index 0
-  LECHAR = Info     PERMIT=06 SIZE=1   HANDLE=0007            ; index 1
-  LECHAR = Name     PERMIT=06 SIZE=16  HANDLE=0009 UUID=2A00  ; index 2
-DEVICE = Windows PC    TYPE=classic node=4   address=00:1A:7D:DA:71:13
-DEVICE = Android phone TYPE=CLASSIC node=10  ADDRESS = 98:80:EE:75:4D:EB
+  ; Specify UUIDs and let system allocate handles
+  PRIMARY_SERVICE = 1800
+    LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0
+    LECHAR = Appearance   PERMIT=02 SIZE=2  UUID=2A01   ; index 1
+  PRIMARY_SERVICE = 1801
+    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; index 2
+  PRIMARY_SERVICE = 180A
+    LECHAR = PnP ID          PERMIT=02 SIZE=7 UUID=2A50 ; index 3
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00
+    LECHAR = Control  PERMIT=06 SIZE=8 UUID=ABCD        ; index 4
+    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; index 5
+
 DEVICE = LE device     TYPE=LE      NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
-  ; characteristics of the above LE server device
-  LECHAR=Test    HANDLE=000B PERMIT=06 SIZE=1  ; LE characteristic index 0
-  LECHAR=Name    PERMIT=06 UUID=2A00           ;                   index 1                                            
-DEVICE = HC-05   TYPE=CLASSIC node=9 PIN=1234 channel=1 ADDRESS = 98:D3:32:31:59:84
+  ; Characteristics of the above LE server device
+  ; Specify UUID, but find_citcs() must be called to find handle
+  LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0
+  ; If handles are known and specifed, find_ctics() is not needed
+  LECHAR=Test    HANDLE=000B PERMIT=06 SIZE=1         ; index 1
+  LECHAR=Control HANDLE=000D PERMIT=06 SIZE=8         ; index 2
+  
+DEVICE = Galaxy  TYPE=LE NODE=5 ADDRESS = MATCH_NAME  
+          ; use MATCH_NAME for devices with a known name and an 
+          ; unknown address (e.g. a random address LE device)
+          ; Run a classic_scan or le_scan to find the address
+          ; This example will look for a device name starting "Galaxy"  
+                                                                            
+DEVICE = nRF52840  TYPE=LE NODE=8  ADDRESS=CD:01:87:91:DF:39  RANDOM=UNCHANGED  
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2                                           
+          ; use RANDOM=UNCHANGED for random address LE devices that
+          ; do not change their address (no scan required)  
+  
+  

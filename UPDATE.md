@@ -77,3 +77,6 @@ transfer protocol. It can act as a classic client or server for btferret.
 1. New functions: set\_le\_interval(), set\_le\_interval\_update(), and set\_le\_interval\_server().
 Set the LE connection interval which controls the speed of multiple read/writes.
 2. Bug fix. Rapid writes of large LE characteristics could sometimes crash the system.
+
+### Version 11
+1. LE server: 2-byte primary services in devices.txt, allows standard LE characteristics set-up.

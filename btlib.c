@@ -74,7 +74,7 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 10
+#define VERSION 11
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -84,6 +84,17 @@ struct hci_dev_req
   // Target packet transmission time in microseconds
 #define TRANSMITUS 2048 
 
+
+struct psdata
+  {
+  int handle;
+  int eog;
+  int uuidtype;
+  unsigned char uuid[16];
+  };
+  
+struct psdata pserv[32]; 
+
 struct cticdata 
   {
   int type;    // CTIC_UNUSED=allocated but unused CTIC_ACTIVE=used CTIC_END=terminate
@@ -91,7 +102,7 @@ struct cticdata
   int size;    // number of bytes 0=unknown
   int perm;    // permissions 0=unknown 02=read 04=write no ack 08=write ack
   int notify;   // 1=enable notifications
-  int psn;  // primary service index
+  int psnx;
   int lasthandle;  // in primary service
   char name[NAMELEN];  // name of characteristic - your choice
   int chandle;    // characteristic handle 0=unknown 
@@ -387,9 +398,9 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
 void replysdp(int ndevice,int in,unsigned char *uuid,char *name);
 int addaid(unsigned char *sdp,unsigned char *aid,int *rn,int aidj,int aidk,int aidn);
 void rwlinkey(int rwflag,int ndevice);
-int localctics(void);
+int localctics(int starthandle);
 void leserver(int ndevice,int count,unsigned char *dat);
-int nextctichandle(int start,int end,int *handle);
+int nextctichandle(int start,int end,int *handle,int flag);
 int findcticuuid(int start,int end,unsigned char *uuidrev,int size);
 char *cticerrs(struct cticdata * cp);
 void addname(void);
@@ -409,6 +420,7 @@ void readleatt(int node,int handle);
 void printval(unsigned char *s,int len,unsigned char *t);
 int splitcmd(unsigned char *s);
 int splitwrite(unsigned char *cmd,int len);
+int stuuid(unsigned char *s);  
 
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
@@ -551,6 +563,9 @@ unsigned char lescanoff[10] = {6,0,0,0,1,0x0C,0x20,2,0,0};  // scan for LE devic
 unsigned char leadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x0F,0x08,0xFF,0x34,0x12,
 0x00,0x00,0xC0,0xDE,0x99,0x05,0x08,0x61,0x62,0x63,0x64,0x00,0x00,0x00,0x00,0x00,0x00,
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
+unsigned char hidadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x14,0x02,0x01,0x06,
+0x04,0x08,0x48,0x49,0x44,0x0B,0x03,0x12,0x18,0x00,0x18,0x01,0x18,0x0A,0x18,0x0F,0x18,0x00,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
 
         // set advertising parmeters  [8]=type 0=connectable 3=non connectable, unidirected adv
                                                       //        min int   max int    x0.625ms 0800 = 1.28s  0200=320ms                               
@@ -683,16 +698,19 @@ unsigned char lebufsz[8] = {4,0,0,0,0x01,0x02,0x20,0};
 
    // classic server
 unsigned char conaccept[16] =  { 11,0,S2_BADD,0,0x01,0x09,0x04,0x07,0x11,0x22,0x33,0x44,0x55,0x66,0x00 };
+unsigned char conreject[16] =  { 11,0,0,0,0x01,0x0A,0x04,0x07,0x11,0x22,0x33,0x44,0x55,0x66,0x0D };
 unsigned char spcomp[20] =   { 10,0,S2_BADD,0,0x01,0x2C,0x04,0x06,0x11,0x22,0x33,0x44,0x55,0x66 };
 
 
 unsigned char baseuuid[16] = {0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF,0xFF};    
+unsigned char standard[16] = {0x00,0x00,0x00,0x00,0x00,0x00,0x10,0x00,0x80,0x00,0x00,0x80,0x5F,0x9B,0x34,0xFB};    
   
 
   // LE server
 unsigned char lereadreply[LEDATLEN+20] = {11,0,S2_HAND,0,2,0x40,0,0x06,0,0x02,0,4,0,0x0B,0};  // length 10+number bytes
 
 unsigned char le05reply[40]  = {15,0,S2_HAND,0,2,0x40,0,0x0A,0,0x06,0,4,0,0x05,0x01}; 
+unsigned char le07reply[20]  = {14,0,S2_HAND,0,2,0x40,0,0x09,0,0x05,0,4,0,0x07,0x00,0x00,0x00,0x00}; 
  
 unsigned char le09replyv[LEDATLEN+24] =  {32,0,S2_HAND,0,2,0x40,0,0x1B,0,0x17,0,4,0,0x09};
 
@@ -1220,7 +1238,7 @@ int init_blue(char *filename)
 
 int init_blue_ex(char *filename,int hcin)
   {
-  int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psn;
+  int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psn,psnx,starthandle;
   int clflag,leflag,readret,meshcount,lecap,btleindex;
   unsigned int ind[16];
   struct cticdata *cp;
@@ -1301,7 +1319,7 @@ int init_blue_ex(char *filename,int hcin)
   errcount = 0;
   meshcount = 0;
   psn = -1;  // primary service index
-      
+       
   // zero entries  n=first undefined
   for(k = 0 ; k < NUMDEVS ; ++k)
     {
@@ -1422,7 +1440,30 @@ int init_blue_ex(char *filename,int hcin)
     strcpy(s,btledev[0]);  // btle 1st line  
     readret = 1;
     btleindex = 1;
+    }  
+    
+  for(n = 0 ; n < 32 ; ++n)
+    {
+    pserv[n].handle = -1;
+    pserv[n].eog = 0xFFFF;
     }
+  pserv[0].handle = 1;
+  pserv[0].eog = 1;
+  pserv[0].uuidtype = 2;
+  pserv[0].uuid[0] = 0x18;
+  pserv[0].uuid[1] = 0;
+  pserv[1].handle = 2;
+  pserv[1].eog = 2;
+  pserv[1].uuidtype = 2;
+  pserv[1].uuid[0] = 0x18;
+  pserv[1].uuid[1] = 0x01;
+  pserv[2].handle = 3;
+  pserv[2].eog = 0;
+  pserv[2].uuidtype = 16;
+  for(i = 0 ; i < 16 ; ++i)
+    pserv[2].uuid[i] = baseuuid[i];
+  psnx = -1;    
+  starthandle = 5;
       
   while(readret > 0 && errcount == 0)
     {
@@ -1525,6 +1566,7 @@ int init_blue_ex(char *filename,int hcin)
           --i;
           }
         psn = -1;
+        psnx = -1;
         }  // end ind[0] DEVICE
         
       if(ind[1] != 0)
@@ -1596,10 +1638,10 @@ int init_blue_ex(char *filename,int hcin)
           cp->name[i] = 0;
           --i;
           }
-        if(psn < 0)
-          cp->psn = 0;
-        else
-          cp->psn = psn;   
+                  
+        if(psnx < 0)
+          psnx = 2;  
+        cp->psnx = psnx;
         }  // end ind[4] LECHAR
         
         
@@ -1724,23 +1766,75 @@ int init_blue_ex(char *filename,int hcin)
           }
         }
      
-      if(ind[12] != 0)
+      if(dn == 0 && ind[12] != 0)
         {  // PRIMARY_SERVICE
         len = entrylen(ind,12);
         sn = ind[12] & 0xFFFF;
         data = strtohexx(s + sn,len,&hn);
-        if(hn != 16)
+        if(hn != 16 && hn != 2)
           {
-          NPRINT "%sSERVICE UUID must be 16 bytes\n",errs); 
+          NPRINT "%sSERVICE UUID must be 2 or 16 bytes\n",errs); 
           errflag = 1;
           }
         else
           {
-          if(psn < 15)
+          if(hn == 2 && data[0] == 0x18 && (data[1] == 0 || data[1] == 1))
+            {
+            if((data[1] == 0 && psnx > 0) || (data[1] == 1 && psnx != 0))
+              {
+              NPRINT "%sPrimary services 1800/1801 must be 1st/2nd\n",errs);
+              errflag = 1;
+              }
+            else if(data[1] == 0)
+              {
+              psnx = -2;
+              //starthandle = 3;
+              }
+            }
+
+          if(errflag == 0 && psnx < 30)
+            {
+            if(psnx == -2)
+              {
+              psnx = 0;
+              pserv[psnx].handle = 1;
+              starthandle = 3;
+              }
+            else if(psnx == -1)
+              {
+              psnx = 2;
+              pserv[psnx].handle = 3;
+              }
+            else
+              {
+              ++psnx;             
+              pserv[psnx].handle = 0;
+              }
+            pserv[psnx].uuidtype = hn;
+            for(i = 0 ; i < hn ; ++i)
+              pserv[psnx].uuid[i] = data[i];
+            }
+          else
+            {
+            NPRINT "%sToo many PRIMARY_SERVICEs\n",errs);
+            errflag = 1;
+            }
+
+ 
+          if(psn < 14)
             {
             ++psn;
+            if(hn == 2)
+              {
+              data[2] = data[0];
+              data[3] = data[1];
+              data[0] = 0;
+              data[1] = 0;
+              for(i = 4 ; i < 16 ; ++i)
+                data[i] = standard[i];
+              }
             for(i = 0 ; i < 16 ; ++i)
-              dev[dn]->primaryuuid[(psn << 4) + i] = data[i];
+              dev[dn]->primaryuuid[(psn << 4) + i] = data[i];    
             }
           else
             {
@@ -1836,7 +1930,7 @@ int init_blue_ex(char *filename,int hcin)
     sendhci((unsigned char*)s,0);
     }
       
-  if(localctics() == 0)
+  if(localctics(starthandle) == 0)
     ++errcount;    
  
   if(lecap == 0)
@@ -1879,7 +1973,7 @@ char *cticerrs(struct cticdata * cp)
   
 
 
-int localctics()
+int localctics(int starthandle)
   {
   int n,k,j,uuidn,handle,flag,min,max,psn;
   struct cticdata *cp,*cpx,*lastcp;
@@ -1916,27 +2010,31 @@ int localctics()
   for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
     cp = ctic(0,n);
-    if(cp->psn != psn)
+    if(cp->psnx != psn)
       {
-      psn = cp->psn;
+      psn = cp->psnx;
       if(lastcp != NULL)
-        lastcp->psn |= 0x20000;
-      cp->psn |= 0x10000;  // 1st flag
+        {
+        lastcp->psnx |= 0x20000;
+        }
+      cp->psnx |= 0x10000;
       }
     lastcp = cp;  
-    if(psn > 0 && cp->chandle != 0)
+    if((starthandle != 5 || psn > 2) && cp->chandle != 0)
       {
-      NPRINT "%sDo not specify HANDLE for PRIMARY SERVICES beyond first\n",cticerrs(cp));
-      NPRINT "      Specify UUID and let the system set the handles\n");
+      NPRINT "%sDo not specify HANDLEs for these services\n",cticerrs(cp));
+      NPRINT "      Specify UUIDs and let the system set the handles\n");
       return(0);
       }
     }  
 
   if(lastcp != NULL)
-    lastcp->psn |= 0x40000;
+    {
+    lastcp->psnx |= 0x40000;
+    }
       
   // check handles
-  handle = 4;  // max specified - 1st alloc = 5
+  handle = starthandle-1;  // 4
   for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
     cp = ctic(0,n);
@@ -1944,9 +2042,9 @@ int localctics()
 
     if(cp->chandle != 0)
       {
-      if(cp->chandle < 5)
+      if(cp->chandle < starthandle)
         {
-        NPRINT "%shandle must be 5 or greater\n",errs);
+        NPRINT "%shandle must be % or greater\n",errs,starthandle);
         return(0);
         }
    
@@ -1997,12 +2095,13 @@ int localctics()
             max = min + 2;
             if((cp->perm & 0x30) != 0)
               --min;
-            if((cpx->psn & 0x10000) != 0)
+            if((cpx->psnx & 0x10000) != 0)
               --min;  // PS
             if((cpx->perm & 0x30) != 0)
               ++max;
-            if((cp->psn & 0x10000) != 0)
+            if((cp->psnx & 0x10000) != 0)
               ++max;          
+
             if(handle >= min && handle <= max)
               {
               flag = 1;  // fail
@@ -2012,8 +2111,35 @@ int localctics()
           }
         }
       while(flag != 0);
-        
+    
+
+      j = cp->psnx & 31;
+      if((cp->psnx & 0x10000) != 0)
+        {      
+        for(k = 0 ; k < j ; ++k)
+          {
+          if(pserv[k].handle == 0)
+            {
+            pserv[k].handle = handle-2;
+            pserv[k].eog = handle-2;
+            ++handle;
+            }
+          }
+        }
+
       cp->chandle = handle;
+     
+      if((cp->psnx & 0x10000) != 0)
+        {
+        pserv[j].handle = handle-2;
+        pserv[j].eog = handle-2;
+        }
+      if((cp->psnx & 0x20000) != 0)
+        {
+        pserv[j].eog = handle;
+        if((cp->perm & 0x30) != 0)
+          ++pserv[j].eog;
+        } 
       }  
 
     if(cp->uuidtype == 0)
@@ -2052,7 +2178,7 @@ int localctics()
       return(0);
       }
 
-    /*******/ 
+
     if(cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0)
       { // device name
       j = 0;
@@ -2063,7 +2189,6 @@ int localctics()
         }
       cp->value[j] = 0;
       }
-     /********/
      
     if(cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x05)
       {
@@ -2072,38 +2197,14 @@ int localctics()
       }  
       
     }
-    
-  // set lasthandle
-  psn = 0;
-  do
+
+
+  for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
-    handle = 0;
-    for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
-      {
-      cp = ctic(0,n);
-      if((cp->psn & 0xFFFF) == psn && (cp->psn & 0x20000) != 0)
-        {
-        if((cp->perm & 0x30) == 0)
-          j = cp->chandle;
-        else
-          j = cp->chandle+1;
-          
-        if(j > handle)
-          handle = j;
-        }
-      }
-    if(handle != 0)
-      {      
-      for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
-        {
-        cp = ctic(0,n);
-        if((cp->psn & 0xFFFF) == psn)
-          cp->lasthandle = handle;
-        }
-      }
-    ++psn;
+    cp = ctic(0,n);
+    if((cp->psnx & 0x40000) != 0)
+      pserv[cp->psnx & 31].eog = 0xFFFF;
     }
-  while(handle != 0);  
     
   return(1);
   }
@@ -2346,7 +2447,7 @@ struct cticdata *cticalloc(int ndevice)
   cp->notify = 0;
   cp->chandle = 0;
   cp->uuidtype = 0;
-  cp->psn = 0;
+  cp->psnx = 0;
   cp->lasthandle = 0xFFFF;
   cp->iflag = 0;
   cp->nextctic = &cticnull;  // with type = CTIC_END
@@ -4873,7 +4974,7 @@ int read_ctic(int node,int cticn,unsigned char *data,int datlen)
     
   sendhci(pack,ndevice);
        
-  readhci(ndevice,IN_ATTDAT,0,gpar.timout,gpar.toshort);
+  readhci(ndevice,IN_ATTDAT,0,5000,gpar.toshort);
       
   n = findhci(IN_ATTDAT,ndevice,INS_POP);  
   if(n >= 0) 
@@ -5166,7 +5267,7 @@ int sendhci(unsigned char *s,int ndevice)
       ntogo -= nwrit;
       cmd += nwrit;
       }   
-    if(timems(TIM_RUN) - timstart > 2000)   // 2 sec timeout
+    if(timems(TIM_RUN) - timstart > 5000)   // 5 sec timeout
       {
       NPRINT "Send CMD timeout\n");
       timems(TIM_FREE);
@@ -5646,10 +5747,19 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         gotflag = IN_CLHAND;
         n0 = 6;
         } 
-      else if( (sflag & IN_CONREQ) != 0 && buf[1] == 0x04)
+      else if(buf[1] == 0x04)
         {
-        gotflag = IN_CONREQ;
-        n0 = 3;
+        if((sflag & IN_CONREQ) != 0)
+          {
+          gotflag = IN_CONREQ;
+          n0 = 3;
+          }
+        else
+          {
+          for(k = 0 ; k < 6 ; ++k)
+            conreject[PAKHEADSIZE+k+4] = buf[3+k];
+          sendhci(conreject,0);
+          }
         }
       else if(buf[1] == 0x17) 
         {  
@@ -6809,9 +6919,9 @@ handles 0004...  characteristics
 
 void leserver(int ndevice,int count,unsigned char *dat)
   {
-  int n,dn,cticn,flag,notflag,handle,node,start,end,startx;
+  int n,dn,xn,cticn,flag,notflag,handle,node,start,end,startx,psflag,eog;
   int size,uuidtype,aflag,xflag,acticn,ahandle,psn,locsize,datcount;
-  unsigned char cmd[2],*s,*data,errcode;
+  unsigned char cmd[2],*s,*data,errcode,buf[32];
   struct cticdata *cp;
 
   
@@ -6821,6 +6931,8 @@ void leserver(int ndevice,int count,unsigned char *dat)
   cticn = 0;
   errcode = 0;  
   aflag = 0;   // 0A opcode for non-value
+  notflag = 0;
+  cmd[0] = 0; 
   acticn = 0;
   ahandle = 0;
   xflag = 0;   // stop error
@@ -6831,38 +6943,55 @@ void leserver(int ndevice,int count,unsigned char *dat)
     xflag = 1;   // stop opcode not supported
     flag = 0;      
     handle = dat[1] + (dat[2] << 8);
-
-    if(dat[0] == 0x0A && handle < 4)
+    
+    // look for PS
+    psn = -1;
+    for(n = 0 ; pserv[n].handle > 0 && psn < 0 && n < 32 ; ++n) 
       {
-      if(handle == 3)
-        aflag = 2;  // 16b PS
-      else
-        aflag = 1;  // 2b PS
-      ahandle = handle;
+      if(pserv[n].handle == handle)
+        psn = n;
       }
-    // find cticn of handle
-  
-    for(cticn = 0 ; ctic(0,cticn)->type == CTIC_ACTIVE && flag == 0 && aflag == 0 ; ++cticn)
+    if(psn >= 0)
+      {  // PS
+      if(dat[0] != 0x0A)
+        {
+        VPRINT "Write not permitted\n");
+        errcode = 3;  // write not permit
+        }
+      else
+        {
+        size = pserv[psn].uuidtype;
+        for(n = 0 ; n < size ; ++n)
+          lereadreply[PAKHEADSIZE+10+n] = pserv[psn].uuid[size-1-n];
+        VPRINT "SEND Primary service UUID\n");
+        flag = 2;
+        }    
+      }
+         
+      // find cticn of handle
+ 
+    for(cticn = 0 ; ctic(0,cticn)->type == CTIC_ACTIVE && flag == 0 && aflag == 0 && errcode == 0 ; ++cticn)
       {
       cp = ctic(0,cticn);
 
-      if(dat[0] == 0x0A && handle == cp->chandle-1)
+      if(handle == cp->chandle-1)
         {
-        aflag = 3;   // 0A read of INFO - treat as 08
-        acticn = cticn;
-        ahandle = handle;
+        if(dat[0] == 0x0A)
+          {
+          aflag = 3;   // 0A read of INFO - treat as 08
+          acticn = cticn;
+          ahandle = handle;
+          }
+        else
+          {
+          VPRINT "Write not permitted\n");
+          errcode = 3;  // write not permit
+          }          
         }
-      else if(dat[0] == 0x0A && (cp->psn & 0x10000) != 0 && (cp->psn & 0xFFFF) != 0 && handle == cp->chandle-2)
-        {
-        aflag = 2;   // 0A read of 16b PS - treat as 08
-        acticn = cticn;
-        ahandle = handle;
-        }
+     
       else if(cp->chandle == handle || ((cp->perm & 0x30) != 0 && handle == cp->chandle+1) )
         { 
-        if(cp->chandle == handle)
-          notflag = 0;
-        else
+        if(cp->chandle != handle)
           notflag = 1;
 
         if(dat[0] == 0x52 || dat[0] == 0x12)
@@ -6898,6 +7027,8 @@ void leserver(int ndevice,int count,unsigned char *dat)
                 sendhci(leack,ndevice);  // send ack
                 }
               cmd[0] = LE_WRITE;
+              cmd[1] = cticn;
+              flag = 1;
               }
             }
           else   // notify descriptor
@@ -6912,6 +7043,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
               VPRINT "Send acknowledgement\n");
               sendhci(leack,ndevice);  // send ack
               }
+            flag = 1;
             }
           }
         else
@@ -6925,6 +7057,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
               }
             else
               {
+              VPRINT "SEND characteristic %s\n",cp->name);
               n = 0;
               while(n < cp->size && n < LEDATLEN)
                 {
@@ -6933,38 +7066,37 @@ void leserver(int ndevice,int count,unsigned char *dat)
                 }
               size = n;
               cmd[0] = LE_READ;
+              cmd[1] = cticn;
+              flag = 2;
               }
             }  
           else   // notify descriptor
             {
+            VPRINT "SEND notify status for characteristic %s\n",cp->name);
             size = 2;
             lereadreply[PAKHEADSIZE+10] = cp->notify & 1;
             lereadreply[PAKHEADSIZE+11] = 0;
+            flag = 2;
             }
-            
-          if(errcode == 0)
-            {            
-            lereadreply[0] = 10 + size;
-            lereadreply[PAKHEADSIZE+3] = (unsigned char)((size+5) & 0xFF);
-            lereadreply[PAKHEADSIZE+4] = (unsigned char)(((size+5) >> 8) & 0xFF);
-            lereadreply[PAKHEADSIZE+5] = (unsigned char)((size+1) & 0xFF);
-            lereadreply[PAKHEADSIZE+6] = (unsigned char)(((size+1) >> 8) & 0xFF);
-            if(notflag == 0)
-              VPRINT "SEND characteristic %s\n",cp->name);
-            else 
-              VPRINT "SEND notify status for characteristic %s\n",cp->name);
-            sendhci(lereadreply,ndevice);
-            }          
-          }
-        if(errcode == 0 && notflag == 0)
-          {
-          cmd[1] = cticn;
-          pushins(IN_LECMD,ndevice,2,cmd);
-          }   
-        flag = 1;
-        }
-      }
+          }            
+        }  // VN handle
+      }  // ctic loop
       
+      
+    if(flag == 2 && errcode == 0)
+      {            
+      lereadreply[0] = 10 + size;
+      lereadreply[PAKHEADSIZE+3] = (unsigned char)((size+5) & 0xFF);
+      lereadreply[PAKHEADSIZE+4] = (unsigned char)(((size+5) >> 8) & 0xFF);
+      lereadreply[PAKHEADSIZE+5] = (unsigned char)((size+1) & 0xFF);
+      lereadreply[PAKHEADSIZE+6] = (unsigned char)(((size+1) >> 8) & 0xFF);
+      sendhci(lereadreply,ndevice);
+      }
+                
+    if(errcode == 0 && notflag == 0 && flag != 0 && cmd[0] != 0)
+      pushins(IN_LECMD,ndevice,2,cmd);
+   
+        
     if(flag == 0 && aflag == 0)
       {
       NPRINT "%s trying to read/write invalid handle %04X\n",dev[ndevice]->name,handle);
@@ -6985,51 +7117,50 @@ void leserver(int ndevice,int count,unsigned char *dat)
     le05reply[0] = 15;
     s[3] = 0x0A;
     s[5] = 0x06;
-    s[10] = 1;  // 2 byte
-    if(start >= 1 && start <= 3)
-      {  // handles 1-3  2 byte UUID
-      s[11] = dat[1];  // handle
-      s[12] = dat[2];
-      s[13] = 0;
-      s[14] = 0x28;  
-      flag = 1;
-      }
-    else if(start > 3)
+    s[10] = 1;  // 2 byte    
+    
+    if(start >= 1)
       {    
-      cticn = nextctichandle(start,end,&handle);
+      cticn = nextctichandle(start,end,&handle,1);
+      
       if(cticn >= 0)
-        {  // found handle = one of 4 possible handles associated with cticn
-        cp = ctic(0,cticn);
-        if(handle == cp->chandle-2)
-          {  // PS
+        {  // found handle = PS or one of 3 for cticn
+        psflag = cticn >> 16;
+        cticn &= 0xFFFF;
+        if(psflag != 0)
+          {
           s[13] = 0x00;  // 2800 
           s[14] = 0x28;
           flag = 1;
           }
-        if(handle == cp->chandle-1)
+        else
           {
-          s[13] = 0x03;  // 2803 
-          s[14] = 0x28;
-          flag = 1;
-          }
-        else if(handle == cp->chandle+1)
-          {
-          s[13] = 0x02;  // 2902 notify 
-          s[14] = 0x29;
-          flag = 1;
-          }
-        else if(handle == cp->chandle)  // value uuid
-          {
-          if(cp->uuidtype == 16)
+          cp = ctic(0,cticn);          
+          if(handle == cp->chandle-1)
             {
-            s[3] = 0x18;
-            s[5] = 0x14;
-            s[10] = 2;  // 16 byte
-            le05reply[0] = 29;
+            s[13] = 0x03;  // 2803 
+            s[14] = 0x28;
+            flag = 1;
             }
-          for(n = 0 ; n < cp->uuidtype ; ++n)
-            s[n+13] = cp->uuid[cp->uuidtype-n-1];
-          flag = 1; 
+          else if(handle == cp->chandle+1)
+            {
+            s[13] = 0x02;  // 2902 notify 
+            s[14] = 0x29;
+            flag = 1;
+            }
+          else if(handle == cp->chandle)  // value uuid
+            {
+            if(cp->uuidtype == 16)
+              {
+              s[3] = 0x18;
+              s[5] = 0x14;
+              s[10] = 2;  // 16 byte
+              le05reply[0] = 29;
+              }
+            for(n = 0 ; n < cp->uuidtype ; ++n)
+              s[n+13] = cp->uuid[cp->uuidtype-n-1];
+            flag = 1;
+            } 
           }           
         s[11] = handle & 0xFF;  // handle
         s[12] = (handle >> 8) & 0xFF;    
@@ -7046,6 +7177,93 @@ void leserver(int ndevice,int count,unsigned char *dat)
       VPRINT "SEND reply opcode 05 for handle %02X%02X\n",s[12],s[11]);         
       sendhci(le05reply,ndevice); 
       }
+    }
+  else if(dat[0] == 0x06)
+    {
+    flag = 0;
+    start = dat[1]+(dat[2] << 8);
+    end = dat[3]+(dat[4] << 8);
+    datcount = count-7;
+    // assume handle = start
+    s = le07reply+PAKHEADSIZE;
+
+    do
+      {
+      cticn = nextctichandle(start,end,&handle,1);
+      if(cticn >= 0)
+        {  
+        psflag = cticn >> 16;
+        psn = cticn & 0xFFFF;
+        if(psflag != 0)
+          {
+          if(dat[5] == 0x00 && dat[6] == 0x28 &&
+              ( (datcount == 2 && pserv[psn].uuidtype == 2 && dat[7] == pserv[psn].uuid[1] && dat[8] == pserv[psn].uuid[0]) ||
+                (datcount == 16 && pserv[psn].uuidtype == 16 && bincmp(pserv[psn].uuid,dat+7,16,DIRN_REV) != 0)))
+            { 
+            s[10] = handle & 0xFF;
+            s[11] = (handle >> 8) & 0xFF;
+            eog = pserv[psn].eog;
+            s[12] = eog & 0xFF;
+            s[13] = (eog >> 8) & 0xFF;
+            flag = 1; 
+            }  
+          }
+        else
+          {
+          cp = ctic(0,cticn);
+          if(handle == cp->chandle-1 && dat[5] == 0x03 && dat[6] == 0x28 && datcount == cp->uuidtype+3)
+            {
+            buf[0] = cp->perm;
+            buf[1] = cp->chandle & 0xFF;  // value handle
+            buf[2] = cp->chandle >> 8;
+            for(n = 0 ; n < cp->uuidtype ; ++n)
+              buf[3+n] = cp->uuid[cp->uuidtype-n-1];
+            if(bincmp(buf,dat+7,datcount,DIRN_FOR) != 0)
+              {  // value or notify handle
+              eog = cp->chandle;
+              if((cp->perm & 0x30) != 0)
+                ++eog; 
+              flag = 1;
+              }
+            }
+          else if(handle == cp->chandle && cp->uuidtype == 2 && dat[5] == cp->uuid[1] && dat[6] == cp->uuid[0]
+                          && datcount == cp->size && bincmp(cp->value,dat+7,datcount,DIRN_FOR) != 0)
+            {
+            eog = pserv[cp->psnx & 31].eog;
+            // eog = 0xFFFF;
+            flag = 1;
+            }
+          else if(handle == cp->chandle+1 && dat[5] == 0x02 && dat[6] == 0x29 && datcount == 2 && dat[7] == cp->notify && dat[8] == 0)
+            {
+            eog = pserv[cp->psnx & 31].eog;
+            // eog = 0xFFFF;
+            flag = 1;
+            }
+          if(flag != 0)
+            {
+            s[10] = handle & 0xFF;
+            s[11] = (handle >> 8) & 0xFF;
+            s[12] = eog & 0xFF;
+            s[13] = (eog >> 8) & 0xFF;
+            }
+          }
+        start = handle;
+        }
+          
+      ++start;
+      }
+    while(flag == 0 && start <= end && cticn >= 0);
+     
+    if(flag == 0)
+      {
+      VPRINT "Attribute not found\n");
+      errcode = 0x0A;  // attrib not found
+      }
+    else
+      {
+      VPRINT "SEND reply opcode 07 for handle %02X%02X\n",s[11],s[10]);         
+      sendhci(le07reply,ndevice); 
+      }   
     }
   else if(dat[0] == 0x08 || dat[0] == 0x10 || aflag != 0)
     { 
@@ -7072,63 +7290,14 @@ void leserver(int ndevice,int count,unsigned char *dat)
       dn = 0;
     else
       dn = 2;   // insert end of group handle
-      
-    if((start == 1 || start == 2) && (aflag != 0 || (dat[5] == 0 && dat[6] == 0x28)) )
-      {  // 2b PS
-      handle = start;       
-      size = 2;
-      s[14+dn] = 0x18;
-      if(start == 1)
-        {   // 1800
-        s[13+dn] = 0;
-        if(dn != 0)  // 0x10 request
-          {
-          s[13] = start;  // end of group - this handle 
-          s[14] = 0;         
-          }
-        }
-      else
-        {  // 1801
-        s[13+dn] = 1;
-        if(dn != 0)
-          {
-          s[13] = start; // end of group = this handle
-          s[14] = 0;
-          }
-        }
-      flag = 1;
-      }             
-    else if(start == 3 && (aflag != 0 || (dat[5] == 0 && dat[6] == 0x28)))
-      {   // 16b ps0 entry
-      handle = 3;
-      if(dn == 2)
-        {  // insert end of group handle = 1st ctic 
-        cp = ctic(0,0);
-        if(cp->type == CTIC_END)
-          {
-          s[13] = 0xFF;
-          s[14] = 0xFF;
-          }
-        else
-          {
-          s[13] = cp->lasthandle & 0xFF;
-          s[14] = (cp->lasthandle >> 8) & 0xFF;
-          }
-        } 
-      size = 16;
-      // psn = 0
-      for(n = 0 ; n < 16 ; ++n)
-        s[28-n+dn] = dev[0]->primaryuuid[n];
-         
-      flag = 1;
-      }
-    else
+    
+    if(start >= 0)
       {  // characteristics 
       startx = start;
       do
         {
         if(aflag == 0)
-          cticn = nextctichandle(startx,end,&handle);
+          cticn = nextctichandle(startx,end,&handle,1);
         else
           {
           handle = ahandle;
@@ -7137,68 +7306,74 @@ void leserver(int ndevice,int count,unsigned char *dat)
           
         if(cticn >= 0)
           {
-          cp = ctic(0,cticn);
-          if(aflag != 0)
-            uuidtype = cp->uuidtype;
+          psflag = cticn >> 16;
+          cticn &= 0xFFFF;
+          if(psflag != 0)
+            {
+            if(uuidtype == 2 && dat[5] == 0x00 && dat[6] == 0x28)
+              {   // PS
+              size = pserv[cticn].uuidtype;
+              if(dn != 0)
+                {  // insert end of group handle  
+                s[13] = pserv[cticn].eog & 0xFF;
+                s[14] = (pserv[cticn].eog >> 8) & 0xFF;
+                }
+              for(n = 0 ; n < size ; ++n)
+                s[size+12-n+dn] = pserv[cticn].uuid[n];
+              flag = 1;
+              }
+            }
+          else
+            {  
+            cp = ctic(0,cticn);
+            if(aflag != 0)
+              uuidtype = cp->uuidtype;
        
-          if(handle == cp->chandle-1 && (aflag == 3 || (uuidtype == 2 && dat[5] == 0x03 && dat[6] == 0x28)))
-            {   // info 2803
-            size = cp->uuidtype + 3;  // beyond 09 len handlo handhi
-            if(dn != 0)
-              {  // end of group = value handle or +1 if notify
-              n = cp->chandle;
-              if((cp->perm & 0x30) != 0)
-                ++n; 
-              s[13] = n & 0xFF;
-              s[14] = n >> 8;
+            if(handle == cp->chandle-1 && (aflag == 3 || (uuidtype == 2 && dat[5] == 0x03 && dat[6] == 0x28)))
+              {   // info 2803
+              size = cp->uuidtype + 3;  // beyond 09 len handlo handhi
+              if(dn != 0)
+                {  // end of group = value handle or +1 if notify
+                n = cp->chandle;
+                if((cp->perm & 0x30) != 0)
+                  ++n; 
+                s[13] = n & 0xFF;
+                s[14] = n >> 8;
+                }
+              s[13+dn] = cp->perm;
+              s[14+dn] = cp->chandle & 0xFF;  // value handle
+              s[15+dn] = cp->chandle >> 8;
+              for(n = 0 ; n < cp->uuidtype ; ++n)
+                s[n+dn+16] = cp->uuid[cp->uuidtype-n-1];
+              flag = 1;
               }
-            s[13+dn] = cp->perm;
-            s[14+dn] = cp->chandle & 0xFF;  // value handle
-            s[15+dn] = cp->chandle >> 8;
-            for(n = 0 ; n < cp->uuidtype ; ++n)
-              s[n+dn+16] = cp->uuid[cp->uuidtype-n-1];
-            flag = 1;
-            }
-          else if(handle == cp->chandle+1 && aflag == 0 && uuidtype == 2 && dat[5] == 0x02 && dat[6] == 0x29)
-            { // notify control 2902
-            size = 2;
-            if(dn != 0)
-              {  // insert end of group handle  
-              s[13] = cp->lasthandle & 0xFF;
-              s[14] = (cp->lasthandle >> 8) & 0xFF;
+            else if(handle == cp->chandle+1 && aflag == 0 && uuidtype == 2 && dat[5] == 0x02 && dat[6] == 0x29)
+              { // notify control 2902
+              size = 2;
+              if(dn != 0)
+                {  // insert end of group handle  
+                s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
+                s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+                }
+              s[13+dn] = cp->notify & 1; 
+              s[14+dn] = 0;
+              flag = 1;
               }
-            s[13+dn] = cp->notify & 1; 
-            s[14+dn] = 0;
-            flag = 1;
-            }
-          else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
-            {   // value
-            size = cp->size;
-            if(dn != 0)
-              {  // insert end of group handle  
-              s[13] = cp->lasthandle & 0xFF;
-              s[14] = (cp->lasthandle >> 8) & 0xFF;
+            else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
+              {   // value
+              size = cp->size;
+              if(dn != 0)
+                {  // insert end of group handle  
+                s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
+                s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+                }
+              if(size > LEDATLEN)
+                size = LEDATLEN;
+              for(n = 0 ; n < size ; ++n)
+                s[13+n+dn] = cp->value[n];
+              flag = 1; 
               }
-            if(size > LEDATLEN)
-              size = LEDATLEN;
-            for(n = 0 ; n < size ; ++n)
-              s[13+n+dn] = cp->value[n];
-            flag = 1; 
-            }
-          else if(handle == cp->chandle-2 && (aflag == 2 || ((cp->psn & 0x10000) != 0 && uuidtype == 2 && dat[5] == 0x00 && dat[6] == 0x28)))
-            {  // 16b PS
-            size = 16;
-            if(dn != 0)
-              {  // insert end of group handle  
-              s[13] = cp->lasthandle & 0xFF;
-              s[14] = (cp->lasthandle >> 8) & 0xFF;
-              }
-            psn = (cp->psn & 0xFFFF) << 4;
-            for(n = 0 ; n < 16 ; ++n)
-              s[28-n+dn] = dev[0]->primaryuuid[psn+n];
-            flag = 1;
-            }
-           
+            }            
           startx = handle + 1;
           }
         }
@@ -7286,11 +7461,29 @@ void leserver(int ndevice,int count,unsigned char *dat)
   }
 
 
-int nextctichandle(int start,int end,int *handle)
+int nextctichandle(int start,int end,int *handle,int flag)
   {
-  int n,cticn,minhandle,del,del0,notdel;
+  int n,cticn,minhandle,del,del0,notdel,minpshand,pshand,psn;
   struct cticdata *cp;
   
+  minpshand = 0;
+  for(n = 0 ; minpshand == 0 && pserv[n].handle > 0 && n < 32 ; ++n)
+    {
+    pshand = pserv[n].handle;
+    if(pshand >= start && pshand <= end)
+      {
+      minpshand = pshand;
+      psn = n;
+      }
+    }
+    
+  if(flag != 0 && minpshand != 0 && minpshand == start)
+    {
+    *handle = minpshand;
+    return(psn | 0x10000);
+    }   
+     
+     
   *handle = 0;
   minhandle = 0xFFFF;
   cticn = -1;
@@ -7301,10 +7494,8 @@ int nextctichandle(int start,int end,int *handle)
     notdel = 0;
     if((cp->perm & 0x30) != 0)
       notdel = 1;  // include next handle notify control
-    if((cp->psn & 0x10000) != 0 && (cp->psn & 0xFFFF) != 0)
-      del0 = -2;  // include PS for psn > 0
-    else
-      del0 = -1;  // always include INFO
+    
+    del0 = -1;  // always include INFO
     for(del = del0 ; del <= notdel ; ++del)
       {
       if(cp->chandle+del >= start && cp->chandle+del <= end)
@@ -7318,9 +7509,31 @@ int nextctichandle(int start,int end,int *handle)
         }
       }  
     }
+    
+  if(flag != 0 && minpshand != 0 && minpshand < minhandle)
+    {
+    *handle = minpshand;
+    return(psn | 0x10000);
+    } 
+         
   return(cticn);
   }
-
+  
+  
+int stuuid(unsigned char *s)  
+  {
+  int n;
+  
+  if(s[0] != 0 || s[1] != 0)
+    return(0);
+  for(n = 4 ; n < 16 ; ++n)
+    {
+    if(s[n] != standard[n])
+      return(0);
+    }
+  return(1);
+  }
+  
 void rwlinkey(int rwflag,int ndevice)
   {
   int n,k,j,i,addcount,flag;
@@ -9068,7 +9281,7 @@ int find_ctic_index(int node,int flag,char *uuid)
 
 int printctics1(int ndevice)
   {
-  int k,j,pn,count,len,del,psn;
+  int k,j,i,i0,pn,count,len,del,psn,psnx;
   struct cticdata *cp;
   
   static char *permsn[16] = {" ? ","r  ","w  ","rw ","wa ","rwa"," ? "," ? ","n  ","rn ","wn ","rwn","wan","rwan","??n","??n"  };
@@ -9084,15 +9297,9 @@ int printctics1(int ndevice)
       NPRINT "     No characteristics - Read services to find\n");
     return(0);
     }
-  
-  if(ndevice == 0)
-    {
-    psn = 0;  // primary service index
-    NPRINT "   PRIMARY SERVICE = ");
-    for(j = 0 ; j < 16 ; ++j)
-      NPRINT "%02X",dev[ndevice]->primaryuuid[j]);
-    NPRINT "\n");
-    }
+
+  psn = 0;
+  psnx = -1;  
     
   NPRINT "   ctic\n");
   NPRINT "   index       LE Characteristics\n");
@@ -9113,17 +9320,23 @@ int printctics1(int ndevice)
         perms = permsi;  // indicate  
       }                   
     len = strlen(cp->name);                 
-    
-    if(ndevice == 0 && (cp->psn & 0xFFFF) != psn)
+       
+    if(ndevice == 0 && (cp->psnx & 0xFFFF) != psnx)
       {
-      psn = cp->psn & 0xFFFF;
-      NPRINT "        PRIMARY SERVICE = ");
-      for(j = 0 ; j < 16 ; ++j)
-        NPRINT "%02X",dev[ndevice]->primaryuuid[(psn << 4) + j]);
+      i0 = (cp->psnx & 0xFFFF);   
+      for(i = i0 - 1 ; i > psnx && i >= 0 ; --i)
+        i0 = i;
+      for(i = i0 ; i < (cp->psnx & 0xFFFF) ; ++i)  
+        NPRINT "        Empty Primary Service Handle=%04X\n",pserv[i].handle);
+             
+      psnx = cp->psnx & 0xFFFF;
+      NPRINT "        PRIMARY SERVICE = ");  
+      for(j = 0 ; j < pserv[psnx].uuidtype ; ++j)
+        NPRINT "%02X",pserv[psnx].uuid[j]);
       NPRINT "\n");
       }                 
 
-    NPRINT "     %d  %s",k,cp->name);
+    NPRINT "     %d  %s",k,cp->name);  
      
     if(len < 20)
       del = 20 - len;
@@ -11392,131 +11605,316 @@ int readline(FILE *stream,char *s)
   return(0);
   }
 
-/**** TEST LE SERVER attribute replies ******
- send opcode 04/08/10 requests
- leaves replies on stack
-************************************/ 
 
-void readleatt(int node,int handle)
+void readleatt(int node,int xhandle)
   {
-  int n,k,len,uuidtype,ndevice,flag;
-  char s[64],sx[8];
+  int n,k,len,uuidtype,ndevice,flag,h0,hx,handle,psflag,allflag,uuid,endff,bdlen,delh;
+  char s[64],sx[8],*sp;
   unsigned char *bd,bdat[256];
   
   static unsigned char opx2[32] = {16,0,S2_HAND,0,2,0x40,0,11,0,7,0,4,0,0x10,0x01,0,0x01,0x00,0x00,0x2A};     
   static unsigned char opx16[40] = {30,0,S2_HAND,0,2,0x40,0,25,0,21,0,4,0,0x10,0x01,0,0x01,0x00,
                                         0x00,0xFF,0xEE,0xDD,0xCC,0xBB,0xAA,0x99,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11};   
   static unsigned char op4[32] = {14,0,S2_HAND,0,2,0x40,0,9,0,5,0,4,0,0x04,0x01,0,0x01,0x00};     
+  static unsigned char op6[64] = {18,0,S2_HAND,0,2,0x40,0,0x0D,0,0x09,0,4,0,0x06,0x01,0,0x01,0x00,0x00,0x28,0x01,0x18};     
   static unsigned char opa[20] = {12,0,S2_HAND,0,2,0x40,0,7,0,3,0,4,0,0x0A,0x12,0};  
-
+  //FILE *stream;  
+  
   ndevice = devn(node);
   if(ndevice < 0)
     return;
      
+  // set_le_interval_update(node,6,6);
+
   bd = NULL;
   read_all_clear();
   
-  opa[14] = handle;
-  sendhci(opa,ndevice);
-  readhci(ndevice,IN_ATTDAT,0,2000,0);      
-  n = findhci(IN_ATTDAT,ndevice,INS_POP);
-  if(n >= 0 && insdat[n] == 0x0B)
+  allflag = 0;
+  endff = 0;
+  hx = xhandle & 0xFFFF;
+  h0 = hx;
+  delh = 0;
+  if((xhandle & 0x10000) != 0)
     {
-    len = instack[n+1]+(instack[n+2] << 8);
-    NPRINT "%02X size %d\n",insdat[n],len);
-    printval(insdat+n+1,len-1,NULL);
-    for(k = 0 ; k < len && k < 256 ; ++k)
-      bdat[k] = insdat[k];
-    bd = bdat+1;  
-    }    
+    endff = 1;
+    if(h0 > 1)
+      delh = 1;
+    }     
+  else if((xhandle & 0x20000) != 0)
+    {
+    allflag = 1;
+    h0 = 1;
+    //stream = fopen("hidvals.txt","wb"); 
+    }
+    
+  for(handle = h0 ; handle <= hx ; ++handle)
+    { 
+    psflag = 0;
+    bd = NULL;
+    bdlen = 0;
+    
+    opa[14] = handle;
+    sendhci(opa,ndevice);
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    if(n >= 0 && insdat[n] == 0x0B)
+      {
+      len = instack[n+1]+(instack[n+2] << 8);
+      if(allflag == 0)
+        {
+        NPRINT "%02X size %d\n",insdat[n],len);
+        printval(insdat+n+1,len-1,NULL);
+        }
+      for(k = 0 ; k < len && k < 256 ; ++k)
+        bdat[k] = insdat[k];
+      bd = bdat+1;
+      bdlen = len-1;
+      }    
  
-  op4[14] = handle;
-  op4[16] = handle;
-  sendhci(op4,ndevice);  
-  readhci(ndevice,IN_ATTDAT,0,2000,0);      
-  n = findhci(IN_ATTDAT,ndevice,INS_POP);
-  if(n < 0 || insdat[n] != 0x05)
-    return;
-
-  uuidtype = 0;
-  if(insdat[n+1] == 1)
-    uuidtype = 2;
-  else if(insdat[n+1] == 2)
-    uuidtype = 16;
-  else
-   return;    
-
-  if(uuidtype == 2)
-    sprintf(s,"%02X%02X",insdat[n+5],insdat[n+4]);
-  else
-    {
-    s[0] = 0;
-    for(k = 0 ; k < 16 ; ++k)
+    op4[14] = handle;
+    op4[15] = 0;
+    if(endff == 0)
       {
-      sprintf(sx,"%02X",insdat[n+19-k]);
-      strcat(s,sx);
+      op4[16] = handle;
+      op4[17] = 0;
       }
-    }
+    else
+      {
+      op4[16] = 0xFF;
+      op4[17] = 0xFF;
+      }
+    sendhci(op4,ndevice);  
+    readhci(ndevice,IN_ATTDAT,0,2000,0);      
+    n = findhci(IN_ATTDAT,ndevice,INS_POP);
+    if(n >= 0 && insdat[n] == 0x05)  // 1
+      {   
+      uuidtype = 0;
+      if(insdat[n+1] == 1)
+        uuidtype = 2;
+      else if(insdat[n+1] == 2)
+        uuidtype = 16;
+      if(uuidtype != 0)  // 2
+        {    
+        if(allflag == 0)
+          {
+          if(uuidtype == 2)
+            sprintf(s,"%02X%02X",insdat[n+5],insdat[n+4]);  
+          else
+            {
+            s[0] = 0;
+            for(k = 0 ; k < 16 ; ++k)
+              {
+              sprintf(sx,"%02X",insdat[n+19-k]);
+              strcat(s,sx);
+              }
+            }
     
-  NPRINT "%02X H=%02X%02X UUID=%s\n",insdat[n],insdat[n+3],insdat[n+2],s);
+          NPRINT "%02X H=%02X%02X UUID=%s\n",insdat[n],insdat[n+3],insdat[n+2],s);
+          }
+        else
+          {
+          if(uuidtype == 2)
+            {
+            uuid = insdat[n+4] + (insdat[n+5] << 8);
+            if(uuid == 0x2800)
+              {
+              sp = "PS ";
+              psflag = 1;
+              }
+            else if(uuid == 0x2803)
+              sp = "I ";
+            else if(uuid == 0x2902)
+              sp = "N ";
+            else
+              {
+              sp = "V ";
+              /***
+              if(stream != NULL)
+                {
+                fprintf(stream,"val%d[%d] = {",handle,bdlen);
+                for(k = 0 ; k < bdlen ; ++k)
+                  fprintf(stream,"0x%02X,",bd[k]);
+                fprintf(stream,"}\n");
+                }  
+              ***/  
+              }
+              
+            NPRINT "%d %s %04X %s\n",handle,sp,uuid,uuidlist+finduuidtext(uuid));
+            if(psflag != 0 && bd != NULL)
+              {
+              NPRINT "   ");
+              for(k = len-2 ; k >= 0 ; --k)
+                NPRINT "%02X",bd[k]);
+              NPRINT "\n");
+              psflag = 0;
+              }
+            }
+          else
+            {
+            NPRINT "%d V  16-byte\n",handle);
+            }
+          }    
+    
+        if(uuidtype == 2)
+          {
+          op6[14] = handle;
+          op6[15] = 0;
+          if(endff == 0)
+            {
+            op6[16] = handle;
+            op6[17] = 0;
+            }
+          else
+            {
+            op6[16] = 0xFF;
+            op6[17] = 0xFF;
+            }
+
+          op6[18] = insdat[n+4];
+          op6[19] = insdat[n+5];
+
+
+          opx2[14] = handle - delh;
+          opx2[15] = 0;
+          if(endff == 0)
+            {
+            opx2[16] = handle;
+            opx2[17] = 0;
+            }
+          else
+            {
+            opx2[16] = 0xFF;
+            opx2[17] = 0xFF;
+            }
+       
+          opx2[18] = insdat[n+4];
+          opx2[19] = insdat[n+5];
    
-  if(uuidtype == 2)
-    {
-    opx2[14] = handle;
-    opx2[16] = handle;
-    opx2[18] = insdat[n+4];
-    opx2[19] = insdat[n+5];
+          if(allflag == 0) 
+            NPRINT "Specify %02X %02X\n",op6[18],op6[19]); 
     
-    opx2[13] = 0x08;
-    sendhci(opx2,ndevice);
-    readhci(ndevice,IN_ATTDAT,0,2000,0);      
-    n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    if(n >= 0 && insdat[n] == 0x09)
-      {
-      NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
-      printval(insdat+n+4,insdat[n+1]-2,bd);
-      }
+          opx2[13] = 0x08;
+          sendhci(opx2,ndevice);
+          readhci(ndevice,IN_ATTDAT,0,2000,0);      
+          n = findhci(IN_ATTDAT,ndevice,INS_POP);
+          if(allflag == 0 || psflag != 0) 
+            {
+            if(n >= 0 && insdat[n] == 0x09)
+              {
+              if(allflag == 0)
+                NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
+              printval(insdat+n+4,insdat[n+1]-2,bd);
+              }
+            }
+           
+          opx2[13] = 0x10;
+          sendhci(opx2,ndevice);
+          readhci(ndevice,IN_ATTDAT,0,2000,0);      
+          n = findhci(IN_ATTDAT,ndevice,INS_POP);
+          if(allflag == 0) 
+            {
+            if(n >= 0 && insdat[n] == 0x11)
+              {
+              NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
+              printval(insdat+n+6,insdat[n+1]-4,bd);
+              }
+            }
       
-    opx2[13] = 0x10;
-    sendhci(opx2,ndevice);
-    readhci(ndevice,IN_ATTDAT,0,2000,0);      
-    n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    if(n >= 0 && insdat[n] == 0x11)
-      {
-      NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
-      printval(insdat+n+6,insdat[n+1]-4,bd);
-      }
-    }
-  else if(uuidtype == 16)
-    {
-    opx16[14] = handle;
-    opx16[16] = handle;
-    for(k = 0 ; k < 16 ; ++k)
-      opx16[k+18] = insdat[n+k+4];
+          //len = insdat[n+1]-4; // len of value
+          if(bdlen == 0)
+            NPRINT "No value for 06\n");
+          else if(bdlen > 16)
+            NPRINT "Val too long for 06\n");
+          else
+            {
+            if(allflag == 0) 
+              {
+              NPRINT "Specify %02X %02X -",op6[18],op6[19]); 
+              for(k = 0 ; k < bdlen ; ++k)
+                {
+                op6[20+k] = bd[k];
+                NPRINT " %02X",bd[k]);
+                } 
+              NPRINT "\n");
+              }
+            op6[0] = 16+bdlen;
+            op6[7] = 11+bdlen;
+            op6[9] = 7+bdlen;
+            sendhci(op6,ndevice);
+            readhci(ndevice,IN_ATTDAT,0,2000,0);      
+            n = findhci(IN_ATTDAT,ndevice,INS_POP);
+            if(allflag == 0) 
+              {
+              if(n >= 0 && insdat[n] == 0x07)
+                {
+                NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+2],insdat[n+1],insdat[n+4],insdat[n+3]);
+                // printval(insdat+n+6,insdat[n+1]-4,bd);
+                }
+              }
+            }
+          }
+        else if(uuidtype == 16)
+          { 
+          opx16[14] = handle - delh;
+          opx16[15] = 0;
+          if(endff == 0)
+            {
+            opx16[16] = handle;
+            opx16[17] = 0;
+            }
+          else
+            {
+            opx16[16] = 0xFF;
+            opx16[17] = 0xFF;
+            }
+
+          if(allflag == 0) 
+            {
+            NPRINT "Specify ");
+            for(k = 0 ; k < 16 ; ++k)
+              {
+              opx16[k+18] = insdat[n+k+4];
+              NPRINT " %02X",opx16[k+18]);
+              }
+            NPRINT "\n");
+            }
+          opx16[13] = 0x08;
+          sendhci(opx16,ndevice);
+          readhci(ndevice,IN_ATTDAT,0,2000,0);      
+          n = findhci(IN_ATTDAT,ndevice,INS_POP);
+          if(allflag == 0) 
+            {
+            if(n >= 0 && insdat[n] == 0x09)
+              {
+              NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
+              printval(insdat+n+4,insdat[n+1]-2,bd);
+              }
+            }
   
-    opx16[13] = 0x08;
-    sendhci(opx16,ndevice);
-    readhci(ndevice,IN_ATTDAT,0,2000,0);      
-    n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    if(n >= 0 && insdat[n] == 0x09)
-      {
-      NPRINT "%02X H=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2]);
-      printval(insdat+n+4,insdat[n+1]-2,bd);
-      }
+          opx16[13] = 0x10;
+          sendhci(opx16,ndevice);
+          readhci(ndevice,IN_ATTDAT,0,2000,0);      
+          n = findhci(IN_ATTDAT,ndevice,INS_POP);
+          if(allflag == 0) 
+            {
+            if(n >= 0 && insdat[n] == 0x11)
+              {
+              NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
+              printval(insdat+n+6,insdat[n+1]-4,bd);
+              }
+            }
+          }
   
-    opx16[13] = 0x10;
-    sendhci(opx16,ndevice);
-    readhci(ndevice,IN_ATTDAT,0,2000,0);      
-    n = findhci(IN_ATTDAT,ndevice,INS_POP);
-    if(n >= 0 && insdat[n] == 0x11)
-      {
-      NPRINT "%02X H=%02X%02X EOG=%02X%02X\n",insdat[n],insdat[n+3],insdat[n+2],insdat[n+5],insdat[n+4]);
-      printval(insdat+n+6,insdat[n+1]-4,bd);
-      }
-    }
-  
-  flushprint();    
-  popins();
+        flushprint();    
+        popins();
+        }  // 2
+      }  // 1
+    }  // handle
+
+  /***
+  if(stream != NULL) 
+    fclose(stream);
+  ***/
   }
 
 
