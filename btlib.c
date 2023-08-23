@@ -2044,7 +2044,7 @@ int localctics(int starthandle)
       {
       if(cp->chandle < starthandle)
         {
-        NPRINT "%shandle must be % or greater\n",errs,starthandle);
+        NPRINT "%shandle must be %04X or greater\n",errs,starthandle);
         return(0);
         }
    
