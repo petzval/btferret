@@ -1,7 +1,7 @@
 btferret/btlib Bluetooth Interface
 ==================================
 
-*Version 11*
+*Version 12*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -102,7 +102,8 @@ btferret/btlib Bluetooth Interface
 
 ## 1 Introduction
 
-This is a C Bluetooth interface that has been developed for Raspberry Pis.
+This is a C Bluetooth interface that has been developed for Raspberry Pis (but has also had some
+testing on Ubuntu, and may well work on other linux systems).
 
 A Pi running this interface can connect simultaneously to multiple Classic and LE devices,
 and also to a mesh network of other Pis running the same software.
@@ -278,9 +279,9 @@ int main()
   
   connect_node(2,CHANNEL_NODE,0);
   s = "Hello\n";
-  write_node(2,s,strlen(s));
+  write_node(2,(unsigned char*)s,strlen(s));
   s = "world\n";
-  write_node(2,s,strlen(s));
+  write_node(2,(unsigned char*)s,strlen(s));
      // sending "world" causes server to initiate disconnect
   wait_for_disconnect(2,5000);  // time out 5000ms
   
@@ -798,7 +799,7 @@ DEVICE = HC-05 TYPE=CLASSIC NODE=6 PIN=1234 CHANNEL=1 ADDRESS=98:D3:32:31:59:84
 */
 
 int channel;
-char buf[16],inbuf[64];
+unsigned char buf[16],inbuf[64];
 
    // The serial channel might be known. For example an HC-05 has just one
    // channel which can be specified in devices.txt via CHANNEL=1 as above
@@ -811,8 +812,8 @@ channel = find_channel(4,UUID_16,strtohex("00001101-0000-1000-8000-00805F9B34FB"
    // if channel > 0 then the serial channel has been found 
 connect_node(4,CHANNEL_NEW,channel);
    
-strcpy(buf,"hello\n");          // must have termination char expected by server \n = 10
-write_node(4,buf,strlen(buf));  // send 6 chars to node 4
+strcpy((char*)buf,"hello\n");          // must have termination char expected by server \n = 10
+write_node(4,buf,strlen((char*)buf));  // send 6 chars to node 4
 
    // if the server is expected to reply:
    // wait for 1 second for a reply with a 10 termination char
@@ -899,9 +900,9 @@ classic_server(ANY_DEVICE,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
 // It works the same way for NODE and CLASSIC connections so the 
 // same code can be used for both.
 
-int classic_callback(int clientnode,char *data,int datlen)
+int classic_callback(int clientnode,unsigned char *data,int datlen)
   {
-  char buf[4];
+  unsigned char buf[4];
   
   // data[] has datlen bytes from clientnode
   
@@ -968,7 +969,7 @@ DEVICE = Pictail  TYPE=LE  NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
 */ 
 
 
-char buf[32];
+unsigned char buf[32];
 
 set_le_wait(750);              // LE connection completion time 750ms
 connect_node(7,CHANNEL_LE,0);  // 3rd parameter 0 not needed for LE devices
@@ -993,7 +994,7 @@ read_notify(30*1000);  // read notifications for 30 seconds
 disconnect_node(7);
 
 
-int notify_callback(int lenode,int cticn,char *buf,int nread)
+int notify_callback(int lenode,int cticn,unsigned char *buf,int nread)
   { 
   // LE device lenode has sent notification of characteristic index cticn
   // data in buf[0] to buf[nread-1]
@@ -1023,7 +1024,7 @@ DEVICE = nRF52840  TYPE=LE NODE=8  ADDRESS=CD:01:87:91:DF:39  RANDOM=UNCHANGED
   LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2       
 */ 
 
-char buf[32];
+unsigned char buf[32];
 
      // for RANDOM=UNCHANGED address - no scan needed
 set_le_wait(750);              // LE connection completion time 750ms
@@ -1082,65 +1083,103 @@ d - Disconnect
 The server's characteristics are defined in the devices.txt file, full details
 in [devices file](#3-3-devices-file).
 
-Starting the server and reading/writing the local characteristics are programmed via btlib funtions as follows:
+Starting the server and reading/writing the local characteristics are programmed via btlib funtions as follows.
+These are the devices.txt and C files for a working LE server example.
+
+Devices.txt file:
+
+```
+ ; devices.txt file. Set ADDRESS = address of Pi
+ ; semicolon is comment char
+ 
+DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
+  ; LE characteristics when acting as an LE server
+  ; Specify UUIDs and let system allocate handles  
+  PRIMARY_SERVICE = 1800
+    LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0 
+    LECHAR = Appearance   PERMIT=02 SIZE=2  UUID=2A01   ; index 1 
+  PRIMARY_SERVICE = 1801
+    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; index 2  
+  PRIMARY_SERVICE = 180A
+    LECHAR = PnP ID          PERMIT=02 SIZE=7 UUID=2A50 ; index 3 
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00 
+    LECHAR = Control  PERMIT=06 SIZE=2 UUID=ABCD        ; index 4
+    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; index 5
+    LECHAR = Data     PERMIT=12 SIZE=1 UUID=DEAF        ; index 6 notify capable
+```
+
+C code file:
 
 ```c
-/* devices.txt file:
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
 
-DEVICE = My Pi  TYPE=Mesh  NODE=1   ADDRESS = 00:1E:C0:2D:17:7C
-  LECHAR=Test     HANDLE=0005  PERMIT=06  SIZE=2   ; index 0 read/write no ack  2 bytes
-  LECHAR=Detector HANDLE=0007  PERMIT=16  SIZE=2   ; index 1 read/write/notify capable
-  LECHAR=Status   HANDLE=000A  PERMIT=02  SIZE=1   ; index 2 read only  1 byte
-  LECHAR=Control  HANDLE=000C  PERMIT=06  SIZE=2  UUID=11223344-5566-7788-99AA-BBCCDDEEFF00   
-*/  
+int le_callback(int clientnode,int operation,int cticn);
+
+int main()
+  {
+  unsigned char buf[32];
   
-// C code:
+  if(init_blue("devices.txt") == 0)
+    return(0);
+                                    // write 56 to Info (index 5)
+  buf[0] = 0x56;
+  write_ctic(localnode(),5,buf,0);  // local device is allowed to write to its own
+                                    // characteristic Info
+                                    // Size is known from devices.txt, so last
+                                    // parameter (count) can be 0           
 
-char buf[32];
+                    // write 12 34 to Control (index 4)
+  buf[0] = 0x12;
+  buf[1] = 0x34;
+  write_ctic(localnode(),4,buf,0);  
 
-read_ctic(localnode(),2,buf,sizeof(buf));   // read Status (index 2) 
-                                            // buf[0] will have the data
-
-                                  // write 56 to Status (index 2)
-buf[0] = 0x56;
-write_ctic(localnode(),2,buf,0);  // local device is allowed to write to its own
-                                  // characteristic Status. Remote devices are
-                                  // not allowed because it is read only.
-                                  // Size is known from devices.txt, so last
-                                  // parameter (count) can be 0           
-
-         // write 12 34 to Detector (index 1)
-buf[0] = 0x12;
-buf[1] = 0x34;
-write_ctic(localnode(),1,buf,0);  
-           // If a connected client has enabled notifications for Detector, this
-           // write will also trigger a notification that will be sent to the client.
-
-
-le_server(le_callback,100);
+  le_server(le_callback,100);
                    // Become an LE server and wait for clients to connect.   
                    // when a client performs an operation such as connect, or
                    // write a characteristic, call the function le_callback()
                    // Call LE_TIMER in le_callback every 100 deci-seconds (10 seconds)
+  close_all();
+  return(0);
+  }
 
 
 int le_callback(int clientnode,int operation,int cticn)
   {
+  unsigned char buf[32];
+  
   if(operation == LE_CONNECT)
-     // clientnode has just connected
+    {
+    // clientnode has just connected
+    }
   else if(operation == LE_READ)
-     // clientnode has just read local characteristic cticn
+    {
+    // clientnode has just read local characteristic cticn
+    }
   else if(operation == LE_WRITE)
-     // clientnode has just written local characteristic cticn
+    { 
+    // clientnode has just written local characteristic cticn
+    read_ctic(localnode(),cticn,buf,sizeof(buf));   // read characteristic to buf 
+    } 
   else if(operation == LE_DISCONNECT)
-     // clientnode has just disconnected
-     // uncomment next line to stop LE server when client disconnects
-     // return(SERVER_EXIT);
-     // otherwise LE server will continue and wait for another connection
-     // or operation from other clients that are still connected
+    {
+    // clientnode has just disconnected
+    // uncomment next line to stop LE server when client disconnects
+    // return(SERVER_EXIT);
+    // otherwise LE server will continue and wait for another connection
+    // or operation from other clients that are still connected
+    }
   else if(operation == LE_TIMER)
-    // The server timer calls here every timerds deci-seconds 
-       
+    {
+    // The server timer calls here every timerds deci-seconds     
+    // Data (index 6) is notify capable
+    // so if the client has enabled notifications for this characteristic
+    // the following write will send the data as a notification to the client
+    buf[0] = 0x67;
+    write_ctic(localnode(),6,buf,0);  
+    }
+  
   return(SERVER_CONTINUE);
   }
 
@@ -1157,7 +1196,7 @@ to start it listening, then run the client.
 
 DEVICE= Client Pi  TYPE=MESH NODE=1 ADDRESS=11:11:11:11:11:11
 DEVICE= Server Pi  TYPE=MESH NODE=2 ADDRESS=22:22:22:22:22:22
-  LECHAR=Min/Sec PERMIT=16 HANDLE=0005 SIZE=2
+  LECHAR=Min/Sec PERMIT=16 UUID=ABCD SIZE=2
 */
 
 // C code for Server Pi:
@@ -1218,7 +1257,7 @@ read_notify(2*60*1000);
 disconnect_node(2);
 
 
-int notify_callback(int lenode,int cticn,char *buf,int nread)
+int notify_callback(int lenode,int cticn,unsigned char *buf,int nread)
   { 
   // LE device lenode has sent notification of characteristic index cticn
     
@@ -1302,9 +1341,9 @@ classic_server(2,node_callback,10,KEY_OFF | PASSKEY_OFF);
 // It works the same way for NODE and CLASSIC connections so the 
 // same code can be used for both.
 
-int node_callback(int clientnode,char *data,int datlen)
+int node_callback(int clientnode,unsigned char *data,int datlen)
   {
-  char buf[4];
+  unsigned char buf[4];
   
   // data[] has datlen bytes from clientnode
   
@@ -1327,7 +1366,7 @@ int node_callback(int clientnode,char *data,int datlen)
 
 // CLIENT code
 
-char outbuf[4],inbuf[64];
+unsigned char outbuf[4],inbuf[64];
 
 // NODE CLIENT - node 2
 // Connect as a node client to the node 1 node server
@@ -1395,7 +1434,7 @@ write_node(1,buf,32);   // send 32 bytes of binary data
 
 SERVER CODE (classic or node callback)
 
-int clasic_callback(int clientnode,char *data,int datlen)
+int clasic_callback(int clientnode,unsigned char *data,int datlen)
   {
   int numbytes;
   unsigned char buf[64];
@@ -1458,7 +1497,7 @@ mesh_server(mesh_callback);
 // This mesh callback routine receives all broadcast packets from
 // devices on the devices.txt list.
 
-int mesh_callback(int clientnode,char *data,int datlen)
+int mesh_callback(int clientnode,unsigned char *data,int datlen)
   {
   int n;
     
@@ -1475,7 +1514,7 @@ int mesh_callback(int clientnode,char *data,int datlen)
 
 // MESH BROADCASTER
 
-char buf[4];
+unsigned char buf[4];
 
 buf[0] = 0x12;
 buf[1] = 0x34;
@@ -1485,7 +1524,7 @@ write_mesh(buf,2);
 sleep(1);  // 1 second delay to allow packet to be sent
 
    // broadcast D disconnect command
-write_mesh("D",1);
+write_mesh((unsigned char*)"D",1);
 sleep(1);  // 1 second delay to allow packet to be sent
 
      // A write_mesh packet is not sent immediately because
@@ -1852,6 +1891,9 @@ Recommended keyflags:
 When connecting two Mesh Pis, use KEY\_OFF | PASSKEY\_OFF.
 When the client is a Windows/Android/.. device,
 some experimentation is required to determine whether to use a link key and pass key.
+A client will ask the server if it is prepared to use a KEY and a PASSKEY. The server
+can give a negative reply to both, but most clients will then terminate the connection.
+A few will be happy to proceed (e.g. a btferret client).
 Some terminal programs
 require the server to be paired before attempting to connect, some will pair during 
 connection, and some do not need to be paired, or may even have to be unpaired.
@@ -1877,7 +1919,7 @@ RETURN
 The callback function is defined as follows:
 
 ```
-int callback(int clientnode,char *data,int datlen)
+int callback(int clientnode,unsigned char *data,int datlen)
 
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
@@ -1920,7 +1962,7 @@ classic_server(ANY_DEVICE,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
       // asking if the passkey has appeared on the local server screen.
 classic_server(2,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
    
-int classic_callback(int clientnode,char *data,int datlen)
+int classic_callback(int clientnode,unsigned char *data,int datlen)
   {
   
   // data[] has datlen bytes from clientnode  
@@ -2281,7 +2323,7 @@ to disconnect. For an example, see the node_callback() code in btferret.c or
    // Send a serial data message to node 4 that it interprets as
    // a disconnect instruction - in this case a single 'D' character
 
-char buf[4];
+unsigned char buf[4];
 
 buf[0] = 'D';  
 write_node(4,buf,1);   
@@ -2301,7 +2343,7 @@ wait_for_disconnect(4,3000);
 ## 4-2-12 find\_channel
 
 ```c
-int find_channel(int node,int flag,char *uuid)
+int find_channel(int node,int flag,unsigned char *uuid)
 ```
 
 Returns the RFCOMM channel number of a specified
@@ -2336,7 +2378,7 @@ SAMPLE CODE
 // Find RFCOMM channel of node 7's serial data channel with UUID = 1101
 
 int channel;
-char uuid[2];
+unsigned char uuid[2];
 
 uuid[0] = 0x11;
 uuid[1] = 0x01;
@@ -2386,7 +2428,7 @@ find_citcs(5);
 ## 4-2-14 find\_ctic\_index
 
 ```c
-int find_ctic_index(int node,int flag,char *uuid)
+int find_ctic_index(int node,int flag,unsigned char *uuid)
 ```
 
 Returns the characteristic index of a specified UUID for an LE server. This
@@ -2423,7 +2465,7 @@ SAMPLE CODE
 // Find index of LE server node 7's characteristic with UUID = 2A00 and read it.
 
 int cticn;
-char uuid[2],data[64];
+unsigned char uuid[2],data[64];
 
 uuid[0] = 0x2A;
 uuid[1] = 0x00;
@@ -2585,7 +2627,7 @@ by using [read\_ctic](#4-2-28-read\_ctic) and [write\_ctic](#4-2-42-write\_ctic)
 [localnode()](#4-2-21-localnode) as follows:
 
 ```
-char buf[32];
+unsigned char buf[32];
 
 read_ctic(localnode(),2,buf,sizeof(buf));  // read characteristic index 2 
 write_ctic(localnode(),2,buf,1);           // write one byte to characteristic index 2
@@ -2599,12 +2641,15 @@ They can also be read and written by a connected LE client.
 
 SAMPLE CODE
 
+See also [LE server](#3-7-le-server) for a fully working server example.
+
 
 ```c
 /* devices.txt file:
 DEVICE= Server Pi  TYPE=MESH NODE=2 ADDRESS=22:22:22:22:22:22
-  LECHAR=Status PERMIT=06 HANDLE=0005 SIZE=1
-  LECHAR=Test   PERMIT=06 HANDLE=0007 SIZE=2
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00 
+    LECHAR=Status PERMIT=06 UUID=ABCD SIZE=1
+    LECHAR=Test   PERMIT=06 UUID=CDEF SIZE=2
 */
 
 unsigned char buf[2];
@@ -2631,7 +2676,7 @@ le_server(le_callback,100);
 int le_callback(int clientnode,int operation,int cticn)
   {  
   int nread;
-  char dat[32];
+  unsigned char dat[32];
   
   if(operation == LE_CONNECT)
     {
@@ -2740,7 +2785,7 @@ list_ctics(3,LIST_FULL);   // full characteristic info of node 3
 ## 4-2-20 list\_uuid
 
 ```c
-int list_uuid(int node,char *uuid)
+int list_uuid(int node,unsigned char *uuid)
 ```
 
 List information about a node's services that contain a
@@ -2765,7 +2810,7 @@ SAMPLE CODE
 ```c
 // List services of node 5 that contain the UUID = 0100
 
-char uuid[2];
+unsigned char uuid[2];
 
 uuid[0] = 0x01;
 uuid[1] = 0x00;
@@ -2841,7 +2886,7 @@ callback() = Callback function that deals with the received mesh packet
 The callback function is defined as follows:
 
 ```
-int callback(int clientnode,char *data,int datlen)
+int callback(int clientnode,unsigned char *data,int datlen)
 
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
@@ -2858,7 +2903,7 @@ pressing the x key. See btferret.c or sample.c for similar examples.
 mesh_server(mesh_callback);
 
 
-int mesh_callback(int clientnode,char *data,int datlen)
+int mesh_callback(int clientnode,unsigned char *data,int datlen)
   {
   printf("Mesh packet from %s\n",device_name(clientnode));
   if(data[0] == 'D')     // 'D' programmed as exit command
@@ -2906,7 +2951,7 @@ RETURN
 The callback function is defined as follows:
 
 ```
-int callback(int clientnode,char *data,int datlen)
+int callback(int clientnode,unsigned char *data,int datlen)
 
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
@@ -2933,7 +2978,7 @@ callback function is effectively identical to the classic callback listed in
 node_server(4,node_callback,10);
 
 
-int node_callback(int clientnode,char *data,int datlen)
+int node_callback(int clientnode,unsigned char *data,int datlen)
   {
   printf("Node packet from %s\n",device_name(clientnode));
   if(data[0] == 'D')      // 'D' programmed as exit command
@@ -2981,7 +3026,7 @@ RETURN
 The callback function is defined as follows:
 
 ```
-void callback(int lenode,int cticn,char *data,int datlen)
+void callback(int lenode,int cticn,unsigned char *data,int datlen)
 
 lenode = Node number of the device that sent the notification
 cticn = Characteristic index in device info
@@ -3005,7 +3050,7 @@ DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
 */
 
 
-void notify_callback(int lenode,int cticn,char *buf,int nread);
+void notify_callback(int lenode,int cticn,unsigned char *buf,int nread);
 
   // enable notifications for characteristic index 0 from LE node 4
   
@@ -3013,7 +3058,7 @@ notify_ctic(4,0,NOTIFY_ENABLE,notify_callback);
 
 
   
-void notify_callback(int lenode,int cticn,char *buf,int nread)
+void notify_callback(int lenode,int cticn,unsigned char *buf,int nread)
   {
   int n;
   
@@ -3109,7 +3154,7 @@ DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
   LECHAR=My data UUID=11223344-5566-7788-99AABBCCDDEEFF00 ; index 2 
 */
 
-char data[32];
+unsigned char data[32];
 int nread,cticn;
 
   // connect to LE device Pictail node 4
@@ -3156,7 +3201,7 @@ RETURN
 ## 4-2-30 read\_mesh
 
 ```c
-int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms)
+int read_mesh(int *node,unsigned char *inbuf,int bufsize,int exitflag,int timeoutms)
 ```
 
 Reads a mesh packet sent by any other trasmitting mesh device. The maximum size
@@ -3203,7 +3248,7 @@ SAMPLE CODE
 
 ```c
 int nread,node;
-char inbuf[32];
+unsigned char inbuf[32];
 
     // wait 5 seconds for mesh packet
 nread = read_mesh(&node,inbuf,sizeof(inbuf),EXIT_TIMEOUT,5000);
@@ -3225,7 +3270,7 @@ while(read_error() == 0);
 ## 4-2-31 read\_node\_count
 
 ```c
-int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms)
+int read_node_count(int node,unsigned char *inbuf,int count,int exitflag,int timeoutms)
 ```
 
 Read node packet from a specified node connected as CLASSIC or NODE until a specified 
@@ -3296,7 +3341,7 @@ client sends 8 bytes to the server, the server sends 20 bytes back, and then an 
 ```c
 ***** CLIENT CODE *****
 
-char dat[32];
+unsigned char dat[32];
 
 connect_node(2,CHANNEL_NODE,0);
 
@@ -3338,7 +3383,8 @@ node_server(1,callback,10);   // termination char = 10
 
 int callback(int clientnode,unsigned char *dat,int count)
   {
-  char *s,buf[20];
+  char *s;
+  unsigned char buf[20];
   
      // the client has sent a single termination char
      // count should be 1 and dat[0] should be 10
@@ -3356,7 +3402,7 @@ int callback(int clientnode,unsigned char *dat,int count)
      // client now expects ascii "OK" with 10 termination char
      
   s = "OK\n";
-  write_node(clientnode,s,strlen(s));
+  write_node(clientnode,(unsigned char*)s,strlen(s));
 
     // this return stops the server (node_server() returns)
     // and intiates disconnection
@@ -3371,8 +3417,8 @@ int callback(int clientnode,unsigned char *dat,int count)
 ## 4-2-32 read\_node-all\_endchar
 
 ```c
-int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
-int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
+int read_node_endchar(int node,unsigned char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
+int read_all_endchar(int *node,unsigned char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms)
 ```
 
 Read node packet from a specified node (connected as CLASSIC or NODE), or all connected nodes,
@@ -3435,7 +3481,7 @@ SAMPLE CODE
 
 ```c
 int nread,node;
-char buff[64];
+unsigned char buff[64];
 
   // Read bytes from node 3 until termination char 10 received
   // Time out after 1 second
@@ -3516,7 +3562,7 @@ read_notify(tos*1000);
 ## 4-2-35 register\_serial
 
 ```c
-void register_serial(char *uuid,char *name)
+void register_serial(unsigned char *uuid,char *name)
 ```
 
 When set up as a [classic\_server](#4-2-2-classic\_server), the following serial
@@ -3846,7 +3892,7 @@ DEVICE = Pictail TYPE=LE NODE=4 ADDRESS = 00:1E:C0:2D:17:7C
 */
 
 int cticn;
-char data[8];
+unsigned char data[8];
 
   // connect to LE device Pictail node 4
 connect_node(4,CHANNEL_LE,0); 
@@ -3874,7 +3920,7 @@ disconnect_node(4);
 ## 4-2-43 write\_mesh
 
 ```c
-int write_mesh(char *outbuf,int count)
+int write_mesh(unsigned char *outbuf,int count)
 ```
 
 Broadcast a mesh packet. This packet will be transmitted repeatedly until another
@@ -3915,7 +3961,7 @@ Number of bytes written
 SAMPLE CODE
 
 ```c
-char data[4];
+unsigned char data[4];
 
 
 data[0] = 0x00;
@@ -3968,7 +4014,7 @@ Number of bytes written
 SAMPLE CODE
 
 ```c
-char buf[4];
+unsigned char buf[4];
 
 buf[0] = 0x00;
 buf[1] = 0x11;
@@ -4300,6 +4346,7 @@ struct sockaddr_hci
 unsigned char eventmask[16] =  { 1,1,0x0C,8,0xFF,0xFF,0xFB,0xFF,0x07,0xF8,0xBF,0x3D }; // len 12  
 unsigned char lemask[16] = { 1,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 };  // len 12  
 unsigned char scanip[8] = { 1,0x1A,0x0C,1,3};  // len 5   I/P scans [8] 0=off  3=I/P scans
+unsigned char btreset[8] = {0x01,0x03,0x0C,0};
 
 //#define HCIDEVDOWN _IOW('H',202,int)
 #define HCIDEVDOWN 0x400448CA
@@ -4349,6 +4396,11 @@ void hcisock()
 
   // dd is hci socket
   // read/write HCI packets via read() and write()
+  
+  // Reset Bluetooth adapter
+  // Not needed for Raspberry Pi. but does no harm
+  // Needed for some Ubuntu installations
+  write(dd,btreset,4);
 
   // Set event mask  Vol 4 Part E Section 7.3.1
   write(dd,eventmask,12);

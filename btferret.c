@@ -1,9 +1,12 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h 
+  btlib.c/h  Version 12 
+  devices.txt
 COMPILE
-  gcc bterret.c btlib.c -o btferret
+  gcc btferret.c btlib.c -o btferret
+RUN
+  sudo ./btferret
 EDIT
   devices.txt to list all devices in the network
   and set their ADDRESS= entries 
@@ -215,7 +218,7 @@ void printhelp()
 int clientread(int node)
   {
   int n,gotn;
-  char buf[1024];
+  unsigned char buf[1024];
   
    // read to endchar 3s time out
   gotn = read_node_endchar(node,buf,1024,endchar,EXIT_TIMEOUT,3000);
@@ -258,7 +261,7 @@ int clientsend(int cmd)
     
   if(node == 0)   // mesh packet to all mesh servers
     {
-    write_mesh("D",1);
+    write_mesh((unsigned char*)"D",1);
     return(1);
     }  
     
@@ -816,7 +819,8 @@ void readuuid()
 int sendgetfile()
   {
   int servernode,maxblock,xblock,retval,sorg;
-  char ec,fname[256],ddir[256],temps[256];
+  char ec,fname[256],ddir[256];
+  char temps[256];
   static char ddirsav[256] = {""};
   static int nblock = 0;
  
@@ -935,7 +939,7 @@ int sendgetfile()
     strcat(temps,fname);
     sendstring(servernode,temps);
     // server sends file
-    retval = read_node_endchar(servernode,temps,256,endchar,EXIT_TIMEOUT,5000);
+    retval = read_node_endchar(servernode,(unsigned char*)temps,256,endchar,EXIT_TIMEOUT,5000);
     if(retval != 0 && temps[0] == 'F')
       {
       // strip endchar
@@ -1427,7 +1431,7 @@ int sendstring(int node,char *comd)
   printf("Sending to %s: %s\n",device_name(node),s);
 
   // add endchar   
-  strcpy(sbuff,comd);
+  strcpy((char*)sbuff,comd);
   sbuff[clen] = endchar;
   ++clen;
      
@@ -1457,7 +1461,7 @@ int meshsend()
     return(0);
     }
     
-  write_mesh(coms,len);
+  write_mesh((unsigned char*)coms,len);
   return(1);
   }
 
@@ -1774,7 +1778,7 @@ void getstring(char *prompt,char *s,int len)
   
   do
     {
-    printf(prompt);
+    printf("%s",prompt);
     fgets(s,len,stdin);
     }
   while(s[0] == 10);

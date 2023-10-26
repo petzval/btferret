@@ -80,3 +80,19 @@ Set the LE connection interval which controls the speed of multiple read/writes.
 
 ### Version 11
 1. LE server: 2-byte primary services in devices.txt, allows standard LE characteristics set-up.
+
+### Version 12
+
+There are no new features, but the following changes have been made. 
+
+1. When run on Ubuntu, the code may have failed to initialise, maybe with an "Unable to read local board address"
+or "No root permission or hci0 is not operational" message. A reset has been added to the initialisation
+process that should fix this problem. The code has been tested on a PC running Ubuntu 22.04.3 LTS.
+
+2. When acting as a server, the CPU is no longer 100% occupied waiting for client packets.
+
+3. The compilation would throw up multiple signed/unsigned char warnings. They were harmless, but they have
+now been eliminated by re-defining the relevant function parameters from char to unsigned char.
+
+4. When doing a classic scan, some Bluetooth adapters did not filter out repeats, resulting in multiple FOUND
+reports for a single device. Now fixed.

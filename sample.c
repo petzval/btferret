@@ -16,8 +16,8 @@ RUN
 #include "btlib.h"
 
 int hubnode(void);
-int meshserver(int clientnode,char *inbuf,int count);
-int nodeserver(int clientnode,char *inbuf,int count);
+int meshserver(int clientnode,unsigned char *inbuf,int count);
+int nodeserver(int clientnode,unsigned char *inbuf,int count);
 
 int main()
   {
@@ -48,8 +48,8 @@ int main()
 
 int hubnode()
   {
-  int n,len,channel;
-  char buf[8],name[64];
+  int len,channel;
+  unsigned char buf[8],name[64];
 
   // send mesh packet to all mesh devices = 2 10 4 
   // node 3 is running meshserver callback which ignores this packet
@@ -97,7 +97,7 @@ int hubnode()
   // plus a 10 termination character added by nodeserver()
   // followed by a zero added by read_node_endchar()
   // 8 second time out.
-  
+   
   printf("Wait for reply from node 2 with name\n");
   
   len = read_node_endchar(2,name,sizeof(name),10,EXIT_TIMEOUT,8000); 
@@ -178,7 +178,7 @@ int hubnode()
   }
 
 
-int meshserver(int clientnode,char *inbuf,int count)
+int meshserver(int clientnode,unsigned char *inbuf,int count)
   {
   if(inbuf[0] == 'D')
     {
@@ -208,10 +208,10 @@ int meshserver(int clientnode,char *inbuf,int count)
   }
   
 
-int nodeserver(int clientnode,char *inbuf,int count)
+int nodeserver(int clientnode,unsigned char *inbuf,int count)
   {
   int len,lenode,index;
-  char name[64];
+  unsigned char name[64];
   
   if(inbuf[0] == 'D')      // disconnect command
     {
@@ -226,7 +226,7 @@ int nodeserver(int clientnode,char *inbuf,int count)
     printf("Read name of LE node %d command\n",lenode);
 
      // connect LE device
-    if(connect_node(lenode,0,0) == 0)
+    if(connect_node(lenode,CHANNEL_LE,0) == 0)
       printf("Failed to connect to LE device\n");
     else
       { 
@@ -253,8 +253,8 @@ int nodeserver(int clientnode,char *inbuf,int count)
       if(len == 0)
         {
         printf("Failed to read name\n");
-        sprintf(name,"Fail");  // send this as name
-        len = strlen(name);
+        sprintf((char*)name,"Fail");  // send this as name
+        len = strlen((char*)name);
         }
       else
         printf("Read name = %s\n",name);

@@ -1,4 +1,4 @@
-  // for btlib.c Version 10
+  // for btlib.c Version 12
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -92,9 +92,9 @@ char *device_name(int node);
 int device_type(int node);
 int disconnect_node(int node);
 
-int find_channel(int node,int flag,char *uuid);
+int find_channel(int node,int flag,unsigned char *uuid);
 int find_ctics(int node);
-int find_ctic_index(int node,int flag,char *uuid);
+int find_ctic_index(int node,int flag,unsigned char *uuid);
 
 int init_blue(char *filename);
 int init_blue_ex(char *filename,int hcin);
@@ -105,7 +105,7 @@ int le_server(int(*callback)(),int timerds);
 
 int list_channels(int node,int flag);
 int list_ctics(int node,int flag);
-int list_uuid(int node,char *uuid);
+int list_uuid(int node,unsigned char *uuid);
 
 int localnode(void);
 
@@ -123,12 +123,12 @@ int output_file(char *filemame);
 int read_ctic(int node,int cticn,unsigned char *inbuf,int bufsize);
 int read_error(void);
 
-int read_mesh(int *node,char *inbuf,int bufsize,int exitflag,int timeoutms);
+int read_mesh(int *node,unsigned char *inbuf,int bufsize,int exitflag,int timeoutms);
 
-int read_node_count(int node,char *inbuf,int count,int exitflag,int timeoutms);
+int read_node_count(int node,unsigned char *inbuf,int count,int exitflag,int timeoutms);
 
-int read_node_endchar(int node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms);
-int read_all_endchar(int *node,char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms);
+int read_node_endchar(int node,unsigned char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms);
+int read_all_endchar(int *node,unsigned char *inbuf,int bufsize,char endchar,int exitflag,int timeoutms);
 
 void read_node_clear(int node);
 void read_all_clear(void);
@@ -149,7 +149,7 @@ unsigned char *strtohex(char *s,int *num);
 
 int wait_for_disconnect(int node,int timout);
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count);
-int write_mesh(char *outbuf,int count);
+int write_mesh(unsigned char *outbuf,int count);
 int write_node(int node,unsigned char *outbuf,int count);
 
 

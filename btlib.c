@@ -1,3 +1,4 @@
+/********** Version 12 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -7,6 +8,7 @@
 #include <termios.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/poll.h>
 #include <fcntl.h>
 #include "btlib.h"     
 
@@ -74,7 +76,7 @@ struct hci_dev_req
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 11
+#define VERSION 12
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -146,6 +148,7 @@ struct devdata
   int linkflag;
   int datlen;                 // max LE characteristic size
   int setdatlen;
+  int foundflag;
   unsigned char primaryuuid[256];
   unsigned char linkey[16];
   char pincode[64];
@@ -335,10 +338,9 @@ int meshpacket(unsigned char *buf);
 void clscanx(void);
 int lescanx(void);
 int clconnect(int ndevice,int channel,int method);
-int leservices(int ndevice,int flags,char *uuid);
-int clservices(int ndevice,int flags,char *uuid);
+int leservices(int ndevice,int flags,unsigned char *uuid);
+int clservices(int ndevice,int flags,unsigned char *uuid);
 void printlocalchannels(void);
-int services(int ndevice,int flags,char *uuid);
 int printchannels(int ndevice,int flags,struct servicedata *serv,int servlen);
 int printctics0(int devicen,int flags);
 int printctics1(int devicen);
@@ -360,7 +362,7 @@ int connectpsm(int psm,int channel,int ndevice);
 int disconnectl2(int ndevice,int psm);
 void setcredits(int ndevice);
 int readpack(char *c,int clen,int *ndevice,int count,int endchar,int toflag,int abtflag);
-int readrf(int *ndevice,char *inbuff,int count,char endchar,int flag,int timeoutms);
+int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int flag,int timeoutms);
 int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout,int toshort);
 int setkeymode(int setflag);
 int leconnect(int ndevice);
@@ -413,7 +415,7 @@ int findhci(long long int type,int devicen,int popflag);
 void printins(void);
 
 int sconnect(int ndevice);
-int readserial(int *ndevice,char *inbuff,int count,char endchar,int exitflags,int timeoutms);
+int readserial(int *ndevice,unsigned char *inbuff,int count,char endchar,int exitflags,int timeoutms);
 unsigned char *strtohexx(char *s,int slen,int *num);
 
 void readleatt(int node,int handle);
@@ -520,6 +522,7 @@ unsigned char locsup[8] = { 4,0,0,0,0x01,0x02,0x10,0x00 };
 unsigned char lemask[20] = { 12,0,0,0,0x01,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 };   // BF 05 for no data len event
 unsigned char lesetscan[16] = { 11,0,0,0,0x01,0x0B,0x20,0x07,0x01,0x10,0x00,0x10,0x00,0x00,0x02 };
 unsigned char locbadd[10] = {4,0,0,0,0x01,0x09,0x10,0};
+unsigned char btreset[10] = {4,0,0,0,0x01,0x03,0x0C,0};
 unsigned char lesuggest[16] = { 8,0,0,0,1,0x24,0x20,4,0xF8,0,TRANSMITUS & 0xFF,(TRANSMITUS >> 8) & 0xFF};
 unsigned char leopen[40] = {29,0,S2_BADD,0,
   1,0x0D,0x20,0x19,0x60,0,0x60,0,0,0,0x7C,0x17,0x2D,0xC0,0x1E,0,0,0x18,0,0x28,0,0,0,0x11,0x01,0,0,0,0}; // len 29
@@ -2316,7 +2319,7 @@ void meshreadoff()
   }
 
 
-int write_mesh(char *buf,int count)
+int write_mesh(unsigned char *buf,int count)
   {
   int n;
   
@@ -2502,6 +2505,7 @@ int devalloc()
   dp->matchname = 0;
   dp->datlen = 20;
   dp->setdatlen = 20;
+  dp->foundflag = 0;
   
   for(j = 0 ; j < 6 ; ++j)
     dp->baddr[j] = 0;
@@ -3228,7 +3232,7 @@ int devlist(int mask)
 void mesh_server(int(*callback)())
   {
   int nread,retval,clientnode;
-  char buf[32];
+  unsigned char buf[32];
 
   mesh_on(); 
   meshpacket(NULL);  // enable unknown device message
@@ -3312,7 +3316,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   do
     {
     readhci(LE_SERV,IN_LECMD,0,100,0);
-          
+
     cbflag = 0;  // callback not called
           
     n = findhci(IN_LECMD,0,INS_POP);
@@ -3440,10 +3444,10 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
 /*********** NODE SERVER ***********/
 
 
-int node_server(int clientnode,int (*callback)(int clientnode,char *buf,int count),char endchar)
+int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf,int count),char endchar)
   {
   int nread,key,ndevice,retval,oldkm;
-  char buf[1024];
+  unsigned char buf[1024];
   struct devdata *dp;
      
   ndevice = devn(clientnode);
@@ -3520,10 +3524,11 @@ int node_server(int clientnode,int (*callback)(int clientnode,char *buf,int coun
 
 
 
-int classic_server(int clientnode,int (*callback)(int clientnode,char *buf,int count),char endchar,int keyflag)
+int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf,int count),char endchar,int keyflag)
   {
   int n,nread,key,ndevice,retval,oldkm,tryflag,keyflagx;
-  char *s,buf[1024];
+  char *s;
+  unsigned char buf[1024];
   struct devdata *dp;
   
   if(clientnode == ANY_DEVICE)
@@ -5286,7 +5291,7 @@ int sendhci(unsigned char *s,int ndevice)
 
 int splitcmd(unsigned char *s)
   {
-  int n,k,sn,tn,tn0,t20,len,numx,remx,kx,flag;
+  int n,k,sn,tn,t20,len,numx,remx,kx,flag;
   unsigned char t[512];
   
   
@@ -5316,7 +5321,7 @@ int splitcmd(unsigned char *s)
   for(n = 0 ; n < numx ; ++n)
     {
     ++gpar.cmdcount;
-    tn0 = tn;
+    // tn0 = tn;
     t[tn] = 0x02;
     t[tn+1] = t[1];
     t[tn+2] = t20 | 0x10;
@@ -5519,7 +5524,8 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   static long long int sflag;
   static int level = 0;   
   unsigned char buf[2048];
-
+  struct pollfd pfd[1];
+  
   //if(level > 0 && ndevice == 0 && mustflag == 0 && lookflag == 0 && timout == 0 && toshort == 0)
   //  return(0);
 
@@ -5637,10 +5643,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         {         
         do       // read block of data - may be less than or more than one line
           {
-          len = read(gpar.hci,&buf[blen],sizeof(buf)-blen);                  
+          pfd[0].fd = gpar.hci;
+          pfd[0].events = POLLIN;
+          if(poll(pfd,1,1) == 0)
+            len = 0;
+          else if((pfd[0].events & POLLIN) != 0)
+            len = read(gpar.hci,&buf[blen],sizeof(buf)-blen);           
+ 
+           // len = number of bytes read  0=EOF -1=error
            
-           // len = number of bytes read  0=EOF -1=error     
-         
           if(len <= 0 && (timendms == 0 || (timems(TIM_RUN) - timstart) >= timendms))  
             {    // nothing read and timed out - normal exit route                         
             if(len > 0 || blen > 0)
@@ -6764,7 +6775,7 @@ void immediate(long long lookflag)
       if(dp->pincode[0] == 0)
         {
         flushprint();
-        printf ("Input PIN code (can set in device info via PIN=)\n? ");
+        printf ("Input PIN code (0000 if unknown)\n? ");
         j = setkeymode(0);
         do
           {
@@ -6919,7 +6930,7 @@ handles 0004...  characteristics
 
 void leserver(int ndevice,int count,unsigned char *dat)
   {
-  int n,dn,xn,cticn,flag,notflag,handle,node,start,end,startx,psflag,eog;
+  int n,dn,cticn,flag,notflag,handle,start,end,startx,psflag,eog;
   int size,uuidtype,aflag,xflag,acticn,ahandle,psn,locsize,datcount;
   unsigned char cmd[2],*s,*data,errcode,buf[32];
   struct cticdata *cp;
@@ -6936,7 +6947,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
   acticn = 0;
   ahandle = 0;
   xflag = 0;   // stop error
-  node = dev[0]->node;
+  // node = dev[0]->node;
   
   if(dat[0] == 0x52 || dat[0] == 0x12 || dat[0] == 0x0A)
     {  // read/write
@@ -8188,6 +8199,10 @@ int hcisock()
 
   gpar.hci = dd;    
 
+  VPRINT "Reset\n");
+  sendhci(btreset,0);
+  statusok(0,btreset);
+
   VPRINT "Set event masks\n");
   sendhci(eventmask,0);
   statusok(0,eventmask);
@@ -8502,7 +8517,7 @@ int clconnectxx(int ndevice)
 
 /************* SERVICES ******************/
 
-int find_channel(int node,int flag,char *uuid)
+int find_channel(int node,int flag,unsigned char *uuid)
   {
   int flags,retval,ndevice;
   
@@ -8563,7 +8578,7 @@ int list_channels(int node,int flag)
 /********** READ SERVICES *******/
 
 
-int list_uuid(int node,char *uuid)
+int list_uuid(int node,unsigned char *uuid)
   {
   int retval,ndevice;
     
@@ -8601,7 +8616,7 @@ UUID
         1 = OK  
 ****************/         
   
-int clservices(int ndevice,int flags,char *uuid)
+int clservices(int ndevice,int flags,unsigned char *uuid)
   {
   int n,j,k,ncont,sn,savto,locndevice,type;
   int headsz,getout,savpf,flag;
@@ -8991,7 +9006,7 @@ void printlocalchannels()
   NPRINT "\n");
   }
 
-int leservices(int ndevice,int flag,char *uuid)
+int leservices(int ndevice,int flag,unsigned char *uuid)
   {
   int n,n0,k,j,len,lasth,num,count,getout;
   int loop,chn,locuuid,cancelflag,failcount;
@@ -9247,7 +9262,7 @@ return n index of characteristic in device information
 *************************************/
 
 
-int find_ctic_index(int node,int flag,char *uuid)
+int find_ctic_index(int node,int flag,unsigned char *uuid)
   {
   int n,k,getout,ndevice;
   struct cticdata *cp;
@@ -9281,7 +9296,7 @@ int find_ctic_index(int node,int flag,char *uuid)
 
 int printctics1(int ndevice)
   {
-  int k,j,i,i0,pn,count,len,del,psn,psnx;
+  int k,j,i,i0,pn,count,len,del,psnx;
   struct cticdata *cp;
   
   static char *permsn[16] = {" ? ","r  ","w  ","rw ","wa ","rwa"," ? "," ? ","n  ","rn ","wn ","rwn","wan","rwan","??n","??n"  };
@@ -9298,7 +9313,7 @@ int printctics1(int ndevice)
     return(0);
     }
 
-  psn = 0;
+  // psn = 0;
   psnx = -1;  
     
   NPRINT "   ctic\n");
@@ -9860,6 +9875,9 @@ void clscanx()
   char buf[64];
    
   NPRINT "Scanning for Classic devices - 10 seconds\n");
+
+  for(n = 0 ; devok(n) != 0 ; ++n)
+    dev[n]->foundflag = 0;
     
   sendhci(cscan,0);  // with 10 sec timeout
   readhci(0,IN_INQCOMP,IN_CSCAN,15000,gpar.toshort);
@@ -9884,17 +9902,20 @@ void clscanx()
     for(repn = 0 ; repn < nrep ; ++repn)
       {
       flag = 0;  // no MATCH_NAME
-      NPRINT "%d FOUND %s\n",count+1,baddstr(rp,1));      
       
       ndevice = devnfrombadd(rp,BTYPE_CL | BTYPE_ME,DIRN_REV);
-      if(ndevice >= 0)
+      if(ndevice >= 0 && dev[ndevice]->foundflag == 0)
         {
+        NPRINT "%d FOUND %s\n",count+1,baddstr(rp,1));      
         NPRINT "   Known device %d = %s\n",dev[ndevice]->node,dev[ndevice]->name);
         if(dev[ndevice]->type != BTYPE_CL && dev[ndevice]->type != BTYPE_ME)
           NPRINT "   But not listed as Classic or Mesh\n"); 
+        dev[ndevice]->foundflag = 1;
+        ++count;
         }
-      else
+      else if(ndevice < 0)
         {     
+        NPRINT "%d FOUND %s\n",count+1,baddstr(rp,1));      
         ndevice = devalloc();
         if(ndevice < 0)
           {
@@ -9906,6 +9927,7 @@ void clscanx()
         dp = dev[ndevice];
         dp->type = BTYPE_CL;
         dp->node = newnode();          
+        dp->foundflag = 1;
                               
         for(j = 0 ; j < 6 ; ++j)
           dp->baddr[j] = rp[5-j];
@@ -9953,10 +9975,12 @@ void clscanx()
                 if(flag != 0)
                   {  
                   dp->type = 0;      // free ndevice
+                  dp->foundflag = 0;
                   ndevice = k;       // swap to known device k
                   NPRINT "   Found via MATCH_NAME\n");
                   NPRINT "   Known device %d = %s\n",dev[ndevice]->node,dev[ndevice]->name);
                   dev[k]->matchname |= 2;  // found address flag
+                  dev[k]->foundflag = 1;
                   ndevice = k;
                   for(j = 0 ; j < 6 ; ++j)
                     dev[ndevice]->baddr[j] = rp[5-j];          
@@ -9980,9 +10004,9 @@ void clscanx()
           NPRINT "   New device %s\n",dev[ndevice]->name);
           rwlinkey(0,ndevice);  // link key in file?
           }
+        ++count;
         }
       rp += 14;
-      ++count;
       }
     instack[n] = INS_POP;
     flushprint();
@@ -10601,7 +10625,7 @@ int write_node(int node,unsigned char *outbuff,int count)
 /*************** READ SERIAL DATA ***********/
 
 
-int read_node_count(int node,char *buf,int count,int exitflag,int timeoutms)
+int read_node_count(int node,unsigned char *buf,int count,int exitflag,int timeoutms)
   {
   int locnode;
   
@@ -10609,7 +10633,7 @@ int read_node_count(int node,char *buf,int count,int exitflag,int timeoutms)
   return(readserial(&locnode,buf,count,0,(exitflag & 3) | EXIT_COUNT,timeoutms));
   }
 
-int read_node_endchar(int node,char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
+int read_node_endchar(int node,unsigned char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
   {
   int locnode;
       
@@ -10617,7 +10641,7 @@ int read_node_endchar(int node,char *buf,int bufsize,char endchar,int exitflag,i
   return(readserial(&locnode,buf,bufsize,endchar,(exitflag & 3) | EXIT_CHAR,timeoutms));
   }
 
-int read_all_endchar(int *node,char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
+int read_all_endchar(int *node,unsigned char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
   {
   int locnode,retval;
   
@@ -10632,7 +10656,7 @@ int read_all_endchar(int *node,char *buf,int bufsize,char endchar,int exitflag,i
   return(retval);
   }
 
-int read_mesh(int *node,char *buf,int bufsize,int exitflag,int timeoutms)
+int read_mesh(int *node,unsigned char *buf,int bufsize,int exitflag,int timeoutms)
   {
   int locnode,retval;
  
@@ -10714,7 +10738,7 @@ void read_notify(int timeoutms)
 
 
 
-int readserial(int *node,char *inbuff,int count,char endchar,int flag,int timeoutms)
+int readserial(int *node,unsigned char *inbuff,int count,char endchar,int flag,int timeoutms)
   {
   int n,nread,meshcon,clcon,onedevn,ndevice,oldkm;
 
@@ -10811,7 +10835,7 @@ int readserial(int *node,char *inbuff,int count,char endchar,int flag,int timeou
 
 /*********** RECEIVE CHARS ************/
         
-int readrf(int *ndevice,char *inbuff,int count,char endchar,int inflag,int timeoutms)
+int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,int timeoutms)
   {
   int n,k,len,getout,devicen,flag,gotn,ndev,meshflag;
   char lastchar;
@@ -11608,7 +11632,7 @@ int readline(FILE *stream,char *s)
 
 void readleatt(int node,int xhandle)
   {
-  int n,k,len,uuidtype,ndevice,flag,h0,hx,handle,psflag,allflag,uuid,endff,bdlen,delh;
+  int n,k,len,uuidtype,ndevice,h0,hx,handle,psflag,allflag,uuid,endff,bdlen,delh;
   char s[64],sx[8],*sp;
   unsigned char *bd,bdat[256];
   
