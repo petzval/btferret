@@ -235,7 +235,7 @@ int nodeserver(int clientnode,unsigned char *inbuf,int count)
     
       // find index of characteristic with UUID=2A00
       // which is the standard UUID for the device name     
-   
+      find_ctics(lenode);  // read characteristic info
       index = find_ctic_index(lenode,UUID_2,strtohex("2A00",NULL));
      
       if(index < 0)
@@ -244,12 +244,8 @@ int nodeserver(int clientnode,unsigned char *inbuf,int count)
         len = 0;
         }
       else
-        {             
-        // index should be 1 because it is the second LECHAR listed in sampledev.txt  
-        // so could have just set index=1 without using find_ctic_index
         len = read_ctic(lenode,index,name,sizeof(name));
-        }
-           
+             
       if(len == 0)
         {
         printf("Failed to read name\n");

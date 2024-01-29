@@ -1,4 +1,4 @@
-/********** Version 12 *********/
+/********** Version 13 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -28,55 +28,10 @@
 //#define HCISETSCAN _IOW('H',221,int)
 #define HCISETSCAN 0x400448DD
 
-
-struct sockaddr_hci
-  {
-  unsigned short hci_family;
-  unsigned short hci_dev;      
-  unsigned short hci_channel;
-  };
-
-struct sockaddr_un
-  {
-  unsigned short sun_family;
-  char sun_path[108];
-  };
-
-struct sockaddr_rc
-  {
-  unsigned short rc_family;
-  unsigned char rc_bdaddr[6];
-  unsigned char rc_channel;
-  };  
-
-struct sockaddr_l2
-  {
-  unsigned short l2_family;
-  unsigned short l2_psm;
-  unsigned char l2_bdaddr[6];
-  unsigned short l2_cid;
-  unsigned char l2_bdaddr_type; 
-  };
-  
-  
-struct hci_filter
-  {
-  unsigned long type_mask;
-  unsigned long event_mask[2];
-  unsigned short opcode;
-  };
-
-struct hci_dev_req
-  {
-  unsigned short dev_id;
-  unsigned long dev_opt;
-  };
-
-
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 12
+#define VERSION 13
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -110,6 +65,8 @@ struct cticdata
   int chandle;    // characteristic handle 0=unknown 
   int uuidtype;   // 0=unknown 2=2-byte 16=16-byte
   int iflag;      // 1=have read info from remote device
+  int reportflag;  // HID Report count
+  int reportid;    // Report ID (85 XX) in Report Map
   unsigned char value[LEDATLEN];
   unsigned char uuid[16];
   int (*callback)();
@@ -149,9 +106,15 @@ struct devdata
   int datlen;                 // max LE characteristic size
   int setdatlen;
   int foundflag;
-  unsigned char primaryuuid[256];
   unsigned char linkey[16];
-  char pincode[64];
+  char pincode[64]; 
+
+  unsigned int cryptoflag; 
+  unsigned char pair[7];
+  unsigned char rrand[16];
+  unsigned char irand[16];
+  unsigned char confirm[16];
+ 
   struct cticdata *ctic;      // first ctic in chain
   };
 
@@ -278,7 +241,9 @@ struct globpar
   int cmdcount;        // command stack pointer
   int btletimerds;     // btle server timer
   int meshflag;        // 1=R 2=W
-  int readerror;       // 0=none 1=time out 2=key press  
+  int readerror;       // 0=none 1=time out 2=key press
+  int keyboard;        // 0=GB  
+  int ledatlenflag;    // 0=no data length change
   int lebufsize;
   int leintervalmin;
   int leintervalmax;
@@ -295,11 +260,15 @@ struct globpar
   int prts;   // start of circular buffer
   int prte;   // end of print for scroll
   char *s;    // print buffer
-
   unsigned char *ssareply;  // SSA reply packet
   unsigned char *sdp;
+  unsigned char randbadd[6];
 
- 
+  int cryptfd;
+  int randomfd;
+  int hidflag; // 01=HID 10=User add 
+  int settings;
+  int keytocb;  // keys to callback     
   int maxpage;
   };
 
@@ -399,8 +368,8 @@ void waitdis(int ndevice,unsigned int timout);
 int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int (*callback)());
 void replysdp(int ndevice,int in,unsigned char *uuid,char *name);
 int addaid(unsigned char *sdp,unsigned char *aid,int *rn,int aidj,int aidk,int aidn);
-void rwlinkey(int rwflag,int ndevice);
-int localctics(int starthandle);
+void rwlinkey(int rwflag,int ndevice,unsigned char *addr);
+int localctics();
 void leserver(int ndevice,int count,unsigned char *dat);
 int nextctichandle(int start,int end,int *handle,int flag);
 int findcticuuid(int start,int end,unsigned char *uuidrev,int size);
@@ -420,10 +389,16 @@ unsigned char *strtohexx(char *s,int slen,int *num);
 
 void readleatt(int node,int handle);
 void printval(unsigned char *s,int len,unsigned char *t);
-int splitcmd(unsigned char *s);
+int splitcmd(unsigned char *s,int plen);
 int splitwrite(unsigned char *cmd,int len);
 int stuuid(unsigned char *s);  
 
+int calce(unsigned char *key,unsigned char *in,unsigned char *out);
+int calcc1(unsigned char *key,unsigned char *r,unsigned char *preq,unsigned char *pres,unsigned char iat,unsigned char rat,
+            unsigned char *ia,unsigned char *ra,unsigned char *res);
+int calcs1(unsigned char *key,unsigned char *r1,unsigned char *r2,unsigned char *out);
+int setupcrypt(void);
+int lepair(int ndevice);
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
                               // 1 still available
@@ -475,6 +450,7 @@ int stuuid(unsigned char *s);
 #define IN_DATLEN   ((long long int)1 << 45)    // HCI event 3E/7 
 #define IN_CONUP5   ((long long int)1 << 46)    // channel 5 connection paramters 
 #define IN_LEACK    ((long long int)1 << 47)    // write ctic response 
+#define IN_CRYPTO   ((long long int)1 << 48) 
 #define IN_IMMED  ((long long int)1 << 63)
 
 /***************** END Received PACKET TYPES *************/
@@ -482,6 +458,10 @@ int stuuid(unsigned char *s);
 #define AUTO_RF  1
 #define AUTO_DIS 2
 #define AUTO_MSC 3
+#define AUTO_PAIROK 4
+#define AUTO_PAIRFAIL 5
+#define AUTO_PAIRREQ 6
+#define AUTO_NOTIFY 7
 
 /*********************** sendhci() PACKETS sent to the Bluetooth socket **********************/        
  
@@ -566,14 +546,24 @@ unsigned char lescanoff[10] = {6,0,0,0,1,0x0C,0x20,2,0,0};  // scan for LE devic
 unsigned char leadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x0F,0x08,0xFF,0x34,0x12,
 0x00,0x00,0xC0,0xDE,0x99,0x05,0x08,0x61,0x62,0x63,0x64,0x00,0x00,0x00,0x00,0x00,0x00,
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
-unsigned char hidadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x14,0x02,0x01,0x06,
-0x04,0x08,0x48,0x49,0x44,0x0B,0x03,0x12,0x18,0x00,0x18,0x01,0x18,0x0A,0x18,0x0F,0x18,0x00,
-0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
 
-        // set advertising parmeters  [8]=type 0=connectable 3=non connectable, unidirected adv
+unsigned char leadvertx[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x12,0x08,0xFF,0x34,0x12,
+0x00,0x00,0xC0,0xDE,0x99,0x02,0x01,0x06,0x05,0x08,0x61,0x62,0x63,0x64,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
+
+   // keyboard appearance bytes = C1 03
+unsigned char hidadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x10,0x02,0x01,0x06,0x03,0x19,
+0xC1,0x03,
+0x04,0x08,0x48,0x49,0x44,0x03,0x02,0x12,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x00,0x00 };
+
+unsigned char lerandadd[16] = { 10,0,0,0,0x01,0x05,0x20,6,0x11,0x22,0x33,0x44,0xAA,0xDC };
+
+     // set advertising parmeters  [8]=type 0=connectable 3=non connectable, unidirected adv
                                                       //        min int   max int    x0.625ms 0800 = 1.28s  0200=320ms                               
 unsigned char leadparam[32] =   { 19,0,0,0,0x01,0x06,0x20,0x0F,0x00,0x02,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x00 };
-unsigned char leadparam4[32] =  { 19,0,0,0,0x01,0x06,0x20,0x0F,0x00,0x08,0x00,0x08,0x01,0x00,0x00,0xB8,0x27,0xEB,0xF1,0x50,0xC3,0x07,0x00 };
+unsigned char leadparamx[32] =   { 19,0,0,0,0x01,0x06,0x20,0x0F,0x00,0x02,0x00,0x02,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x00 };
+
         // le advert  [4] 0=disable  1=enable
 unsigned char leadvon[16] = { 5,0,0,0,0x01,0x0A,0x20,0x01,0x01 };
 unsigned char leadvoff[16] = { 5,0,0,0,0x01,0x0A,0x20,0x01,0x00 };
@@ -701,7 +691,7 @@ unsigned char lebufsz[8] = {4,0,0,0,0x01,0x02,0x20,0};
 
    // classic server
 unsigned char conaccept[16] =  { 11,0,S2_BADD,0,0x01,0x09,0x04,0x07,0x11,0x22,0x33,0x44,0x55,0x66,0x00 };
-unsigned char conreject[16] =  { 11,0,0,0,0x01,0x0A,0x04,0x07,0x11,0x22,0x33,0x44,0x55,0x66,0x0D };
+unsigned char conreject[16] =  { 11,0,0,0,0x01,0x0A,0x04,0x07,0x11,0x22,0x33,0x44,0x55,0x66,0x0E };
 unsigned char spcomp[20] =   { 10,0,S2_BADD,0,0x01,0x2C,0x04,0x06,0x11,0x22,0x33,0x44,0x55,0x66 };
 
 
@@ -729,6 +719,18 @@ unsigned char lefail[20] =  {14,0,S2_HAND,0,2,0x40,0,9,0,5,0,4,0,0x01,0x08,0,0,0
 
 unsigned char custuuid[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 char custname[64] = "None";
+
+unsigned char preq[20]  = {16,0,S2_HAND,0,2,0x40,0,0x0B,0,0x07,0,6,0,0x01,0x03,0x00,0x00,0x10,0x00,0x01}; 
+unsigned char pres[20]  = {16,0,S2_HAND,0,2,0x40,0,0x0B,0,0x07,0,6,0,0x02,0x03,0x00,0x00,0x10,0x00,0x01}; 
+unsigned char confirm[32] = {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x03,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+unsigned char sendrand[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x04,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+unsigned char sendkey[32] = { 22,0,S2_HAND,0,1,0x1A,0x20,0x12,0x40,0x00,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+unsigned char negkey[16] = { 6,0,S2_HAND,0,1,0x1B,0x20,2,0,0 };
+unsigned char ltkcrypt[40] = { 32,0,S2_HAND,0,1,0x19,0x20,0x1C,0x40,0x00,0,0,0,0,0,0,0,0,0,0,
+                     1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+unsigned char sendltk[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x06,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+unsigned char sendci[32] =  {20,0,S2_HAND,0,2,0x40,0,0x0F,0,0x0B,0,6,0,0x07,1,2,3,4,5,6,7,8,9,10 };
+unsigned char conup[32] = { 18,0,S2_HAND,0,1,0x13,0x20,14,0x40,0,0x30,0x00,0x30,0x00,0x02,0x00,0xC0,0x03,0x00,0x00,0x00,0x00 };
 
 /********************** END sendhci() PACKETS *********************/
 
@@ -1241,13 +1243,14 @@ int init_blue(char *filename)
 
 int init_blue_ex(char *filename,int hcin)
   {
-  int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psn,psnx,starthandle;
-  int clflag,leflag,readret,meshcount,lecap,btleindex;
+  int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psnx;
+  int clflag,leflag,readret,meshcount,lecap,btleindex,reportflag;
   unsigned int ind[16];
   struct cticdata *cp;
   char s[256],buf[128],*es;
   unsigned char *data;
   FILE *stream;
+  struct timespec ts;
   static char errs[16] = {"   ERROR **** "};
   static unsigned char wln[8] = { 252,0,0,0,1,0x13,0x0C,0xF8 };
   static int initflag = 0;
@@ -1268,6 +1271,7 @@ int init_blue_ex(char *filename,int hcin)
   gpar.btletimerds = 0;
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
+  gpar.ledatlenflag = 0;
   gpar.leclientwait = 750;
   gpar.leintervalmin = 0x18;
   gpar.leintervalmax = 0x28;  
@@ -1278,7 +1282,13 @@ int init_blue_ex(char *filename,int hcin)
   gpar.prtw = 0;   // wrap index
   gpar.prts = 0;   // start of circular buffer
   gpar.prte = 0;   // end of print for scroll
-
+  gpar.cryptfd = 0;
+  gpar.randomfd = 0;
+  gpar.hidflag = 0;
+  gpar.settings = 0;
+  gpar.keytocb = 0;
+  gpar.keyboard = 0;
+  
   if(initflag == 0)
     {   
     gpar.s = (char*)calloc(PRBUFSZ,1);
@@ -1297,7 +1307,7 @@ int init_blue_ex(char *filename,int hcin)
   insdat = instack + INSHEADSIZE;     
   
   set_print_flag(PRINT_NORMAL);  
-  //set_print_flag(PRINT_VERBOSE);
+  // set_print_flag(PRINT_VERBOSE);
 
   gpar.maxpage = 0;
   if(initflag == 0)
@@ -1321,7 +1331,7 @@ int init_blue_ex(char *filename,int hcin)
     
   errcount = 0;
   meshcount = 0;
-  psn = -1;  // primary service index
+  
        
   // zero entries  n=first undefined
   for(k = 0 ; k < NUMDEVS ; ++k)
@@ -1347,7 +1357,7 @@ int init_blue_ex(char *filename,int hcin)
     {
     if(hcisock() == 0)
       {    
-      NPRINT "No root permission or hci%d is not operational\n",gpar.devid); 
+      NPRINT "No root permission or Bluetooth (hci%d) is off\n",gpar.devid); 
       NPRINT "Must run with root permission via sudo as follows:\n"); 
       NPRINT "sudo ./btferret\n");
       flushprint();
@@ -1392,6 +1402,7 @@ int init_blue_ex(char *filename,int hcin)
   else
     {
     NPRINT "Unable to read local board address\n");      
+    NPRINT "Bluetooth may be locked - reboot\n");
     errcount = 1000;
     }
 
@@ -1414,13 +1425,6 @@ int init_blue_ex(char *filename,int hcin)
         }
       }
     while(n >= 0 && flag == 0);
-
-    VPRINT "Set LE advertising parameters\n");
-    sendhci(leadparam,0);
-    statusok(0,leadparam);
-    VPRINT "Set LE advertising data\n");
-    sendhci(leadvert,0);  // reset mesh packet index = 0
-    statusok(0,leadvert);
     }
    
   stream = NULL; 
@@ -1450,23 +1454,16 @@ int init_blue_ex(char *filename,int hcin)
     pserv[n].handle = -1;
     pserv[n].eog = 0xFFFF;
     }
-  pserv[0].handle = 1;
-  pserv[0].eog = 1;
-  pserv[0].uuidtype = 2;
-  pserv[0].uuid[0] = 0x18;
-  pserv[0].uuid[1] = 0;
-  pserv[1].handle = 2;
-  pserv[1].eog = 2;
-  pserv[1].uuidtype = 2;
-  pserv[1].uuid[0] = 0x18;
-  pserv[1].uuid[1] = 0x01;
-  pserv[2].handle = 3;
-  pserv[2].eog = 0;
-  pserv[2].uuidtype = 16;
+  pserv[0].handle = 0;
+  pserv[0].eog = 0;
+  pserv[0].uuidtype = 16;
   for(i = 0 ; i < 16 ; ++i)
-    pserv[2].uuid[i] = baseuuid[i];
+    pserv[0].uuid[i] = baseuuid[i];
   psnx = -1;    
-  starthandle = 5;
+  reportflag = 0;
+
+  clock_gettime(CLOCK_MONOTONIC_RAW,&ts);
+  srand((unsigned int)ts.tv_nsec);
       
   while(readret > 0 && errcount == 0)
     {
@@ -1526,7 +1523,6 @@ int init_blue_ex(char *filename,int hcin)
         dn = devalloc();
         if(dn < 0)
           return(0);  // fatal alloc error
-        psn = -1;
         flag = 1;
         }
       }
@@ -1568,7 +1564,6 @@ int init_blue_ex(char *filename,int hcin)
           dev[dn]->name[i] = 0;
           --i;
           }
-        psn = -1;
         psnx = -1;
         }  // end ind[0] DEVICE
         
@@ -1643,7 +1638,7 @@ int init_blue_ex(char *filename,int hcin)
           }
                   
         if(psnx < 0)
-          psnx = 2;  
+          psnx = 0;  // lechar before PS  
         cp->psnx = psnx;
         }  // end ind[4] LECHAR
         
@@ -1681,6 +1676,15 @@ int init_blue_ex(char *filename,int hcin)
           cp->uuidtype = hn;
           for(i = 0 ; i < hn ; ++i)
             cp->uuid[i] = data[i];
+          if(hn == 2 && data[0] == 0x2A && data[1] == 0x4D)
+            {
+            ++reportflag;
+            cp->reportflag = reportflag;
+              // Report Reference descriptor ID for Report characteristic
+              // reportflag=1 for 1st Report, 2 for 2nd...
+              // Set Report ID (85 XX entry in Report Map)
+            cp->reportid = reportflag;  // assumes Report ID = 1,2,3... 
+            }
           }               
         }  // end ind[6] UUID
       
@@ -1781,38 +1785,17 @@ int init_blue_ex(char *filename,int hcin)
           }
         else
           {
-          if(hn == 2 && data[0] == 0x18 && (data[1] == 0 || data[1] == 1))
+          if(hn == 2 && data[0] == 0x18 && data[1] == 0x12)
             {
-            if((data[1] == 0 && psnx > 0) || (data[1] == 1 && psnx != 0))
-              {
-              NPRINT "%sPrimary services 1800/1801 must be 1st/2nd\n",errs);
-              errflag = 1;
-              }
-            else if(data[1] == 0)
-              {
-              psnx = -2;
-              //starthandle = 3;
-              }
+            gpar.hidflag = 1;
             }
-
           if(errflag == 0 && psnx < 30)
             {
-            if(psnx == -2)
-              {
+            if(psnx < 0)
               psnx = 0;
-              pserv[psnx].handle = 1;
-              starthandle = 3;
-              }
-            else if(psnx == -1)
-              {
-              psnx = 2;
-              pserv[psnx].handle = 3;
-              }
             else
-              {
-              ++psnx;             
-              pserv[psnx].handle = 0;
-              }
+             ++psnx;             
+            pserv[psnx].handle = 0;
             pserv[psnx].uuidtype = hn;
             for(i = 0 ; i < hn ; ++i)
               pserv[psnx].uuid[i] = data[i];
@@ -1821,29 +1804,7 @@ int init_blue_ex(char *filename,int hcin)
             {
             NPRINT "%sToo many PRIMARY_SERVICEs\n",errs);
             errflag = 1;
-            }
-
- 
-          if(psn < 14)
-            {
-            ++psn;
-            if(hn == 2)
-              {
-              data[2] = data[0];
-              data[3] = data[1];
-              data[0] = 0;
-              data[1] = 0;
-              for(i = 4 ; i < 16 ; ++i)
-                data[i] = standard[i];
-              }
-            for(i = 0 ; i < 16 ; ++i)
-              dev[dn]->primaryuuid[(psn << 4) + i] = data[i];    
-            }
-          else
-            {
-            NPRINT "%sToo many PRIMARY_SERVICEs\n",errs);
-            errflag = 1;
-            }
+            }           
           }                      
         }
 
@@ -1933,9 +1894,24 @@ int init_blue_ex(char *filename,int hcin)
     sendhci((unsigned char*)s,0);
     }
       
-  if(localctics(starthandle) == 0)
+  if(localctics() == 0)
     ++errcount;    
- 
+
+  flushprint();
+
+  if(errcount != 0)
+    {    
+    printf("\n************ initblue() FAILED ************\n");
+    closehci();            
+    return(0);
+    }
+
+  rwlinkey(0,0,NULL);
+  if(initflag == 0)
+    atexit(close_all);
+  initflag = 1;
+
+
   if(lecap == 0)
     {
     NPRINT "\n*** Bluetooth adapter is not LE capable ***\n");
@@ -1943,26 +1919,46 @@ int init_blue_ex(char *filename,int hcin)
     }
   else
     {
-    VPRINT "Set LE advertising data with device name\n");
-    addname();
-    sendhci(leadvert,0);  // reset mesh packet index = 0
-    statusok(0,leadvert);
+    gpar.randbadd[0] = (rand() | 0xC0) & 0xFF;
+    gpar.randbadd[1] = rand() & 0xFF;
+    gpar.randbadd[2] = rand() & 0xFF; 
+    gpar.randbadd[3] = rand() & 0xFF; 
+    gpar.randbadd[4] = rand() & 0xFF; 
+    gpar.randbadd[5] = rand() & 0xFF; 
+
+    for(n = 0 ; n < 6 ; ++n)
+      lerandadd[13-n] = gpar.randbadd[n];
+      
+    VPRINT "Set LE random address\n");
+    sendhci(lerandadd,0);
+    statusok(0,lerandadd);
+
+  
+    VPRINT "Set LE advertising parameters\n");
+    if(gpar.hidflag == 0)
+      {
+      dev[0]->leaddtype = 0;
+      sendhci(leadparam,0);
+      statusok(0,leadparam);
+      VPRINT "Set LE advertising data with device name\n");
+      addname();
+      sendhci(leadvert,0);  // reset mesh packet index = 0
+      statusok(0,leadvert);
+      }
+    else
+      {
+      dev[0]->leaddtype = 1;
+      sendhci(leadparamx,0);
+      statusok(0,leadparamx);
+      NPRINT "Advertise as LE HID device\n");
+      sendhci(hidadvert,0);
+      statusok(0,hidadvert);
+      }
     }
 
   flushprint();
 
-  if(errcount == 0)
-    {
-    rwlinkey(0,0);
-    if(initflag == 0)
-      atexit(close_all);
-    initflag = 1;
-    return(1);
-    }
-    
-  printf("\n************ initblue() FAILED ************\n");
-  closehci();            
-  return(0);  
+  return(1);     
   }
 
 
@@ -1976,7 +1972,7 @@ char *cticerrs(struct cticdata * cp)
   
 
 
-int localctics(int starthandle)
+int localctics()
   {
   int n,k,j,uuidn,handle,flag,min,max,psn;
   struct cticdata *cp,*cpx,*lastcp;
@@ -2023,7 +2019,7 @@ int localctics(int starthandle)
       cp->psnx |= 0x10000;
       }
     lastcp = cp;  
-    if((starthandle != 5 || psn > 2) && cp->chandle != 0)
+    if(psn > 2 && cp->chandle != 0)
       {
       NPRINT "%sDo not specify HANDLEs for these services\n",cticerrs(cp));
       NPRINT "      Specify UUIDs and let the system set the handles\n");
@@ -2037,7 +2033,7 @@ int localctics(int starthandle)
     }
       
   // check handles
-  handle = starthandle-1;  // 4
+  handle = 4;  // 4
   for(n = 0 ; ctic(0,n)->type == CTIC_ACTIVE ; ++n)
     {
     cp = ctic(0,n);
@@ -2045,9 +2041,9 @@ int localctics(int starthandle)
 
     if(cp->chandle != 0)
       {
-      if(cp->chandle < starthandle)
+      if(cp->chandle < 5)
         {
-        NPRINT "%shandle must be %04X or greater\n",errs,starthandle);
+        NPRINT "%shandle must be 5 or greater\n",errs);
         return(0);
         }
    
@@ -2097,11 +2093,19 @@ int localctics(int starthandle)
             min = cpx->chandle-1;
             max = min + 2;
             if((cp->perm & 0x30) != 0)
+              {
               --min;
+              if(cp->reportflag != 0)
+                min -= 2;
+              }
             if((cpx->psnx & 0x10000) != 0)
               --min;  // PS
             if((cpx->perm & 0x30) != 0)
+              {
               ++max;
+              if(cpx->reportflag != 0)
+                max += 2;
+              }
             if((cp->psnx & 0x10000) != 0)
               ++max;          
 
@@ -2115,8 +2119,19 @@ int localctics(int starthandle)
         }
       while(flag != 0);
     
-
       j = cp->psnx & 31;
+
+      if(handle == 5 && j > 0)
+        {  // initial empty PS
+        for(k = 0 ; k < j ; ++k)
+          {
+          pserv[k].handle = k+1;
+          pserv[k].eog = k+1;
+          if(k > 1)
+            ++handle;
+          }
+        }
+
       if((cp->psnx & 0x10000) != 0)
         {      
         for(k = 0 ; k < j ; ++k)
@@ -2141,7 +2156,11 @@ int localctics(int starthandle)
         {
         pserv[j].eog = handle;
         if((cp->perm & 0x30) != 0)
+          {
           ++pserv[j].eog;
+          if(cp->reportflag != 0)
+            pserv[j].eog += 2;
+          }
         } 
       }  
 
@@ -2197,8 +2216,7 @@ int localctics(int starthandle)
       {
       NPRINT "Service changed 2A05 enabled\n");
       cp->notify = 1;  // enable service changed notify
-      }  
-      
+      }
     }
 
 
@@ -2321,11 +2339,22 @@ void meshreadoff()
 
 int write_mesh(unsigned char *buf,int count)
   {
-  int n;
+  int n,max;
   
-  if(count < 0 || count > 25)
+  if((gpar.hidflag & 1) != 0)
     {
-    NPRINT "More than 25 bytes of mesh data\n");
+    NPRINT "Mesh does not work with HID device\n");
+    return(0);
+    }
+  
+  if((gpar.hidflag & 2) == 0)
+    max = 25;
+  else
+    max = 22;
+    
+  if(count < 0 || count > max)
+    {
+    NPRINT "More than %d bytes of mesh data\n",max);
     flushprint();
     return(0);
     }
@@ -2353,8 +2382,7 @@ int write_mesh(unsigned char *buf,int count)
   for(n = 0 ; n < count ; ++n)
     leadvert[PAKHEADSIZE+11+n] = buf[n];
     
-  addname();  
-    
+  addname();     
   sendhci(leadvert,0);
   readhci(0,0,0,0,0);
   
@@ -2366,28 +2394,44 @@ int write_mesh(unsigned char *buf,int count)
 
 void addname()
   {   // add device name and pad zeoroes
-  int n,maxm,m,k,padn;
+  int maxm,k,padn,count,len,del;
+  unsigned char *leadv;
   
-  n = leadvert[PAKHEADSIZE+5] - 5;
-  maxm = 23 - n;
+  if((gpar.hidflag & 1) != 0)
+    return;
+
+  if((gpar.hidflag & 2) == 0)
+    {
+    del = 0;
+    leadv = leadvert;
+    }
+  else
+    {  // random
+    del = 3;
+    leadv = leadvertx;
+    }
+    
+  count = leadv[PAKHEADSIZE+5] - 5;  // mesh data
+  maxm = 23 - del - count;
+    
   if(maxm < 1)  // no room for name
-    padn = n + 11;
+    padn = count + del + 11;
   else
     {
-    m = strlen(dev[0]->name);
-    if(m > maxm)
-      m = maxm;
-    leadvert[PAKHEADSIZE+4] = n+m+8;
-    leadvert[PAKHEADSIZE+n+11] = m+1;
-    leadvert[PAKHEADSIZE+n+12] = 0x08; // name code
-    for(k = 0 ; k < m ; ++k)
-      leadvert[PAKHEADSIZE+n+k+13] = dev[0]->name[k];
-    padn = n + m + 13;
+    len = strlen(dev[0]->name);  
+    if(len > maxm)
+      len = maxm;
+    leadv[PAKHEADSIZE+4] = count+len+del+8;
+    leadv[PAKHEADSIZE+count+11+del] = len+1;
+    leadv[PAKHEADSIZE+count+12+del] = 0x08; // name code
+    for(k = 0 ; k < len ; ++k)
+      leadv[PAKHEADSIZE+count+k+13+del] = dev[0]->name[k];
+    padn = count + len + del + 13;
     }
 
    // pad with 0
   for(k = padn ; k <= 35 ; ++k)
-    leadvert[PAKHEADSIZE+k] = 0;
+    leadv[PAKHEADSIZE+k] = 0;
   }
  
  struct cticdata *ctic(int ndevice,int cticn)
@@ -2450,6 +2494,7 @@ struct cticdata *cticalloc(int ndevice)
   cp->notify = 0;
   cp->chandle = 0;
   cp->uuidtype = 0;
+  cp->reportflag = 0;
   cp->psnx = 0;
   cp->lasthandle = 0xFFFF;
   cp->iflag = 0;
@@ -2506,14 +2551,12 @@ int devalloc()
   dp->datlen = 20;
   dp->setdatlen = 20;
   dp->foundflag = 0;
+  dp->cryptoflag = 0;
   
   for(j = 0 ; j < 6 ; ++j)
     dp->baddr[j] = 0;
   for(j = 0 ; j < 16 ; ++j)
-    {
     dp->linkey[j] = lkey[j];
-    dp->primaryuuid[j] = baseuuid[j];
-    }
   dp->linkflag = 0;        
   dp->type = 0;
   dev[dn]->name[0] = 0; 
@@ -3243,9 +3286,10 @@ void mesh_server(int(*callback)())
     {
     nread = read_mesh(&clientnode,buf,32,EXIT_KEY,0);
     if(nread > 0)
-      {
       retval = (*callback)(clientnode,buf,nread);
-      }
+    else
+      retval = SERVER_EXIT;
+      
     flushprint();
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
@@ -3292,18 +3336,34 @@ void btle_notifynode(int node)
 
 int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds)
   {
-  int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag;
+  int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag,flag;
   struct devdata *dp;
-  
+  unsigned char *badd;
+     
   mesh_on();   
   oldkm = setkeymode(1); 
   
   if(gpar.btleflag == 0)
-    NPRINT "Listening for LE clients to connect (x=stop server)\n");
+    {
+    NPRINT "Listening for LE clients to connect ");
+    if(gpar.keytocb == 0)
+      NPRINT "(x=stop server)\n");
+    else
+      NPRINT "(ESC=stop server)\n");
+    }
   else
     NPRINT "Waiting for BeetleIN Android apps to connect (x=exit)\n");
 
-  NPRINT "Advertising as %s %s\n",baddstr(dev[0]->baddr,0),dev[0]->name);
+  if(gpar.hidflag == 0)
+    badd = dev[0]->baddr;
+  else
+    badd = gpar.randbadd;
+  
+  if((gpar.hidflag & 1) == 0)  
+    NPRINT "Advertising as %s %s\n",baddstr(badd,0),dev[0]->name);
+  else
+    NPRINT "Advertising as %s HID device\n",baddstr(badd,0));
+    
   flushprint();
   ndevice = 0;
   timecount = 0;
@@ -3331,12 +3391,50 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
         VPRINT "%s has disconnected\n",dp->name);
       else if(op == LE_CONNECT)
         {
+        flag = 0;
+        if(gpar.hidflag != 0)
+          {  // 6 sec for crypto
+          NPRINT "Waiting...\n");           
+          if((gpar.hidflag & 3) == 2)
+            {  // not HID
+            readhci(ndevice,IN_AUTOEND,0,1000,0);
+            n = findhci(IN_AUTOEND,ndevice,INS_POP);
+            if(n >= 0 && insdat[n] == AUTO_PAIRREQ)
+              VPRINT "Pair request\n");  
+            else
+              flag = 1;  // no crypto wait
+            }
+          else
+            {
+            readhci(ndevice,IN_AUTOEND,0,6000,0);
+            n = findhci(IN_AUTOEND,ndevice,INS_POP);
+            }         
+            
+          if(flag == 0)
+            {
+            if(gpar.leclientwait > 3000)
+              readhci(0,0,0,gpar.leclientwait,0);
+            else if(gpar.leclientwait > 0)
+              readhci(0,0,0,0,gpar.leclientwait);
+            }
+             
+            
+          NPRINT "End wait\n");
+          }
+ 
         VPRINT "%s has connected\n",dp->name);
-        mesh_on();
         dp->btletods = 0;
-        setlelen(ndevice,LEDATLEN,1); 
-        }
-        
+        if((gpar.hidflag & 1) == 0)  
+          {
+          mesh_on();
+          if(flag != 2)
+            {
+            VPRINT "Set larger data length\n");  
+            sendhci(datlenset,ndevice);
+            } 
+          }
+        }   
+
       flushprint();
       popins();     
         
@@ -3407,7 +3505,19 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       
     flushprint();
     popins();
-    key = readkey();  
+    key = readkey();
+ 
+    if(key > 0 && gpar.keytocb != 0)  
+      {
+      if(key == 27)  
+        key = 'x';
+      else
+        {
+        VPRINT "Key code %d\n",key); 
+        retval = callback(localnode(),LE_KEYPRESS,key);
+        key = 0;
+        }
+      }  
     }
   while((retval & SERVER_CONTINUE) != 0 && key != 'x');
 
@@ -3438,7 +3548,20 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   }  
 
 
-
+int keys_to_callback(int flag,int keyboard)
+  {
+  if(flag == KEY_OFF)
+    gpar.keytocb = 0;
+  else if(flag == KEY_ON)
+    gpar.keytocb = 1;
+  else
+    {
+    NPRINT "keys_to_callback() invalid parameter\n");
+    return(0);
+    }
+  gpar.keyboard = keyboard;
+  return(1);
+  }
   
   
 /*********** NODE SERVER ***********/
@@ -3498,9 +3621,9 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
     {
     nread = read_node_endchar(clientnode,buf,1024,endchar,EXIT_KEY,0);
     if(nread > 0)
-      {
       retval = (*callback)(clientnode,buf,nread);
-      }
+    else
+      retval = SERVER_EXIT;  // key press or error
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
   
@@ -3674,22 +3797,19 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
     {
     nread = read_node_endchar(dp->node,buf,1024,endchar,EXIT_KEY,0);
     if(nread > 0)
-      {
       retval = (*callback)(dp->node,buf,nread);
-      }
+    else
+      retval = SERVER_EXIT;
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
   
-  if((retval & SERVER_CONTINUE) != 0)
-    {
-    if(read_error() == ERROR_KEY)
-      NPRINT "Key press - stopping server\n");
-    else if(read_error() == ERROR_FATAL)
-      NPRINT "Fatal error - stopping server\n");
-    else if(read_error() == ERROR_DISCONNECT)
-      NPRINT "%s has disconnected - stopping server\n",dp->name);
-    }
-        
+  if(read_error() == ERROR_KEY)
+    NPRINT "Key press - stopping server\n");
+  else if(read_error() == ERROR_FATAL)
+    NPRINT "Fatal error - stopping server\n");
+  else if(read_error() == ERROR_DISCONNECT)
+    NPRINT "%s has disconnected - stopping server\n",dp->name);
+         
   flushprint();  
   sleep(2);    // allow time for any last reply sent by callback to transmit      
   disconnect_node(dp->node);  // sever initiated here
@@ -4199,6 +4319,7 @@ int leconnect(int ndevice)
   VPRINT "SEND LE connect to %s\n",dp->name);
 
   dp->setdatlen = 20;
+  dp->cryptoflag = 0;
      
   sendhci(leopen,ndevice);
       
@@ -4221,6 +4342,7 @@ int leconnect(int ndevice)
 
     popins();
     flushprint();
+    //pair here      
     return(1);
     }      
   
@@ -4241,6 +4363,25 @@ int leconnect(int ndevice)
   flushprint();
   return(0);      
   }
+
+
+int lepair(int ndevice)
+  {  
+  int n;
+  
+  sendhci(preq,ndevice); 
+  readhci(ndevice,IN_AUTOEND,0,5000,0);
+  n = findhci(IN_AUTOEND,ndevice,INS_POP);
+  if(n >= 0 && insdat[n] == AUTO_PAIROK)
+    NPRINT "PAIR OK\n");
+  else
+    NPRINT "PAIR FAIL\n");
+     
+  popins();
+  flushprint();
+  return(1);
+  }
+
 
 int set_le_interval(int min,int max)
   {
@@ -4507,6 +4648,14 @@ void close_all()
   
   if(flag != 0)
     return;
+     
+  if(gpar.hidflag != 0)
+    sendhci(leadparam,0);  // nix random
+        
+  if(gpar.cryptfd != 0)
+    close(gpar.cryptfd);
+  if(gpar.randomfd != 0)
+    close(gpar.randomfd);  
     
   meshreadoff();   
   mesh_off();
@@ -4515,12 +4664,12 @@ void close_all()
     disconnectdev(n);  
     
   closehci();
-  rwlinkey(1,0);
+  rwlinkey(1,0,NULL);
   
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();   
+  // printins();    
   }  
   
   
@@ -5261,6 +5410,13 @@ int sendhci(unsigned char *s,int ndevice)
     hexdump(cmd,len);
     }  // end printflag
     
+  if(gpar.ledatlenflag == 0 && (s == lereadreply || s == lewrite || s == lenotify || s == le09replyv))
+    {
+    if(splitcmd(s+PAKHEADSIZE,32) != 0)
+      return(1);
+    }  
+    
+    
   ntogo = len;  // first header entry is length of cmd
   timstart = timems(TIM_LOCK);  
   do
@@ -5289,39 +5445,37 @@ int sendhci(unsigned char *s,int ndevice)
 
 
 
-int splitcmd(unsigned char *s)
+int splitcmd(unsigned char *s,int plen)
   {
   int n,k,sn,tn,t20,len,numx,remx,kx,flag;
   unsigned char t[512];
   
-  
-  len = s[5] + (s[6] << 8) - 3;
-  if(len <= 20)
+  len = s[5] + (s[6] << 8);
+  if(len <= plen-9)
     return(0);  
-    
  
   flag = 1;   // 0 = send all packets as one write
               // 1 = send each packet as a separate write
   
-  for(n = 0 ; n < 32 ; ++n)
+  for(n = 0 ; n < plen ; ++n)
     t[n] = s[n];
     
   t20 = t[2];
-  tn = len+12;  
-  t[3] = 0x1B;
+  t[3] = plen-5;
   t[4] = 0;
-  numx = (len-20)/27;
-  remx = (len-20)%27;
+  n = len-plen+9;
+  numx = n/(plen-5);
+  remx = n%(plen-5);
   if(remx > 0)
     ++numx;
-  sn = 32;
-  tn = 32;
+  sn = plen;
+  tn = plen;
+  VPRINT "Split into %d packets\n",numx+1);
   if(flag != 0)  
-    splitwrite(t,32);
+    splitwrite(t,plen);
   for(n = 0 ; n < numx ; ++n)
     {
     ++gpar.cmdcount;
-    // tn0 = tn;
     t[tn] = 0x02;
     t[tn+1] = t[1];
     t[tn+2] = t20 | 0x10;
@@ -5332,8 +5486,8 @@ int splitcmd(unsigned char *s)
       }
     else
       {
-      t[tn+3] = 0x1B;
-      kx = 27;
+      t[tn+3] = plen-5;
+      kx = plen-5;
       }
     t[tn+4] = 0;
     tn += 5;
@@ -5345,7 +5499,7 @@ int splitcmd(unsigned char *s)
       ++sn;
       }
     if(flag != 0)   
-      splitwrite(t+32*(n+1),kx+5);
+      splitwrite(t+plen*(n+1),kx+5);
     }
   if(flag == 0)
     splitwrite(t,tn);
@@ -5517,7 +5671,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   unsigned char b0,*datp,*rsp,ledat[2];   
   int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
   int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb;
-  int retval,savtimendms,datlen,ascflag,clsflag;
+  int retval,savtimendms,datlen,ascflag,clsflag,multiflag,seqflag;
   long long int locmustflag,gotflag;
   unsigned int timstart,timx,timendms;
   struct devdata *dp,*condp;
@@ -5528,7 +5682,18 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   
   //if(level > 0 && ndevice == 0 && mustflag == 0 && lookflag == 0 && timout == 0 && toshort == 0)
   //  return(0);
-
+  
+  if(ndevice == 0 && mustflag == 0 && lookflag == 0 && timout == 0 && toshort != 0)
+    {
+    seqflag = 1;
+    timendms = toshort;
+    }
+  else
+    {
+    seqflag = 0;
+    timendms = timout;
+    }
+    
   lesflag = ndevice & LE_SERV;
   clsflag = ndevice & CL_SERV;
   
@@ -5545,8 +5710,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     }
          
   doneflag = 0;
-  timendms = timout;
-   
+    
   // check instack for mustflag data already read
   if(mustflag != 0 && findhci(mustflag,ndevice,INS_NOPOP) >= 0) 
     {
@@ -5749,6 +5913,35 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         n0 = 4 | 0x80;  // param xchg req
         gotflag = IN_PARAMREQ | IN_IMMED;
         }
+      else if(buf[1] == 0x3E && buf[3] == 5)
+        {
+        buf[3] = 0xFF;
+        n0 = 4 | 0x80;  
+        gotflag = IN_CRYPTO | IN_IMMED;
+        }
+      else if(buf[1] == 8 || buf[1] == 0x59)
+        {
+        if((sflag & IN_ENCR) != 0)
+          {  // classic
+          if(buf[3] == 0 )  // status=0   
+            {
+            gotflag = IN_ENCR;
+            n0 = 4 | 0x80;   // handle not board add
+            }  
+          }
+        else
+          {   // LE server crypto
+          if(buf[3] == 0)
+            buf[3] = 0xFE;
+          else
+            {
+            buf[6] = buf[3];
+            buf[3] = 0xFD;
+            }
+          n0 = 4 | 0x80;
+          gotflag = IN_CRYPTO | IN_IMMED;
+          }
+        }         
       else if( (sflag & IN_BADD) != 0 && buf[1] == 0x0E && buf[4] == 0x09 && buf[5] == 0x10)   
         gotflag = IN_BADD;           // command complete with board address if buf[6]=0                   
       else if(buf[1] == 0x0E && (sflag & IN_STATOK) != 0)        
@@ -5767,6 +5960,13 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           }
         else
           {
+          NPRINT "%s is attempting a Classic connection\n",baddstr(buf+3,DIRN_REV));
+          if((gpar.hidflag & 3) != 0)
+            {
+            NPRINT "This device is LE only - will fail for security reasons\n");
+            NPRINT "Problem caused by client - its cache must be cleared or\n");
+            NPRINT "call set_le_random_address() with a new value\n");
+            }
           for(k = 0 ; k < 6 ; ++k)
             conreject[PAKHEADSIZE+k+4] = buf[3+k];
           sendhci(conreject,0);
@@ -5824,11 +6024,6 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         gotflag = IN_CONFREQ | IN_IMMED;
         n0 = 3;
         }
-      else if( (sflag & IN_ENCR) != 0 && buf[1] == 0x08 && buf[3] == 0 )  // status=0   
-        {
-        gotflag = IN_ENCR;
-        n0 = 4 | 0x80;   // handle not board add
-        }
       else if(buf[1] == 0x05 && buf[3] == 0 )  // STATUS=0    
         {
         disflag = 1;
@@ -5845,6 +6040,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         n0 = 4;         
         }
      
+      if(buf[1] == 0x0E && buf[2] >= 4 && buf[4] == 0x22 && buf[5] == 0x20 && buf[6] == 0)
+        {
+        gpar.ledatlenflag = 1;  // data length change ok
+        } 
        
         // find sending devicen  
        
@@ -5886,7 +6085,16 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         else   // LE connected
           {
           eflag = 1;  // error
-          if((sflag & IN_LEHAND) != 0 || (sflag & IN_LECMD) != 0)
+          multiflag = 0;  // HID multi
+          if((gpar.hidflag & 1) != 0)  // (gpar.settings & HID_MULTI) == 0)
+            {  // check for existing connection
+            for(k = 1 ; multiflag == 0 && devok(k) != 0 ; ++k)
+              {
+              if(dev[k]->conflag == CON_LX)
+                multiflag = 1;                
+              } 
+            }
+          if(multiflag == 0 && ((sflag & IN_LEHAND) != 0 || (sflag & IN_LECMD) != 0))
             {  // is waiting for this connection
             if(lesflag != 0)
               {  // LE server accepts any client
@@ -5898,10 +6106,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                   dp = dev[devicen];
                   dp->type = BTYPE_LE; 
                   dp->node = newnode();          
-                             
+                  dp->leaddtype = buf[8] & 1;           
                   for(k = 0 ; k < 6 ; ++k)
                     dp->baddr[k] = buf[14-k];
-        
+                      
                   strcpy(dev[devicen]->name,baddstr(dp->baddr,0));
                   }
                 }                                 
@@ -5911,6 +6119,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                 ledat[1] = (unsigned char)devicen;
                 pushins(IN_LECMD,devicen,2,ledat);
                 dev[devicen]->setdatlen = 20;
+                dev[devicen]->cryptoflag = 0;
                 eflag = 0;
                 }
               }
@@ -5920,12 +6129,19 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                  
           if(eflag == 0)
             {               
+            rwlinkey(0,devicen,NULL);  // read LEkey
             dp = dev[devicen];
             dp->dhandle[0] = buf[5];
             dp->dhandle[1] = buf[6];       
-
+            dp->cryptoflag = 0; 
             if(lesflag != 0)
-              dp->conflag = CON_LX;   // LE server       
+              {
+              dp->conflag = CON_LX;   // LE server
+              VPRINT "Set MTU\n");
+              mtuset[PAKHEADSIZE+10] = (unsigned char)(LEDATLEN & 0xFF);
+              mtuset[PAKHEADSIZE+11] = (unsigned char)((LEDATLEN >> 8) & 0xFF);
+              sendhci(mtuset,devicen);
+              }       
             else if(dp->type == BTYPE_LE || (dp->type == BTYPE_ME && dp->lecflag != 0))
               dp->conflag = CON_LE;   // LE connected as LE
             else
@@ -5949,7 +6165,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             }
           }
           
-        if((gpar.meshflag & MESH_W) != 0)
+        if((gpar.hidflag & 1) == 0 && (gpar.meshflag & MESH_W) != 0)
           mesh_on();
         }  // end IN_LEHAND
       else if(gotflag == IN_CONREQ)
@@ -6032,7 +6248,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         if(dp->conflag != 0 && gpar.btleflag == 0 && 
                          !((dp->conflag & CON_RF) == 0 && (dp->conflag & CON_SERVER) != 0))    
           NPRINT "%s has disconnected\n",dev[devicen]->name);
-        if((dp->conflag & CON_MESH) != 0)
+        if((gpar.hidflag & 1) == 0 && (dp->conflag & CON_MESH) != 0)
           mesh_on();
         dp->conflag = 0;
         dp->lecflag = 0;
@@ -6270,7 +6486,11 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           if(buf[9] == 0x12)
             gotflag = IN_CONUP5 | IN_IMMED;
           }
-          
+        else if(chan == 6)
+          {
+          gotflag = IN_CRYPTO | IN_IMMED;
+          }
+            
         }  // end not extra
    
       //nxx = -2;   // stack index
@@ -6461,6 +6681,11 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
     wantlen = 8192;  // new message flag
        
+    if(seqflag != 0)
+      {  // restart short to
+      timstart = timems(TIM_RUN);
+      timendms = toshort;
+      }   
        
     if((xflag == 0 && doneflag == 0 && mustflag != 0 && locmustflag == 0) ||
        (disflag != 0 && ndevice == devicen)  )
@@ -6479,13 +6704,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
 void immediate(long long lookflag)
   {
-  int n,j,devicen,id,ch,psm;
+  int n,j,devicen,id,ch,psm,flag;
   int bn,getout,cticn,chandle;
   unsigned char *rsp,buf[16];
   char sbuf[16];
   long long int gotflag;
   struct devdata *dp;
   struct cticdata *cp;
+  struct devdata *rp,*ip,*sp;  
+  unsigned char key[16],out[16],ia[6],ra[6];
       
   while(1)
     {
@@ -6899,6 +7126,256 @@ void immediate(long long lookflag)
       leconnreply[PAKHEADSIZE+10] = insdat[n+1];  // id
       sendhci(leconnreply,devicen);
       }
+    else if(gotflag == IN_CRYPTO && (dev[devicen]->conflag & CON_LX) != 0)
+     {  // server
+     rp = dev[0];
+     ip = dev[devicen];
+     sp = ip;   // save to remote devdata
+     for(j = 0 ; j < 6 ; ++j)
+       {
+       ia[j] = ip->baddr[5-j];
+       if((rp->leaddtype & 1) != 0)
+         ra[j] = gpar.randbadd[5-j];
+       else   
+         ra[j] = rp->baddr[5-j];
+       }
+     if(insdat[n] == 1)
+       {
+       VPRINT "GOT pair request - SEND response\n");
+       // save preq for confirm calc
+       for(j = 0 ; j < 7 ; ++j)
+         sp->pair[j] = insdat[n+j];   // request
+       if((insdat[n+3] & 1) == 0)
+         pres[PAKHEADSIZE+12] = 0;
+       else
+         pres[PAKHEADSIZE+12] = 1;  // bond
+       sendhci(pres,devicen);
+       if((gpar.hidflag & 3) == 2)
+         {
+         buf[0] = AUTO_PAIRREQ;
+         pushins(IN_AUTOEND,devicen,1,buf);
+         }
+       }          
+     else if(insdat[n] == 3)
+       {
+       VPRINT "GOT I confirm - SEND R confirm\n");
+       //iat = ip->leaddtype & 1;
+       //rat = rp->leaddtype & 1;
+       for(j = 0 ; j < 16 ; ++j)
+         {
+         sp->confirm[j] = insdat[n+j+1];  // I confirm
+         key[j] = 0;   // Just Works
+         }    
+       
+       for(j = 0 ; j < 16 ; ++j)
+         sp->rrand[j] = rand() & 0xFF;
+                                  
+       calcc1(key,sp->rrand,sp->pair,pres+PAKHEADSIZE+9,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
+       sendhci(confirm,devicen);
+       }
+     else if(insdat[n] == 4)
+       {
+       VPRINT "GOT I random\n");
+       for(j = 0 ; j < 16 ; ++j)
+         {
+         sp->irand[j] = insdat[n+j+1];
+         key[j] = 0;   // Just Works 
+         }
+       calcc1(key,sp->irand,sp->pair,pres+PAKHEADSIZE+9,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,out);
+       getout = 0;
+       for(j = 0 ; j < 16 && getout == 0 ; ++j)
+         {
+         if(sp->confirm[j] != out[j])
+           getout = 1;
+         }
+       if(getout == 0)
+         {
+         VPRINT "I confirm OK\n");
+         sp->cryptoflag = 1;
+         }
+       else
+         VPRINT "I confirm fail\n");
+         
+       VPRINT "SEND R random\n");
+       for(j = 0 ; j < 16 ; ++j)
+         sendrand[j+PAKHEADSIZE+10] = sp->rrand[j];         
+       sendhci(sendrand,devicen);
+       }
+     else if(insdat[n] == 0xFF)
+       {     
+       if(sp->cryptoflag == 0)
+         {
+         // LEkey available? index=[n+3] forward address
+         if((sp->linkflag & (KEY_NEW | KEY_FILE)) == KEY_FILE &&
+                bincmp(sp->baddr,insdat+n+3,6,DIRN_FOR) == 0)
+           {  // address change but have invalid LTK from baddr
+           sp->linkflag &= ~KEY_FILE;  // force rwlinkey with index
+           }       
+         if((sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
+           {
+           // address may have changed - index at [n+3] = old address
+           rwlinkey(0,devicen,insdat+n+3);
+           }
+         if((sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
+           {
+           NPRINT "KEY fail - On client: Unpair/Remove, Bluetooth off/on and retry\n");       
+           sendhci(negkey,devicen);
+           }
+         else
+           {
+           for(j = 0 ; j < 16 ; ++j)
+             sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
+           VPRINT "SEND key\n");
+           sendhci(sendkey,devicen);
+           }        
+          // bincmp(sp->baddr,insdat+n+3,6,DIRN_FOR) = add/random id match 
+         }
+       else if(sp->cryptoflag == 1)
+         {
+         VPRINT "STK encrypt\n");
+         for(j = 0 ; j < 16 ; ++j)
+           key[j] = 0;
+         calcs1(key,sp->rrand,sp->irand,sp->linkey);
+         for(j = 0 ; j < 16 ; ++j)
+           sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
+         sendhci(sendkey,devicen);
+         sp->linkflag |= KEY_NEW;  // saves LEkey 
+         }
+       }
+     else if(insdat[n] == 0xFE)
+       {
+       if(sp->cryptoflag == 0)
+         { // reconnect
+         VPRINT "Reconnect using LTK\n");
+         flag = 0;
+         for(j = 0 ; ctic(0,j)->type == CTIC_ACTIVE ; ++j)
+           {
+           cp = ctic(0,j);
+           if(cp->uuidtype == 2 && (cp->perm & 0x30) != 0 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
+             {
+             cp->notify = 1;
+             if(flag == 0 && (gpar.hidflag & 1) != 0)
+               {
+               flag = 1;
+               buf[0] = AUTO_NOTIFY;
+               pushins(IN_AUTOEND,devicen,1,buf);
+               }
+             }
+           }
+         }
+       else
+         {
+         VPRINT "LTK encrypt\n");
+   
+         for(j = 0 ; j < 16 ; ++j)
+           sendltk[j+PAKHEADSIZE+10] = sp->linkey[j];
+         for(j = 0 ; j < 6 ; ++j)
+           sendci[j+PAKHEADSIZE+12] = sp->baddr[j];  // random id = address
+              
+         sendhci(sendltk,devicen);
+         sendhci(sendci,devicen);
+         }  
+       // AUTO_PAIROK    
+       }
+     else if(insdat[n] == 0xFD || insdat[n] == 5)
+       {
+       if(insdat[n] == 5)
+         NPRINT "PAIR FAIL code %02X\n",insdat[n+1]);  // codes V3 pH 3.5.5 
+       else
+         {   
+         j = insdat[n+3];
+         if(j > 69)
+           j = 0;  // no error0f text
+         NPRINT "FAIL %s\n",error0f[j]);
+         // j 0x3D MIC fail
+         }
+       // AUTO_PAIRFAIL
+       }
+     }
+    else if(gotflag == IN_CRYPTO && (dev[devicen]->conflag & CON_LX) == 0)
+      {  // client
+      ip = dev[0];
+      rp = dev[devicen];
+      sp = rp;
+      for(j = 0 ; j < 6 ; ++j)
+        {
+        ia[j] = ip->baddr[5-j];
+        ra[j] = rp->baddr[5-j];
+        }       
+     if(insdat[n] == 2)
+       {
+       VPRINT "GOT pair response - SEND I confirm\n");
+       // save for confirm calc
+       for(j = 0 ; j < 7 ; ++j)
+         sp->pair[j] = insdat[n+j];  // response 
+                           
+       for(j = 0 ; j < 16 ; ++j)
+         sp->irand[j] = rand() & 0xFF;
+
+       for(j = 0 ; j < 16 ; ++j)
+         key[j] = 0;   // Just Works
+
+       calcc1(key,sp->irand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
+       sendhci(confirm,devicen);
+       }
+     else if(insdat[n] == 3)
+       {
+       VPRINT "GOT R confirm - SEND I rand\n");
+       
+       for(j = 0 ; j < 16 ; ++j)
+         sp->confirm[j] = insdat[n+j+1];  // R confirm
+     
+       for(j = 0 ; j < 16 ; ++j)
+         sendrand[PAKHEADSIZE+10+j] = sp->irand[j];         
+       sendhci(sendrand,devicen);
+       }
+     else if(insdat[n] == 4)
+       {
+       VPRINT "GOT R random\n");
+       for(j = 0 ; j < 16 ; ++j)
+         {
+         sp->rrand[j] = insdat[n+j+1];
+         key[j] = 0;   // Just Works 
+         }
+       calcc1(key,sp->rrand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,out);
+       getout = 0;
+       for(j = 0 ; j < 16 && getout == 0 ; ++j)
+         {
+         if(sp->confirm[j] != out[j])
+           getout = 1;
+         }
+       if(getout == 0)
+         {
+         VPRINT "R confirm OK\n");
+         sp->cryptoflag = 1;
+         }
+       else
+         VPRINT "I confirm fail\n");
+         
+       VPRINT "SEND LTK encrypt\n");
+       calcs1(key,sp->rrand,sp->irand,sp->linkey);
+       for(j = 0 ; j < 16 ; ++j)
+         {
+         key[j] = 0;   // Just Works 
+         ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
+         }
+       sendhci(ltkcrypt,devicen);
+       }
+     else if(sp->cryptoflag != 2 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
+       {
+       VPRINT "PAIR OK\n");
+       buf[0] = AUTO_PAIROK;
+       pushins(IN_AUTOEND,devicen,1,buf);
+       sp->cryptoflag = 2;
+       }
+     else if(sp->cryptoflag != 2 && (insdat[n] == 5 || insdat[n] == 0xFD))
+       {
+       VPRINT "PAIR FAIL\n");  // codes V3 pH 3.5.5
+       buf[0] = AUTO_PAIRFAIL;
+       pushins(IN_AUTOEND,devicen,1,buf);
+       sp->cryptoflag = 2;
+       }
+     }  
     else 
       VPRINT "Unrecognised immediate\n");
                       
@@ -6984,7 +7461,6 @@ void leserver(int ndevice,int count,unsigned char *dat)
     for(cticn = 0 ; ctic(0,cticn)->type == CTIC_ACTIVE && flag == 0 && aflag == 0 && errcode == 0 ; ++cticn)
       {
       cp = ctic(0,cticn);
-
       if(handle == cp->chandle-1)
         {
         if(dat[0] == 0x0A)
@@ -6999,11 +7475,15 @@ void leserver(int ndevice,int count,unsigned char *dat)
           errcode = 3;  // write not permit
           }          
         }
-     
-      else if(cp->chandle == handle || ((cp->perm & 0x30) != 0 && handle == cp->chandle+1) )
+      else if(cp->chandle == handle || ((cp->perm & 0x30) != 0 && handle == cp->chandle+1 ) ||
+               (cp->reportflag != 0 && (handle == cp->chandle+2 || handle == cp->chandle+3)) )
         { 
-        if(cp->chandle != handle)
-          notflag = 1;
+        if(handle == cp->chandle+1)
+          notflag = 1;  // notify
+        else if(handle == cp->chandle+2)
+          notflag = 2;  //  ctic extended props
+        else if(handle == cp->chandle+3)
+          notflag = 3;  // report ref
 
         if(dat[0] == 0x52 || dat[0] == 0x12)
           {  // write  12 ack  52 no ack
@@ -7042,13 +7522,20 @@ void leserver(int ndevice,int count,unsigned char *dat)
               flag = 1;
               }
             }
-          else   // notify descriptor
+          else if(notflag == 1)   // notify descriptor
             {
             cp->notify = dat[3];
             if(cp->notify == 0)
               VPRINT "%s notify disable\n",cp->name);
             else
+              {
               VPRINT "%s notify enable\n",cp->name);
+              if((gpar.hidflag & 1) != 0 && cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
+                {
+                buf[0] = AUTO_NOTIFY;
+                pushins(IN_AUTOEND,ndevice,1,buf);
+                }
+              } 
             if(dat[0] == 0x12)
               {
               VPRINT "Send acknowledgement\n");
@@ -7056,6 +7543,12 @@ void leserver(int ndevice,int count,unsigned char *dat)
               }
             flag = 1;
             }
+          else
+            {
+            VPRINT "Write not permitted\n");
+            errcode = 3;  // write not permit
+            }
+            
           }
         else
           {  // read
@@ -7081,7 +7574,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
               flag = 2;
               }
             }  
-          else   // notify descriptor
+          else if(notflag == 1)   // notify descriptor
             {
             VPRINT "SEND notify status for characteristic %s\n",cp->name);
             size = 2;
@@ -7089,6 +7582,23 @@ void leserver(int ndevice,int count,unsigned char *dat)
             lereadreply[PAKHEADSIZE+11] = 0;
             flag = 2;
             }
+          else if(notflag == 2)           
+            {  // ctic extended
+            VPRINT "SEND extended props for %s\n",cp->name);
+            size = 2;
+            lereadreply[PAKHEADSIZE+10] = 0;  // 0x10;
+            lereadreply[PAKHEADSIZE+11] = 0;
+            flag = 2;
+            }
+          else if(notflag == 3)  
+            {
+            VPRINT "SEND report ref for %s\n",cp->name);
+            size = 2;
+            lereadreply[PAKHEADSIZE+10] = cp->reportid; 
+            lereadreply[PAKHEADSIZE+11] = 1;
+            flag = 2;
+            }
+            
           }            
         }  // VN handle
       }  // ctic loop
@@ -7156,6 +7666,18 @@ void leserver(int ndevice,int count,unsigned char *dat)
           else if(handle == cp->chandle+1)
             {
             s[13] = 0x02;  // 2902 notify 
+            s[14] = 0x29;
+            flag = 1;
+            }
+          else if(handle == cp->chandle+2)
+            {
+            s[13] = 0x00;  // 2900 Extended 
+            s[14] = 0x29;
+            flag = 1;
+            }
+          else if(handle == cp->chandle+3)
+            {
+            s[13] = 0x08;  // 2908 Report ref 
             s[14] = 0x29;
             flag = 1;
             }
@@ -7245,6 +7767,18 @@ void leserver(int ndevice,int count,unsigned char *dat)
             flag = 1;
             }
           else if(handle == cp->chandle+1 && dat[5] == 0x02 && dat[6] == 0x29 && datcount == 2 && dat[7] == cp->notify && dat[8] == 0)
+            {
+            eog = pserv[cp->psnx & 31].eog;
+            // eog = 0xFFFF;
+            flag = 1;
+            }
+          else if(handle == cp->chandle+2 && dat[5] == 0x00 && dat[6] == 0x29)
+            {
+            eog = pserv[cp->psnx & 31].eog;
+            // eog = 0xFFFF;
+            flag = 1;
+            }
+          else if(handle == cp->chandle+3 && dat[5] == 0x08 && dat[6] == 0x29)
             {
             eog = pserv[cp->psnx & 31].eog;
             // eog = 0xFFFF;
@@ -7368,6 +7902,30 @@ void leserver(int ndevice,int count,unsigned char *dat)
                 }
               s[13+dn] = cp->notify & 1; 
               s[14+dn] = 0;
+              flag = 1;
+              }
+            else if(handle == cp->chandle+2 && aflag == 0 && uuidtype == 2 && dat[5] == 0x00 && dat[6] == 0x29)
+              { // Extended 2900
+              size = 2;
+              if(dn != 0)
+                {  // insert end of group handle  
+                s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
+                s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+                }
+              s[13+dn] = 0;   // 0x10; 
+              s[14+dn] = 0;
+              flag = 1;
+              }
+            else if(handle == cp->chandle+3 && aflag == 0 && uuidtype == 2 && dat[5] == 0x08 && dat[6] == 0x29)
+              { // Report ref 2908
+              size = 2;
+              if(dn != 0)
+                {  // insert end of group handle  
+                s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
+                s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+                }
+              s[13+dn] = cp->reportid; 
+              s[14+dn] = 1;
               flag = 1;
               }
             else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
@@ -7504,8 +8062,11 @@ int nextctichandle(int start,int end,int *handle,int flag)
     cp = ctic(0,n);
     notdel = 0;
     if((cp->perm & 0x30) != 0)
+      {
       notdel = 1;  // include next handle notify control
-    
+      if(cp->reportflag != 0)
+        notdel = 3;  // include Extended and Ref
+      }
     del0 = -1;  // always include INFO
     for(del = del0 ; del <= notdel ; ++del)
       {
@@ -7545,7 +8106,7 @@ int stuuid(unsigned char *s)
   return(1);
   }
   
-void rwlinkey(int rwflag,int ndevice)
+void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   {
   int n,k,j,i,addcount,flag;
   unsigned char *badd,*key;
@@ -7579,7 +8140,11 @@ void rwlinkey(int rwflag,int ndevice)
     }
         
   if(rwflag == 0)
-    {  // read
+    {
+    // read
+    if(ndevice > 0 && (dev[ndevice]->linkflag & (KEY_NEW | KEY_FILE)) != 0)
+      return;   // dev[]->linkey is good
+      
     if(count < 0)
       {
       count = 0;
@@ -7609,13 +8174,22 @@ void rwlinkey(int rwflag,int ndevice)
       {
       badd = table + k*22;
       key = badd+6;
-      n = devnfrombadd(badd,BTYPE_CL,DIRN_FOR);
+      if(addr == NULL)
+        n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);  
+      else
+        {
+        n = bincmp(badd,addr,6,DIRN_FOR);
+        if(n != 0)
+          n = ndevice;
+        }  
       if( (ndevice == 0 && n > 0) || (ndevice > 0 && n == ndevice) )
-        {  // all on init (ndevice=0)  or new classic ndevice only
+        {  // all on init (ndevice=0)  or ndevice only
         dp = dev[n];
         for(n = 0 ; n < 16 ; ++n)
           dp->linkey[n] = key[n];
-        dp->linkflag |= KEY_FILE;        
+        dp->linkflag |= KEY_FILE;
+        if(ndevice > 0)
+          return;  // found        
         }
       }
   
@@ -7630,7 +8204,7 @@ void rwlinkey(int rwflag,int ndevice)
         {
         badd = table + k*22;
         key = badd+6;
-        n = devnfrombadd(badd,BTYPE_CL,DIRN_FOR);
+        n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);  
         if(n > 0)
           { 
           dp = dev[n];
@@ -7649,16 +8223,23 @@ void rwlinkey(int rwflag,int ndevice)
     addcount = 0;    
     for(n = 1 ; devok(n) != 0 ; ++n)
       {
-      if((dev[n]->linkflag & KEY_NEW && dev[n]->type == BTYPE_CL) != 0)
+      if((dev[n]->linkflag & KEY_NEW) != 0)   // && dev[n]->type == BTYPE_CL) != 0)
         ++addcount;
       }
  
     if(flag == 0 && delflag == 0 && addcount == 0)   
       return;   // no changes
       
+    if(count + addcount > 63)
+      {
+      NPRINT "link.key file of paired devices is large\n");  
+      NPRINT "Recommendation: delete it and re-pair devices\n");
+      }
+      
     if(count + addcount > 255)
       {
-      NPRINT "Too many link keys - delete link.key file to reset\n");
+      NPRINT "Too many link keys - delete link.key file\n");
+      NPRINT "to reset and then re-pair devices\n");
       return;
       }
 
@@ -7673,7 +8254,7 @@ void rwlinkey(int rwflag,int ndevice)
     for(n = 1 ; k < addcount && devok(n) != 0 ; ++n)
       {
       dp = dev[n];
-      if((dp->linkflag & KEY_NEW) != 0 && dev[n]->type == BTYPE_CL)
+      if((dp->linkflag & KEY_NEW) != 0)   // && dev[n]->type == BTYPE_CL)
         {
         fwrite(dp->baddr,1,6,stream);
         fwrite(dp->linkey,1,16,stream);
@@ -7688,7 +8269,7 @@ void rwlinkey(int rwflag,int ndevice)
     for(k = 0 ; k < count && flag == 0 ; ++k)
       {
       badd = table + k*22;
-      n = devnfrombadd(badd,BTYPE_CL,DIRN_FOR);
+      n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);
       if(n == ndevice)
         {    // found - remove
         flag = 1;
@@ -7710,7 +8291,7 @@ void rwlinkey(int rwflag,int ndevice)
     for(k = 0 ; k < count ; ++k)
       {
       badd = table + k*22;
-      n = devnfrombadd(badd,BTYPE_CL,DIRN_FOR);
+      n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);
       i = 0;
       if(n >= 0)
         {
@@ -8147,7 +8728,7 @@ int bluezdown()
     }
             
   if(retval == 0)
-    NPRINT "Bluez down failed\n");
+    VPRINT "Bluez down failed\n");
        
   flushprint();  
   gpar.bluez = 0;  // bluez down
@@ -8165,8 +8746,9 @@ return 0=fail
 int hcisock()
   {
   int dd;
-  struct sockaddr_hci sa;
-
+  //struct sockaddr_hci sa;
+  unsigned char sa[6];
+  
   if(gpar.hci > 0)
     return(1);
      
@@ -8185,11 +8767,14 @@ int hcisock()
  
   VPRINT "Bind to Bluetooth devid user channel\n");
 
-  sa.hci_family = 31;   // AF_BLUETOOTH;
-  sa.hci_dev = gpar.devid;    // hci0/1/2...
-  sa.hci_channel = 1;   // HCI_CHANNEL_USER    
-  
-  if(bind(dd,(struct sockaddr *)&sa,sizeof(sa)) < 0)
+  sa[0] = 31;  // hci_family = AF_BLUETOOTH
+  sa[1] = 0;
+  sa[2] = gpar.devid & 0xFF;   // hci_dev = hci0/1/2...
+  sa[3] = (gpar.devid >> 8) & 0xFF;
+  sa[4] = 1;    // hci_channel = HCI_CHANNEL_USER
+  sa[5] = 0;
+   
+  if(bind(dd,(struct sockaddr *)sa,sizeof(sa)) < 0)
     {
     VPRINT "Bind failed\n");
     close(dd);
@@ -8338,21 +8923,286 @@ unsigned char calcfcs(unsigned char *s,int count)
   }
 
 
-/********* read key - needs non-blocking read *******
-set_input_mode
-****************************************************/
-
 int readkey()
   {
-  char c;
-  int retval;
-  
-  retval = 0;
-  if(read(STDIN_FILENO,&c,1) == 1)
-    retval = (int)c;
+  static unsigned char keystack[64];
+  static int stn = 0;
+  unsigned char c;
+  unsigned short *seq;
+  int n,k,j,i,flag,cret,ks0;
+  /***** look up table. Each entry (padded to 6-bytes by zeroes) =
+  btferret custom code,key code sequence returned by read(STDIN)
+  **********/
 
+  unsigned short seq0[1] = { 0 };
+
+  unsigned short seq27[190] = {
+  1,27,91,80,0,0,
+  2,27,91,50,126,0,
+  3,27,91,51,126,0,
+  4,27,91,49,126,0,
+  5,27,91,52,126,0,
+  6,27,91,53,126,0,
+  7,27,91,54,126,0,
+  14,27,91,91,65,0,
+  15,27,91,91,66,0,
+  16,27,91,91,67,0,
+  17,27,91,91,68,0,
+  18,27,91,91,69,0,
+  19,27,91,49,55,126,
+  20,27,91,49,56,126,
+  21,27,91,49,57,126,
+  22,27,91,50,48,126,
+  23,27,91,50,49,126,
+  24,27,91,50,51,126,
+  25,27,91,50,52,126,
+  28,27,91,67,0,0,
+  29,27,91,68,0,0,
+  30,27,91,66,0,0,
+  31,27,91,65,0,0,
+  471,27,91,50,53,126,
+  472,27,91,50,54,126,
+  473,27,91,50,56,126,
+  474,27,91,50,57,126,
+  475,27,91,51,49,126,
+  476,27,91,51,50,126,
+  477,27,91,51,51,126,
+  478,27,91,51,52,126,
+  0 };
+  
+  
+  unsigned short seqxx[200] = {
+  11,194,163,0,0,0,
+  12,194,172,0,0,0,
+  481,195,166,0,0,0,
+  482,226,128,157,0,0,
+  483,194,162,0,0,0,
+  484,195,176,0,0,0,
+  486,196,145,0,0,0,
+  487,197,139,0,0,0,
+  488,196,167,0,0,0,
+  489,226,134,146,0,0,
+  490,204,137,0,0,0,
+  491,196,184,0,0,0,
+  492,197,130,0,0,0,
+  493,194,181,0,0,0,
+  495,195,184,0,0,0,
+  496,195,190,0,0,0,
+  498,194,182,0,0,0,
+  499,195,159,0,0,0,
+  500,197,167,0,0,0,
+  501,226,134,147,0,0,
+  502,226,128,156,0,0,
+  504,194,187,0,0,0,
+  505,226,134,144,0,0,
+  506,194,171,0,0,0,
+  507,194,185,0,0,0,
+  508,194,178,0,0,0,
+  509,194,179,0,0,0,
+  510,226,130,172,0,0,
+  511,194,189,0,0,0,
+  512,194,190,0,0,0,
+  513,226,148,128,0,0,
+  514,194,183,0,0,0,
+  515,204,163,0,0,0,
+  0 };
+  
+  // use gpar.keyboard for non-GB tables  
+ 
+  if(stn > 0)
+    {
+    c = keystack[0];
+    n = 1;
+    --stn;
+    for(k = 0 ; k < stn ; ++k)
+      keystack[k] = keystack[k+1];
+    }
+  else
+    n = read(STDIN_FILENO,&c,1);
+    
+  if(n == 0)
+    return(0);
+    
+  cret = c;
+    
+  if(c == 27 || (c >= 194 && c <= 197) || c == 226 || c == 204)
+    {
+    do
+      {
+      n = read(STDIN_FILENO,keystack+stn,1);
+      if(n == 1 && stn < 63)
+        ++stn;
+      }
+    while(n == 1);
+    // chars in c,keystack
+    ks0 = keystack[0];
+    if(stn == 0)
+      {
+      if(c == 226)
+        cret = 0;
+      return(cret);  // inc ESC alone
+      }
+    else if(c == 27 && ks0 > 0 && ks0 < 128 && ks0 != 91)
+      {   
+      cret = ks0;
+      if(cret == 13)
+        cret = 10;   // Enter
+      else if(cret == 127)
+        cret = 8;
+      cret |= 0x100;  // Alt Gr table  27 + single char
+      --stn;
+      for(k = 0 ; k < stn ; ++k)
+         keystack[k] = keystack[k+1];    
+      }    
+    else 
+      {  // search look up
+      cret = 0;  // fail
+      if(c == 27)
+        {
+        if(ks0 == 91)
+          seq = seq27;
+        else
+          seq = seq0;
+        }
+      else
+        seq = seqxx;           
+      for(j = 0 ; seq[j] != 0 && cret == 0 ; j += 6)
+        {
+        if(seq[j+1] == c)
+          {
+          flag = 0;
+          i = 0;
+          while(seq[j+i+2] != 0 && i < 4 && flag == 0)
+            {
+            if(i >= stn || seq[j+i+2] != keystack[i])
+              flag = 1;
+            ++i;
+            }
+          // i = number of chars
+          if(flag == 0)
+            {    
+            stn -= i;
+            for(k = 0 ; k < stn ; ++k)
+              keystack[k] = keystack[k+i];    
+            cret = seq[j];
+            }
+          }     
+        }
+      if(cret == 0)
+        {  // search fail
+        i = 0; // pop
+        if(c == 27)
+          {  // no send ESC
+          cret = ks0;
+          i = 1;
+          }
+        else if(c == 226 && stn >= 2)
+          {
+          i = 2;
+          cret = 0;
+          }
+        else if(stn >= 1 && ((c >= 194 && c <= 197) || c == 204))
+          {
+          i = 1;
+          cret = 0;
+          }
+        else
+          cret = 0;
+        
+        if(i != 0)
+          {
+          stn -= i;
+          for(k = 0 ; k < stn ; ++k)
+            keystack[k] = keystack[k+i];
+          }
+        }
+      }   // end search
+    }
+  else
+    {
+    if(cret == 13)
+      cret = 10;   // Enter
+    else if(cret == 127)
+      cret = 8;
+    else if(cret > 0 && cret < 32 && cret != 9 && cret != 27)
+      cret += 224;  // CTL table  CTL a = 225
+    }      
+  
+          
+  return(cret);
+  }
+
+
+int hid_key_code(int key)
+  {
+  int retval;
+  static unsigned short keylook[517] = {
+  0x0000,0x0048,0x0049,0x004C,0x004A,0x004D,0x004B,0x004E,0x002A,0x002B,
+  0x0028,0x0220,0x0235,0x0000,0x003A,0x003B,0x003C,0x003D,0x003E,0x003F,
+  0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0000,0x0029,0x004F,0x0050,
+  0x0051,0x0052,0x002C,0x021E,0x021F,0x0032,0x0221,0x0222,0x0224,0x0034,
+  0x0226,0x0227,0x0225,0x022E,0x0036,0x002D,0x0037,0x0038,0x0027,0x001E, 
+  0x001F,0x0020,0x0021,0x0022,0x0023,0x0024,0x0025,0x0026,0x0233,0x0033,
+  0x0236,0x002E,0x0237,0x0238,0x0234,0x0204,0x0205,0x0206,0x0207,0x0208,
+  0x0209,0x020A,0x020B,0x020C,0x020D,0x020E,0x020F,0x0210,0x0211,0x0212,
+  0x0213,0x0214,0x0215,0x0216,0x0217,0x0218,0x0219,0x021A,0x021B,0x021C,
+  0x021D,0x002F,0x0064,0x0030,0x0223,0x022D,0x0035,0x0004,0x0005,0x0006,
+  0x0007,0x0008,0x0009,0x000A,0x000B,0x000C,0x000D,0x000E,0x000F,0x0010,
+  0x0011,0x0012,0x0013,0x0014,0x0015,0x0016,0x0017,0x0018,0x0019,0x001A,
+  0x001B,0x001C,0x001D,0x022F,0x0264,0x0230,0x0232,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0104,0x0105,0x0106,0x0107,0x0108,
+  0x0109,0x010A,0x010B,0x010C,0x010D,0x010E,0x010F,0x0110,0x0111,0x0112,
+  0x0113,0x0114,0x0115,0x0116,0x0117,0x0118,0x0119,0x011A,0x011B,0x011C,
+  0x011D,0x0000,0x0164,0x0130,0x0135,0x012D,
+  0x0000,0x0048,0x0049,0x004C,0x004A,0x004D,0x004B,0x004E,0x042A,0x042B,
+  0x0428,0x0220,0x0000,0x0000,0x003A,0x003B,0x003C,0x003D,0x003E,0x003F,
+  0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0000,0x0429,0x004F,0x0050,
+  0x0051,0x0052,0x042C,0x021E,0x021F,0x0432,0x0221,0x0222,0x0224,0x0434,
+  0x0226,0x0227,0x0225,0x022E,0x0436,0x042D,0x0437,0x0438,0x0427,0x041E, 
+  0x041F,0x0420,0x0421,0x0422,0x0423,0x0424,0x0425,0x0426,0x0233,0x0433,
+  0x0236,0x042E,0x0237,0x0238,0x0234,0x0204,0x0205,0x0206,0x0207,0x0208,
+  0x0209,0x020A,0x020B,0x020C,0x020D,0x020E,0x020F,0x0210,0x0211,0x0212,
+  0x0213,0x0214,0x0215,0x0216,0x0217,0x0218,0x0219,0x021A,0x021B,0x021C,
+  0x021D,0x042F,0x0464,0x0430,0x0223,0x022D,0x0435,0x0404,0x0405,0x0406,
+  0x0407,0x0408,0x0409,0x040A,0x040B,0x040C,0x040D,0x040E,0x040F,0x0410,
+  0x0411,0x0412,0x0413,0x0414,0x0415,0x0416,0x0417,0x0418,0x0419,0x041A,
+  0x041B,0x041C,0x041D,0x022F,0x0264,0x0230,0x0232,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000, 
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,  
+  0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,0x0000,  
+  0x0000,0x023A,0x023B,0x023C,0x023D,0x023E,0x023F,0x0240,0x0241,0x0000,
+  0x0000,0x4004,0x4005,0x4006,0x4007,0x4008,0x4009,0x400A,0x400B,0x400C,
+  0x400D,0x400E,0x400F,0x4010,0x4011,0x4012,0x4013,0x4014,0x4015,0x4016,
+  0x4017,0x4018,0x4019,0x401A,0x401B,0x401C,0x401D,0x401E,0x401F,0x4020,
+  0x4021,0x4022,0x4023,0x4036,0x4037,0x4038,0x4064 
+         }; 
+  // last 516
+  // use gpar.keyboard for non-GB table
+  
+  if(key < 1 || key > 516)
+    retval = 0;
+  else
+    retval = keylook[key];
+
+  VPRINT "HID key code %04X\n",retval);
   return(retval);
   }
+
 
 
 /********** CLASSIC CONNECT ************
@@ -8653,7 +9503,8 @@ int clservices(int ndevice,int flags,unsigned char *uuid)
 
   if(dp->conflag != 0)
     {
-    NPRINT "%s must be disconnected and listening as a classic server to read serial channels\n",dp->name);
+    if(dp->type == BTYPE_CL)
+      NPRINT "%s must be disconnected and listening as a classic server to read serial channels\n",dp->name);
     return(-1);
     }
 
@@ -9541,7 +10392,7 @@ int finduuidtext(int uuid2)
 
 int savectic(int devicen,struct servicedata *serv,int servlen)
   {
-  int n,handle,k,j,uuidtype; 
+  int n,handle,k,j; 
   struct cticdata *cp; 
   char *errs;
   unsigned char buf[256];
@@ -9557,16 +10408,15 @@ int savectic(int devicen,struct servicedata *serv,int servlen)
     {
     cp = ctic(devicen,n);
     cp->iflag = 0;
-       
+          
     // look for handle match
-    handle = cp->chandle;
-    for(k = 0 ; k < servlen && serv[k].channel != 0 && handle != 0 ; ++k)
+    handle = cp->chandle;  // may be 0 not set
+    for(k = 0 ; k < servlen && serv[k].channel != 0 && cp->iflag == 0 && handle != 0 ; ++k)
       {
       if(serv[k].channel == 0x10000 && serv[k].handle == handle)
         {
-        cp->iflag = 1;
-        handle = 0;                  // exit k loop
-        serv[k].channel = 0x20000;   // ditch
+        cp->iflag = 1;               // exit k loop
+        serv[k].channel = 0x20000;   // ditch      
         if(cp->perm != 0 && cp->perm != serv[k].perm)
           {
           cp->perm = 0;
@@ -9590,14 +10440,13 @@ int savectic(int devicen,struct servicedata *serv,int servlen)
       }
    
     // look for UUID match
-    uuidtype = cp->uuidtype;
-    for(k = 0 ; k < servlen && serv[k].channel != 0 && uuidtype != 0 ; ++k)
+     
+    for(k = 0 ; k < servlen && serv[k].channel != 0 && cp->iflag == 0 ; ++k)
       {
       if(serv[k].channel == 0x10000 && bincmp(cp->uuid,serv[k].uuid,cp->uuidtype,DIRN_FOR) != 0)
         {
-        cp->iflag = 1;
-        uuidtype = 0;                // exit k loop
         serv[k].channel = 0x20000;   // ditch
+        cp->iflag = 1;               // exit k loop
         if(cp->perm != 0 && cp->perm != serv[k].perm)
           {
           cp->perm = 0;
@@ -9612,7 +10461,7 @@ int savectic(int devicen,struct servicedata *serv,int servlen)
           NPRINT "WARNING - %s handle %s\n",cp->name,errs);
           }
         if(cp->chandle == 0)
-          cp->chandle = serv[k].handle;          
+          cp->chandle = serv[k].handle;        
         }
       }         
         
@@ -9984,7 +10833,7 @@ void clscanx()
                   ndevice = k;
                   for(j = 0 ; j < 6 ; ++j)
                     dev[ndevice]->baddr[j] = rp[5-j];          
-                  rwlinkey(0,ndevice);  // link key in file?
+                  rwlinkey(0,ndevice,NULL);  // link key in file?
                   }
                 } 
               }
@@ -10002,7 +10851,7 @@ void clscanx()
           {
           strcpy(dev[ndevice]->name,buf);                
           NPRINT "   New device %s\n",dev[ndevice]->name);
-          rwlinkey(0,ndevice);  // link key in file?
+          rwlinkey(0,ndevice,NULL);  // link key in file?
           }
         ++count;
         }
@@ -11039,7 +11888,57 @@ int setkeymode(int setflag)
   tcsetattr(STDIN_FILENO,TCSAFLUSH,&tattr);
   flag = 1; 
   return(oldflag);
+  } 
+  
+
+void set_le_random_address(unsigned char *add)
+  {  
+  int n,flag;
+
+  if((gpar.meshflag & MESH_W) != 0)
+    {
+    mesh_off();
+    flag = 1;
+    }
+  else
+    flag = 0;
+        
+  for(n = 0 ; n < 6 ; ++n)
+    gpar.randbadd[n] = add[n];  
+  gpar.randbadd[0] |= 0xC0;
+
+  for(n = 0 ; n < 6 ; ++n)
+    lerandadd[13-n] = gpar.randbadd[n];
+      
+  VPRINT "Set LE random address\n");
+  sendhci(lerandadd,0);
+
+  gpar.hidflag |= 2;
+  dev[0]->leaddtype = 1;
+  sendhci(leadparamx,0);
+
+  if((gpar.hidflag & 1) == 0)
+    {
+    addname();
+    sendhci(leadvertx,0);
+    }
+  else
+    sendhci(hidadvert,0); 
+    
+  if(flag != 0)
+    mesh_on();
   }
+    
+  
+void set_flags(int flags,int onoff)
+  {
+  /****
+  if(onoff == FLAG_OFF)
+    gpar.settings &= ~flags;
+  else
+    gpar.settings |= flags;
+  ****/
+  }  
   
 int set_le_wait(int waitms)
   {
@@ -11971,3 +12870,162 @@ void printval(unsigned char *s,int len,unsigned char *t)
 
   flushprint();
   }
+
+
+
+int calcs1(unsigned char *key,unsigned char *r1,unsigned char *r2,unsigned char *out)
+  {
+  int n;
+  unsigned char res[16];
+  
+  for(n = 0 ; n < 8 ; ++n)
+    res[n] = r2[n];
+  for(n = 0 ; n < 8 ; ++n)
+    res[n+8] = r1[n];
+    
+  if(calce(key,res,out) == 0)
+    return(0);
+    
+  return(1);
+  }
+
+
+int calcc1(unsigned char *key,unsigned char *r,unsigned char *preq,unsigned char *pres,unsigned char iat,unsigned char rat,
+            unsigned char *ia,unsigned char *ra,unsigned char *res)
+  {
+  // key[16] r[16] preq[7] pres[7] ia[6] ra[6] res[16]
+  int n;
+  unsigned char p1[16],p2[16],resa[16],resb[16];
+  
+  p1[0] = iat;
+  p1[1] = rat;
+  for(n = 0 ; n < 7 ; ++n)
+    p1[n+2] = preq[n];
+  for(n = 0 ; n < 7 ; ++n)
+    p1[n+9] = pres[n];
+    
+  for(n = 0 ; n < 6 ; ++n)
+    p2[n] = ra[n];
+  for(n = 0 ; n < 6 ; ++n)
+    p2[n+6] = ia[n];
+  for(n = 0 ; n < 4 ; ++n)
+    p2[n+12] = 0;
+    
+  for(n = 0 ; n < 16 ; ++n)
+    resa[n] = r[n] ^ p1[n];
+ 
+  if(calce(key,resa,resb) == 0)
+    return(0);  
+  
+  for(n = 0 ; n < 16 ; ++n)
+    resa[n] = resb[n] ^ p2[n];
+  
+  if(calce(key,resa,res) == 0)
+    return(0);
+  
+  return(1);
+  }
+
+  
+int calce(unsigned char *key,unsigned char *in,unsigned char *out)
+  {
+  struct cmsghdr *cmsg;
+  struct msghdr msg;
+  struct iovec iov; 
+  unsigned long alg_op;
+  char cbuf[CMSG_SPACE(sizeof(alg_op))];
+  unsigned char tmpkey[16],tmpin[16],tmpout[16];
+  int n,fd,len;
+  
+  if(gpar.cryptfd == 0)
+    {
+    if(setupcrypt() == 0)
+      return(0);
+    }
+  
+  for(n = 0 ; n < 16 ; ++n)
+    tmpkey[15-n] = key[n];
+
+  if(setsockopt(gpar.cryptfd,279,1,tmpkey,16) < 0)
+    {   // SOL_ALG,ALG_SET_KEY
+    VPRINT "Sock opt fail\n");
+    return(0);
+    }
+  fd = accept(gpar.cryptfd,NULL,0);
+  if(fd < 0)
+    {
+    VPRINT "Accept error\n");
+    return(0);
+    }
+
+  for(n = 0 ; n < 16 ; ++n)
+    tmpin[15-n] = in[n];
+ 
+  alg_op = 1; // ALG_OP_ENCRYT
+  memset(cbuf,0,sizeof(cbuf));
+  memset(&msg,0,sizeof(msg));
+  msg.msg_control = cbuf;
+  msg.msg_controllen = sizeof(cbuf);
+  
+  cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_level = 279;  // SOL_ALG
+  cmsg->cmsg_type = 3;     // ALG_SET_OP
+  cmsg->cmsg_len = CMSG_LEN(sizeof(alg_op));
+  memcpy(CMSG_DATA(cmsg), &alg_op, sizeof(alg_op));
+  iov.iov_base = (void *)tmpin;
+  iov.iov_len = 16;
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+  len = sendmsg(fd, &msg, 0);
+  if (len < 0)
+    {
+    VPRINT "Send fail\n");
+    close(fd);
+    return(0);
+    }
+  len = read(fd, tmpout, 16);
+  if (len < 0)
+    {
+    VPRINT "Read fail\n");
+    close(fd);
+    return(0);
+    }
+
+  for(n = 0 ; n < 16 ; ++n)
+    out[15-n] = tmpout[n];
+
+  close(fd);
+  return(1);    
+  }  
+  
+int setupcrypt()
+  {
+  //struct sockaddr_alg sa;
+  int n,fd;
+  unsigned char sa[88];
+  
+  fd = socket(38,SOCK_SEQPACKET | SOCK_CLOEXEC,0);
+  if(fd < 0)
+    {
+    VPRINT "Sock error\n");
+    return(0);
+    }
+    
+  for(n = 0 ; n < 88 ; ++n)
+    sa[n] = 0;  
+  
+  strcpy((char*)(sa+2),"skcipher");
+  strcpy((char*)(sa+24),"ecb(aes)");
+  if(bind(fd,(struct sockaddr*)sa,88) < 0)
+    {
+    VPRINT "Bind error\n");
+    close(fd);
+    return(0);
+    }  
+   
+  gpar.cryptfd = fd;
+  return(1);  
+  }
+ 
+ 
+ 

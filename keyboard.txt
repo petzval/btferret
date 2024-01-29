@@ -1,0 +1,24 @@
+DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
+  PRIMARY_SERVICE = 1800
+    LECHAR=Device Name   SIZE=4   Permit=02 UUID=2A00  
+    LECHAR=Appearance    SIZE=2   Permit=02 UUID=2A01  
+  PRIMARY_SERVICE = 180A
+    LECHAR= PnP ID           SIZE=7 Permit=02   UUID=2A50  
+  PRIMARY_SERVICE = 1812
+    LECHAR=Protocol Mode   SIZE=1  Permit=06  UUID=2A4E  
+    LECHAR=HID Info        SIZE=4  Permit=02  UUID=2A4A  
+    LECHAR=HID Ctl Point   SIZE=8  Permit=04  UUID=2A4C   
+    LECHAR=Report Map      SIZE=47 Permit=02  UUID=2A4B  
+    LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
+        ; Report1 must have Report ID = 1 
+        ;   0x85, 0x01 in Report Map
+        ; unsigned char uuid[2]={0x2A,0x4D};
+        ; index = find_ctic_index(localnode(),UUID_2,uuid);
+        ; Send data: write_ctic(localnode(),index,data,0);
+
+;  *** Optional battery level ***
+;  PRIMARY_SERVICE = 180F
+;    LECHAR=Battery Level   SIZE=1 Permit=12  UUID=2A19   
+
+
+

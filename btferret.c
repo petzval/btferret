@@ -1,7 +1,7 @@
 
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 12 
+  btlib.c/h  Version 13 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -16,7 +16,8 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"   
+#include "btlib.h"  
+
 
 void btlink(void);
 void printhelp(void);
@@ -37,10 +38,10 @@ int clientconnect(void);
 int meshsend(void);
 int clientsend(int fun);
 int server(void);
-int node_classic_callback(int clientnode,char *buf,int nread);
+int node_classic_callback(int clientnode,unsigned char *buf,int nread);
 int le_callback(int clientnode,int operation,int cticn);
-int mesh_callback(int clientnode,char *buf,int nread);
-int notify_callback(int lenode,int cticn,char *buf,int nread);
+int mesh_callback(int clientnode,unsigned char *buf,int nread);
+int notify_callback(int lenode,int cticn,unsigned char *buf,int nread);
 void localdisconnect(void);
 void readnotify(void);
 void readle(void);
@@ -50,13 +51,14 @@ void getstring(char *prompt,char *s,int len);
 void readnotify(void);
 void regserial(void);
 unsigned short crccalc(unsigned short crc,unsigned char *buf,int len);
+int inputlist(char *buf,int len);
 
 char endchar = 10;  // terminate char for read/write 
 
 
 int main(int argc,char *argv[])
   { 
-  if(init_blue("devices.txt") == 0)   
+  if(init_blue("devices.txt") == 0)      
     return(0);     
 
   btlink();
@@ -87,8 +89,8 @@ void btlink()
       {
       case 'h':
         printhelp();
-        break; 
-      
+        break;
+
       case 'k':
         settings();
         break;
@@ -329,6 +331,13 @@ int server()
     timeds = inputint("Timer interval");
     if(timeds < 0)
       return(0);
+    keyflag = inputint("Send key presses to LE_KEYPRESS callback 0=No 1=Yes");  
+    if(keyflag < 0)
+      return(0);
+    if(keyflag == 0)
+      keys_to_callback(KEY_OFF,0);
+    else
+      keys_to_callback(KEY_ON,0);  
     le_server(le_callback,timeds);
     }
   else if(serverflag == 0 || serverflag == 1)
@@ -392,7 +401,7 @@ int server()
   return(0);
   }  
  
-int mesh_callback(int clientnode,char *buf,int nread)
+int mesh_callback(int clientnode,unsigned char *buf,int nread)
   {
   int n;
   
@@ -430,7 +439,7 @@ int le_callback(int clientnode,int operation,int cticn)
     }
   else if(operation == LE_DISCONNECT)
     {
-    printf("  %s has disconnected (x=stop server)\n",device_name(clientnode));
+    printf("  %s has disconnected - waiting for another connection\n",device_name(clientnode));
     // uncomment next line to stop LE server when client disconnects
     // return(SERVER_EXIT);
     // otherwise LE server will continue and wait for another connection
@@ -440,12 +449,15 @@ int le_callback(int clientnode,int operation,int cticn)
     {
     printf("  Timer\n");
     }
-    
+  else if(operation == LE_KEYPRESS)
+    {   // cticn is key code
+    printf("   Key code = %d\n",cticn);
+    }    
   return(SERVER_CONTINUE);
   }
 
 
-int node_classic_callback(int clientnode,char *buf,int nread)
+int node_classic_callback(int clientnode,unsigned char *buf,int nread)
   {
   int n,k,flag;
   char firstc,*s,temps[256];
@@ -487,11 +499,11 @@ int node_classic_callback(int clientnode,char *buf,int nread)
   else if(firstc == 'F')
     {  // receive file      
     // command = Ffilename  endchar stripped 
-    receivefile(&buf[1],clientnode);
+    receivefile((char*)&buf[1],clientnode);
     }
   else if(firstc == 'X' && nread > 1)
     {  // destination directory for get file
-    s = buf+1;
+    s = (char*)(buf+1);
     printf("Destination directory for GET file = %s\n",s);
     n = 0;
     while(s[n] != 0 && n < nread && n < 255)
@@ -504,7 +516,7 @@ int node_classic_callback(int clientnode,char *buf,int nread)
   else if(firstc == 'Y' && nread > 1)
     {  // nblock for get file
     k = 0;
-    s = buf+1;
+    s = (char*)(buf+1);
     flag = 0;
     n = 0;
     while(s[n] != 0 && n < nread)
@@ -523,7 +535,7 @@ int node_classic_callback(int clientnode,char *buf,int nread)
     }
   else if(firstc == 'G' && nread > 1)
     { // get file request with file name
-    s = buf+1;
+    s =  (char*)(buf+1);
     n = 0;
     while(s[n] != 0 && n < nread && n < 255)
       {
@@ -818,19 +830,21 @@ void readuuid()
 
 int sendgetfile()
   {
-  int servernode,maxblock,xblock,retval,sorg;
-  char ec,fname[256],ddir[256];
+  int n,j,servernode,maxblock,xblock,retval,sorg,count;
+  char ec,fname[256],ddir[256],list[512];
   char temps[256];
   static char ddirsav[256] = {""};
   static int nblock = 0;
  
-  printf("File transfer\n  0 = SEND file\n  1 = GET file\n"); 
-  sorg = inputint("Input 0/1");
+  printf("File transfer\n  0 = SEND file\n  1 = GET file\n  2 = SEND multiple files\n"); 
+  sorg = inputint("Input 0/1/2");
        
   if(sorg == 0)
     printf("\nSEND file\n");
   else if(sorg == 1)
     printf("\nGET file\n");
+  else if(sorg == 2)
+    printf("\nSEND multiple\n");
   else
     {
     printf("Cancelled\n");
@@ -858,14 +872,25 @@ int sendgetfile()
   if(nblock < 64 || nblock > maxblock)
     nblock = maxblock;
 
-  printf("Enter file name e.g.  /home/pi/doc.txt  (x=cancel)\n");
-  
-  getstring("? ",fname,256);
-  
-  if((fname[0] == 'x' && fname[1] == 0) || fname[0] == ' ')
+  if(sorg == 2)
     {
-    printf("Cancelled\n");
-    return(0);
+    count = inputlist(list,512);
+    if(count < 1)
+      {
+      printf("Cancelled\n");
+      return(0);
+      }
+    }
+  else
+    {
+    printf("Enter file name e.g.  /home/pi/doc.txt  (x=cancel)\n");
+    getstring("? ",fname,256);
+        
+    if((fname[0] == 'x' && fname[1] == 0) || fname[0] == ' ')
+      {
+      printf("Cancelled\n");
+      return(0);
+      }
     }
 
   if(ddirsav[0] != 0)
@@ -920,7 +945,20 @@ int sendgetfile()
     printf("Block size not changed\n");
  
   // server must use the same opcode (F)
-  if(sorg == 0) 
+  if(sorg == 2)
+    {
+    printf("Sending %d files\n",count);
+    j = 0;
+    for(n = 0 ; n < count ; ++n)
+      {
+      printf("%d. %s\n",n+1,list+j);
+      retval = sendfilex(servernode,"F",list+j,ddir,nblock,endchar);
+      while(list[j] != 0)
+        ++j;
+      ++j;
+      } 
+    }
+  else if(sorg == 0) 
     retval = sendfilex(servernode,"F",fname,ddir,nblock,endchar);
   else
     {  
@@ -1606,7 +1644,7 @@ void notifyle()
   }   
 
 
-int notify_callback(int lenode,int cticn,char *buf,int nread)
+int notify_callback(int lenode,int cticn,unsigned char *buf,int nread)
   {
   int n;
   
@@ -1652,7 +1690,41 @@ void regserial()
   printf("Done\n");
   }
 
+/******** Input file list ********/
+
+
+int inputlist(char *s,int len)
+  {
+  int n,getout,count;
   
+  n = 0;
+  count = 0;
+  getout = 0;
+  printf("Input list of files e=end list x=cancel\n");
+  printf("One file name for each ? prompt\n");
+  printf("e.g. /home/pi/doc.txt or e to end list\n");
+  do
+    {
+    getstring("? ",s+n,len-n);
+    if(s[n] == 'x' && s[n+1] == 0)
+      return(-1);
+    if(s[n] == 'e' && s[n+1] == 0)
+      getout = 1;
+    else
+      ++count;   
+    while(s[n] != 0 && n < len-2)
+      ++n;
+    ++n;
+    s[n] = 0;
+    if(getout == 0 && n > len-32)
+      {
+      printf("Too many\n");
+      getout = 1;
+      }
+    }
+  while(getout == 0);
+  return(count);
+  }  
 
 /********** USER INPUT FUNCTIONS *******/
  

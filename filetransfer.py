@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 
 ####### FILE TRANSFER client/server for btferret #########
+# Call via:
+#   python3 filetransfer.py
+#
+# On Linux, ensure device is visible by setting scan parameters first:
+#   hciconfig hci0 piscan
+#   python3 filetransfer.py
+#
 # This code acts as a client or server to connect with
 # a remote device running btferret. The client side of the connection
 # can then send a file to the server, or get a file from the server.
@@ -452,6 +459,9 @@ def client(node):
     node.connect((node_address,rfcomm_channel))
   except:
     node.close()
+    print("Failed. On Linux, both devices must be visible:")
+    print("  hciconfig hci0 piscan")
+    print("  python3 filetransfer.py")
     quit()
     
   ######### CONNECTED AS CLIENT ###########

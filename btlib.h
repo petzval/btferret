@@ -1,4 +1,4 @@
-  // for btlib.c Version 12
+  // for btlib.c Version 13
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -58,6 +58,7 @@
 #define LE_DISCONNECT 4
 #define LE_TIMER 5
 #define LE_BTLETIMER 6
+#define LE_KEYPRESS 7
   // link key
 #define KEY_OFF 0
 #define KEY_ON  1
@@ -69,6 +70,12 @@
 #define NODE_CONN     1 
 #define CLASSIC_CONN  2
 #define LE_CONN       3
+  // settings
+#define FLAG_OFF    0
+#define FLAG_ON     1
+#define LE_SERVER_BOND 1
+#define HID_MULTI     2
+#define HID_FIXED     4
 
 #define ANY_DEVICE 0
 
@@ -78,7 +85,7 @@ int btle_devtimer(int node,int tods);
 void btle_notifynode(int node);
 
 void classic_scan(void);
-int classic_server(int clientnode,int (*callback)(),char endchar,int keyflag);
+int classic_server(int clientnode,int(*callback)(int,unsigned char*,int),char endchar,int keyflag);
 void close_all(void);
 int cmd_stack_ptr(void);
 int connect_node(int node,int channelflag,int channel);
@@ -96,12 +103,16 @@ int find_channel(int node,int flag,unsigned char *uuid);
 int find_ctics(int node);
 int find_ctic_index(int node,int flag,unsigned char *uuid);
 
+int hid_key_code(int key);
+
 int init_blue(char *filename);
 int init_blue_ex(char *filename,int hcin);
 int init_btle(char *name,int hcin);
 
+int keys_to_callback(int flag,int keyboard);
+
 void le_scan(void);
-int le_server(int(*callback)(),int timerds);
+int le_server(int(*callback)(int,int,int),int timerds);
 
 int list_channels(int node,int flag);
 int list_ctics(int node,int flag);
@@ -111,11 +122,11 @@ int localnode(void);
 
 void mesh_on(void);
 void mesh_off(void);
-void mesh_server(int (*callback)());
+void mesh_server(int(*callback)(int,unsigned char*,int));
 
-int node_server(int clientnode,int (*callback)(),char endchar);
+int node_server(int clientnode,int(*callback)(int,unsigned char*,int),char endchar);
 
-int notify_ctic(int node,int cticn,int notifyflag,int (*callback)());
+int notify_ctic(int node,int cticn,int notifyflag,int(*callback)(int,int,unsigned char*,int));
 
 int output_file(char *filemame);
 
@@ -139,11 +150,14 @@ void register_serial(unsigned char *uuid,char *name);
 
 void scroll_back(void);
 void scroll_forward(void);
+void set_flags(int flags,int onoff);
 int set_le_interval(int min,int max);
 int set_le_interval_update(int node,int min,int max);
 int set_le_interval_server(int node,int min,int max);
+void set_le_random_address(unsigned char *add);
 int set_le_wait(int waitms);
 int set_print_flag(int flag);
+
 unsigned char *strtohex(char *s,int *num);
 
 

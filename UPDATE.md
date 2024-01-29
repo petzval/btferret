@@ -96,3 +96,24 @@ now been eliminated by re-defining the relevant function parameters from char to
 
 4. When doing a classic scan, some Bluetooth adapters did not filter out repeats, resulting in multiple FOUND
 reports for a single device. Now fixed.
+
+### Version 13
+
+1. HID (Human Interface Device) support. An LE server can act an HID device such as a keyboard, mouse,
+or joystick. Code is included (keyboard.c and keyboard.txt) that makes the Pi a 
+Bluetooth keyboard for a tablet/phone/PC. See documentation section: HID Devices.
+
+2. New function: set\_le\_random\_address(). Used by HID device to specify a random address that connecting
+devices will see as an LE-only device.
+
+3. New function: keys\_to\_callback(). Key presses are sent to the LE server callback routine.
+This is used by the HID keyboard, but can also be used to locally trigger an
+action by an LE server. So there are now two ways of doing this: the timer (LE\_TIMER) and a key press
+(LE\_KEYPRESS). Note that the key that stops the server changes from x to ESC when this is active.
+
+4. New function: hid\_key\_code(). Used by the HID keyboard.
+
+5. The LE server no longer inserts empty 1800 and 1801 primary services if they do not appear
+   in the devices file. Fixes a bug - when
+   the devices file only specified one primary service: 1800 with characteristics.
+
