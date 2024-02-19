@@ -4342,7 +4342,8 @@ int leconnect(int ndevice)
 
     popins();
     flushprint();
-    //pair here      
+    //pair here
+    lepair(ndevice);
     return(1);
     }      
   
@@ -4368,15 +4369,16 @@ int leconnect(int ndevice)
 int lepair(int ndevice)
   {  
   int n;
-  
+  preq[PAKHEADSIZE+10] = 0x04;  // kbd + dis
+  preq[PAKHEADSIZE+12] = 0x04;  // auth mitm = passkey required
   sendhci(preq,ndevice); 
-  readhci(ndevice,IN_AUTOEND,0,5000,0);
+  readhci(ndevice,IN_AUTOEND,0,gpar.leclientwait,0);   // now user-set LE wait
   n = findhci(IN_AUTOEND,ndevice,INS_POP);
+  NPRINT "n:%d, insdat[n]:%d\n", n, insdat[n]);
   if(n >= 0 && insdat[n] == AUTO_PAIROK)
     NPRINT "PAIR OK\n");
   else
     NPRINT "PAIR FAIL\n");
-     
   popins();
   flushprint();
   return(1);
@@ -6712,7 +6714,8 @@ void immediate(long long lookflag)
   struct devdata *dp;
   struct cticdata *cp;
   struct devdata *rp,*ip,*sp;  
-  unsigned char key[16],out[16],ia[6],ra[6];
+  unsigned char out[16],ia[6],ra[6];
+  static unsigned char key[16];
       
   while(1)
     {
@@ -7304,7 +7307,7 @@ void immediate(long long lookflag)
         }       
      if(insdat[n] == 2)
        {
-       VPRINT "GOT pair response - SEND I confirm\n");
+       NPRINT "GOT pair response - SEND I confirm\n");
        // save for confirm calc
        for(j = 0 ; j < 7 ; ++j)
          sp->pair[j] = insdat[n+j];  // response 
@@ -7313,14 +7316,22 @@ void immediate(long long lookflag)
          sp->irand[j] = rand() & 0xFF;
 
        for(j = 0 ; j < 16 ; ++j)
-         key[j] = 0;   // Just Works
+         key[j] = 0;
+
+       // IF passkey is fixed e.g. 123456
+       j = 123456;
+        
+       key[0] = j & 0xFF;
+       key[1] = (j >> 8) & 0xFF;
+       key[2] = (j >> 16) & 0xFF;
+       key[3] = (j >> 24) & 0xFF;
 
        calcc1(key,sp->irand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
        sendhci(confirm,devicen);
        }
      else if(insdat[n] == 3)
        {
-       VPRINT "GOT R confirm - SEND I rand\n");
+       NPRINT "GOT R confirm - SEND I rand\n");
        
        for(j = 0 ; j < 16 ; ++j)
          sp->confirm[j] = insdat[n+j+1];  // R confirm
@@ -7331,12 +7342,9 @@ void immediate(long long lookflag)
        }
      else if(insdat[n] == 4)
        {
-       VPRINT "GOT R random\n");
+       NPRINT "GOT R random\n");
        for(j = 0 ; j < 16 ; ++j)
-         {
          sp->rrand[j] = insdat[n+j+1];
-         key[j] = 0;   // Just Works 
-         }
        calcc1(key,sp->rrand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,out);
        getout = 0;
        for(j = 0 ; j < 16 && getout == 0 ; ++j)
@@ -7346,36 +7354,33 @@ void immediate(long long lookflag)
          }
        if(getout == 0)
          {
-         VPRINT "R confirm OK\n");
+         NPRINT "R confirm OK\n");
          sp->cryptoflag = 1;
          }
        else
-         VPRINT "I confirm fail\n");
+         NPRINT "I confirm fail\n");
          
-       VPRINT "SEND LTK encrypt\n");
+       NPRINT "SEND LTK encrypt %02X\n",key[1]);
        calcs1(key,sp->rrand,sp->irand,sp->linkey);
        for(j = 0 ; j < 16 ; ++j)
-         {
-         key[j] = 0;   // Just Works 
          ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
-         }
        sendhci(ltkcrypt,devicen);
        }
      else if(sp->cryptoflag != 2 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
        {
-       VPRINT "PAIR OK\n");
+       NPRINT "PAIR OK\n");
        buf[0] = AUTO_PAIROK;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag = 2;
        }
      else if(sp->cryptoflag != 2 && (insdat[n] == 5 || insdat[n] == 0xFD))
        {
-       VPRINT "PAIR FAIL\n");  // codes V3 pH 3.5.5
+       NPRINT "PAIR FAIL %02X %02X %02X %02X\n",insdat[n],insdat[n+1],insdat[n+3],key[1]); 
        buf[0] = AUTO_PAIRFAIL;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag = 2;
        }
-     }  
+     }    
     else 
       VPRINT "Unrecognised immediate\n");
                       
