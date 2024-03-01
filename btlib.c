@@ -1272,7 +1272,7 @@ int init_blue_ex(char *filename,int hcin)
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
   gpar.ledatlenflag = 0;
-  gpar.leclientwait = 750;
+  gpar.leclientwait = 5000;
   gpar.leintervalmin = 0x18;
   gpar.leintervalmax = 0x28;  
   gpar.prtp = 0;   // current end of buffer
@@ -4343,8 +4343,7 @@ int leconnect(int ndevice)
     popins();
     flushprint();
     //pair here
-    lepair(ndevice);
-    return(1);
+    return(lepair(ndevice));
     }      
   
   sendhci(lecancel,0);  // cancel open command
@@ -4375,13 +4374,18 @@ int lepair(int ndevice)
   readhci(ndevice,IN_AUTOEND,0,gpar.leclientwait,0);   // now user-set LE wait
   n = findhci(IN_AUTOEND,ndevice,INS_POP);
   NPRINT "n:%d, insdat[n]:%d\n", n, insdat[n]);
-  if(n >= 0 && insdat[n] == AUTO_PAIROK)
-    NPRINT "PAIR OK\n");
-  else
-    NPRINT "PAIR FAIL\n");
   popins();
   flushprint();
-  return(1);
+  if(n >= 0 && insdat[n] == AUTO_PAIROK)
+    {
+    NPRINT "PAIR OK\n");
+    return(1);
+    }
+  else
+    {
+    NPRINT "PAIR FAIL\n");
+    return(0);
+    }
   }
 
 
