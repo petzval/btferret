@@ -430,7 +430,7 @@ btfpy.Close_all()
 
 Run via
 
-``
+```
 sudo python3 mycode.py
 ```
 
@@ -2437,7 +2437,7 @@ wait_for_disconnect();
 
 PYTHON code
 
-```
+```python
  # SERVER code
 
  # NODE SERVER - node 1
@@ -2542,7 +2542,7 @@ int callback(int clientnode,unsigned char *data,int datlen)
 
 PYTHON code
 
-```
+```python
 CLIENT CODE
 
    # you choose a code to indicate a binary transfer (# in this example)
@@ -2660,7 +2660,7 @@ sleep(1);  // 1 second delay to allow packet to be sent
 
 PYTHON code
 
-```c
+```python
 # devices.txt
 DEVICE = Mesh Pi 1  TYPE=mesh node=1 ADDRESS = B8:27:EB:F1:50:C3
 DEVICE = Mesh Pi 2  TYPE=mesh node=2 ADDRESS = DC:A6:32:04:DB:56
@@ -9705,7 +9705,7 @@ Windows requires Python 3.9 or later. The file [filetransfer.py](#3-13-file-tran
 is an expanded version of this code.
 
 
-```
+```python
 import socket
 
 try:
