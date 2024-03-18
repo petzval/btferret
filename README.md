@@ -25,8 +25,8 @@ btferret/btlib Bluetooth Interface
         - [3.3.2 LE server](#3-3-2-le-server)
         - [3.3.3 DIY handles](#3-3-3-diy-handles)
         - [3.3.4 Match Name and Random Address](#3-3-4-match-name-and-random-address)
-        - [3.3.5 Services Changed](#3-3-5-services-changed)                                   
-    - [3.4 Windows-Android-HC-05 Classic servers](#3-4-windows-android-hc-05-classic-servers) 
+        - [3.3.5 Services Changed](#3-3-5-services-changed)
+    - [3.4 Windows-Android-HC-05 Classic servers](#3-4-windows-android-hc-05-classic-servers)
     - [3.5 Windows-Android Classic clients](#3-5-windows-android-classic-clients)        
     - [3.6 LE client](#3-6-le-client) 
         - [3.6.1 Notifications](#3-6-1-notifications)
@@ -36,7 +36,7 @@ btferret/btlib Bluetooth Interface
         - [3.7.1 Notifications](#3-7-1-notifications)
         - [3.7.2 Pairing and Security](#3-7-2-pairing-and-security)            
     - [3.8 Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection) 
-        - [3.8.1 Binary Data](#3-8-1-binary-data)    
+        - [3.8.1 Binary Data](#3-8-1-binary-data)
     - [3.9 Broadcast to all mesh servers](#3-9-broadcast-to-all-mesh-servers) 
     - [3.10 sample.c](#3-10-sample)
     - [3.11 HID Devices](#3-11-hid-devices)
@@ -46,7 +46,7 @@ btferret/btlib Bluetooth Interface
     - [4.1 Function list](#4-1-function-list)
         - [4.1.1 List With Descriptions](#4-1-1-list-with-descriptions)    
         - [4.1.2 C Quick Reference](#4-1-2-c-quick-reference)
-        - [4.1.3 Python Quick Reference](#4-1-3-python-quick-reference)            
+        - [4.1.3 Python Quick Reference](#4-1-3-python-quick-reference)
     - [4.2 Functions](#4-2-functions)    
         - [4.2.1 classic\_scan](#4-2-1-classic\_scan)
         - [4.2.2 classic\_server](#4-2-2-classic\_server)
@@ -107,7 +107,7 @@ btferret/btlib Bluetooth Interface
         - [5.2.1 Starting 01 HCI Commands](#5-2-1-starting-01-hci-commands)
         - [5.2.2 Starting 04 HCI Events](#5-2-2-starting-04-hci-events)
         - [5.2.3 Starting 02 Channel 0001](#5-2-3-starting-02-channel-0001)
-        - [5.2.4 Starting 02 Channel 0004/0006](#5-2-4-starting-02-channel-0004/0006)
+        - [5.2.4 Starting 02 Channel 0004 and 0006](#5-2-4-starting-02-channel-0004-and-0006)
         - [5.2.5 Starting 02 Channel 0040+](#5-2-5-starting-02-channel-0040-plus)
     - [5.3 Procedures](#5-3-procedures)
         - [5.3.1 HCI socket read/write packets](#5-3-1-hci-socket-read-write-packets)
@@ -709,7 +709,7 @@ int main()
     return(0);
   
   printf("Node 4 must be TYPE=CLASSIC in devices.txt\n");  
-  channel = find_channel(4,UUID_16,strtohex("00001101-0000-1000-8000-00805F9B34FB",NULL));  
+  channel = find_channel(4,UUID_16,strtohex("00001101-0000-1000-8000-00805F9B34FB",NULL));
   connect_node(4,CHANNEL_NEW,channel);
   printf("Send Hello world to client (assumes line end character = Line feed)\n");
   write_node(4,message,strlen(message));
@@ -729,7 +729,7 @@ if btfpy.Init_blue("devices.txt") == 0:
   exit(0)
   
 print("Node 4 must be TYPE=CLASSIC in devices.txt")  
-channel = btfpy.Find_channel(4,btfpy.UUID_16,btfpy.Strtohex("00001101-0000-1000-8000-00805F9B34FB"))  
+channel = btfpy.Find_channel(4,btfpy.UUID_16,btfpy.Strtohex("00001101-0000-1000-8000-00805F9B34FB"))
 btfpy.Connect_node(4,btfpy.CHANNEL_NEW,channel)
 print("Send Hello world to client (assumes line end character = Line feed)")
 btfpy.Write_node(4,"Hello world\n",0)
@@ -1022,7 +1022,7 @@ DEVICE = Pictail  TYPE=LE NODE=5 ADDRESS = 00:1E:C0:2D:17:7C    ; Fixed address
   ; If handles are known and specifed, find_ctics() is not needed
   LECHAR=Alert   HANDLE=000B PERMIT=06 size=1   ; index 1
   LECHAR=Control handle=000E PERMIT=06 SIZE=1   ; index 2
-  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ; index 3                                           
+  LECHAR=Test    HANDLE=0014 PERMIT=0A SIZE=2   ; index 3
 
 
 DEVICE = My Android  TYPE=LE NODE=5 ADDRESS = MATCH_NAME  
@@ -1330,7 +1330,7 @@ a - Scan for classic devices if not already set in devices.txt.
 c - Connect. Enter the node number of the listening device.
     Select the "Read services" option. The server's serial channels will be
     displayed, and the appropriate one will probably have one of the two
-    following UUIDs, or may be described as something like "rfcomm serial port".    
+    following UUIDs, or may be described as something like "rfcomm serial port"
        1101
        00001101-0000-1000-8000-00805F9B34FB
     Enter the RFCOMM channel number. The device should connect.
@@ -1902,7 +1902,7 @@ le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL,0);   // Local client chooses passkey a
    // BONDING saves pairing information
    // Pair (using any method) and Bond on first connection
    
-le_pair(7,PASSKEY_RANDOM | PASSKEY_REMOTE | BOND_NEW,0);                                                
+le_pair(7,PASSKEY_RANDOM | PASSKEY_REMOTE | BOND_NEW,0);
 
    // On subsequent connections, re-pair without going through passkey entry
                                                  
@@ -1998,7 +1998,7 @@ int main()
                      // find index from UUID
   uuid[0] = 0xCD;
   uuid[1] = 0xEF;
-  index = find_ctic_index(localnode(),UUID_2,uuid);  // should be 5                                  
+  index = find_ctic_index(localnode(),UUID_2,uuid);  // should be 5
                                     
   buf[0] = 0x56;
   write_ctic(localnode(),5,buf,0);  // local device is allowed to write to its own
@@ -2090,7 +2090,7 @@ def le_callback(clientnode,operation,cticn):
     pass
   elif(operation == btfpy.LE_WRITE):
     # clientnode has just written local characteristic cticn
-    data = btfpy.Read_ctic(btfpy.Localnode(),cticn)  # read characteristic to data    
+    data = btfpy.Read_ctic(btfpy.Localnode(),cticn)  # read characteristic to data
   elif(operation == btfpy.LE_DISCONNECT):
     # clientnode has just disconnected
     # uncomment next line to stop LE server when client disconnects
@@ -2311,10 +2311,10 @@ SAMPLE CODE for a server.
 ```c
        // Before starting an LE server
        
-le_pair(localnode(),PASSKEY_FIXED,123456);    // Remote client must know this passkey       
+le_pair(localnode(),PASSKEY_FIXED,123456);    // Remote client must know this passkey
 le_pair(localnode(),AUTHENTICATION_ON,0);     // Enable authentication 
 le_pair(localnode(),AUTHENTICATION_ON | PASSKEY_FIXED,123456); 
-le_pair(localnode(),JUST_WORKS,0);                                                                       
+le_pair(localnode(),JUST_WORKS,0);
        // Then start the server
                                         
 le_server(callback,0);
@@ -2651,7 +2651,7 @@ sleep(1);  // 1 second delay to allow packet to be sent
 
      // A write_mesh packet is not sent immediately because
      // the repeat rate is about 3 per second.
-     // Always allow for this possible delay when using write_mesh     
+     // Always allow for this possible delay when using write_mesh
      // The sleep delays are necessary if another
      // mesh packet is going to be sent immediately,
      // or if the program is going to terminate
@@ -2797,10 +2797,10 @@ DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
     LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D
                     ; Report1 must have Report ID = 1
                     ;     0x85, 0x01 in Report Map
-                    ; find index of Report1 for writing key data:                   
+                    ; find index of Report1 for writing key data:
                     ; unsigned char uuid[2]={0x2A,0x4D};
                     ; index = find_ctic_index(localnode(),UUID_2,uuid);
-                    ; Send key data: write_ctic(localnode(),index,data,0); 
+                    ; Send key data: write_ctic(localnode(),index,data,0);
 ```
 
 The 1812 primary service identifies an HID device, and btferret adopts special protocols when it 
@@ -4416,7 +4416,7 @@ le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL,0);   // Local client chooses passkey a
    // BONDING saves pairing information
    // Pair (using any method) and Bond on first connection
    
-le_pair(7,PASSKEY_RANDOM | PASSKEY_REMOTE | BOND_NEW,0);                                                
+le_pair(7,PASSKEY_RANDOM | PASSKEY_REMOTE | BOND_NEW,0);
 
    // On subsequent connections, re-pair without going through passkey entry
                                                  
@@ -4756,7 +4756,7 @@ def le_callback(clientnode,operation,cticn):
     if(cticn == 2 and data[0] == 4):
       print("Value 4 written to first byte of characteristic index 2")
   elif(operation == btfpy.LE_READ):
-    print(btfpy.Ctic_name(clientnode,cticn) + " read by " + btfpy.Device_name(clientnode))  
+    print(btfpy.Ctic_name(clientnode,cticn) + " read by " + btfpy.Device_name(clientnode))
   elif(operation == btfpy.LE_KEYPRESS):
     #  Only if btfpy.Keys_to_callback(btfpy.KEY_ON,0) called before le_server()
     print("Key code = " + str(cticn))
@@ -4848,7 +4848,7 @@ PYTHON
 btfpy.List_ctics(4,btfpy.LIST_SHORT)
 btfpy.List_citcs(4,btfpy.LIST_SHORT | btfpy.CTIC_R)
 btfpy.List_citcs(4,btfpy.LIST_SHORT | btfpy.CTIC_W)
-btfpy.List_ctics(3,btfpy.LIST_FULL)                              
+btfpy.List_ctics(3,btfpy.LIST_FULL)
 ```
                            
 ## 4-2-23 list\_uuid
@@ -5047,6 +5047,9 @@ The callback function is defined as follows:
 
 ```
 int callback(int clientnode,unsigned char *data,int datlen)
+
+PYTHON
+def callback(clientnode,data,datlen):
 
 clientnode = Node number of the device that sent the packet
 data = array of packet data bytes
@@ -6792,7 +6795,7 @@ Request Reply Purpose
 So an opcode:ID = 0A:04 expects a reply 0B:04 
 ```
 
-## 5-2-4 Starting 02 Channel 0004/0006
+## 5-2-4 Starting 02 Channel 0004 and 0006
 
 Channel 0004 LE Characteristic read/write. Vol 3 Part F Section 3.4
 
@@ -6916,7 +6919,7 @@ struct sockaddr_hci
   unsigned short hci_channel;
   };
 
-unsigned char eventmask[16] =  { 1,1,0x0C,8,0xFF,0xFF,0xFB,0xFF,0x07,0xF8,0xBF,0x3D }; // len 12  
+unsigned char eventmask[16] =  { 1,1,0x0C,8,0xFF,0xFF,0xFB,0xFF,0x07,0xF8,0xBF,0x3D }; // len 12
 unsigned char lemask[16] = { 1,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 };  // len 12  
 unsigned char scanip[8] = { 1,0x1A,0x0C,1,3};  // len 5   I/P scans [8] 0=off  3=I/P scans
 unsigned char btreset[8] = {0x01,0x03,0x0C,0};
@@ -9083,7 +9086,7 @@ This connects to an LE device, writes a 1-byte characteristic with
 no acknowledge, writes a 2-byte characteristic with acknowledge, reads
 the 2-byte characteristic back, enables a characteristic notification and
 indication, receives a notify and indicate, and disconnects. The commands use the 
-[Channel 0004](#5-2-4-starting-02-channel-0004/0006) LE packet format. The connect opcode
+[Channel 0004](#5-2-4-starting-02-channel-0004-and-0006) LE packet format. The connect opcode
 is documented at v4,pE,7.8.12, the Event 3E reply at 7.7.65.1. The read 
 opcodes are documented at v3,pF,3.4.4.3 and 3.4.4.4. The write
 opcodes at v3,pF,3.4.5. A characteristic with no
