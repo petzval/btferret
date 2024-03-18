@@ -1,4 +1,4 @@
-  // for btlib.c Version 13
+  // for btlib.c Version 14
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -61,10 +61,17 @@
 #define LE_KEYPRESS 7
   // link key
 #define KEY_OFF 0
+#define PASSKEY_OFF 0
+#define AUTHENTICATION_OFF 0
 #define KEY_ON  1
-#define PASSKEY_OFF 4
-#define PASSKEY_LOCAL 0
-#define PASSKEY_REMOTE 2
+#define PASSKEY_LOCAL (1 << 1)
+#define PASSKEY_REMOTE (1 << 2)
+#define PASSKEY_FIXED (1 << 3)
+#define PASSKEY_RANDOM (1 << 4)
+#define JUST_WORKS (1 << 5)
+#define BOND_NEW   (1 << 6)
+#define BOND_REPAIR (1 << 7)
+#define AUTHENTICATION_ON (1 << 8)
   // connect type
 #define NO_CONN       0
 #define NODE_CONN     1 
@@ -73,9 +80,6 @@
   // settings
 #define FLAG_OFF    0
 #define FLAG_ON     1
-#define LE_SERVER_BOND 1
-#define HID_MULTI     2
-#define HID_FIXED     4
 
 #define ANY_DEVICE 0
 
@@ -111,6 +115,7 @@ int init_btle(char *name,int hcin);
 
 int keys_to_callback(int flag,int keyboard);
 
+int le_pair(int node,int flags,int passkey);
 void le_scan(void);
 int le_server(int(*callback)(int,int,int),int timerds);
 

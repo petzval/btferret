@@ -1,7 +1,6 @@
-
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 13 
+  btlib.c/h  Version 14 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -16,7 +15,7 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"  
+#include "btlib.h"   
 
 
 void btlink(void);
@@ -52,8 +51,11 @@ void readnotify(void);
 void regserial(void);
 unsigned short crccalc(unsigned short crc,unsigned char *buf,int len);
 int inputlist(char *buf,int len);
+int clientsecurity(int *passkey);
+int serversecurity(int *passkey);
 
 char endchar = 10;  // terminate char for read/write 
+int lesecurity = 2;
 
 
 int main(int argc,char *argv[])
@@ -182,11 +184,10 @@ void btlink()
         mesh_off();
         printf("Mesh off\n");
         break;
-                                
+
       case 'q':
         return;
         break;
-
       
       default:
         printf("Unknown command\n");
@@ -317,8 +318,11 @@ int clientsend(int cmd)
 
 int server()
   {
-  int serverflag,clinode,keyflag,inkey,timeds;
-   
+  int serverflag,clinode,keyflag,inkey,timeds,passkey,pairflags;
+
+  pairflags = 0;
+  passkey = 0;
+     
   printf("\n  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = mesh server\n");
   serverflag = inputint("Input server type 0/1/2/3");
   if(serverflag < 0)
@@ -327,10 +331,29 @@ int server()
     mesh_server(mesh_callback);
   else if(serverflag == 2)
     {   // LE
+    if(lesecurity == 2)
+      {
+      printf("\nPAIRING and SECURITY\n");
+      printf("  Most LE servers do not need security\n");
+      printf("  so this option is not necessary\n");
+      lesecurity = inputint("Enable security options 0=No 1=Yes");
+      if(lesecurity < 0)
+        return(0);
+      if(lesecurity > 1)
+        lesecurity = 1;
+      }
+    if(lesecurity == 1)
+      {
+      pairflags = serversecurity(&passkey);
+      if(pairflags < 0)
+        return(0);
+      }
+      
     printf("Input LE_TIMER interval in deci (0.1) seconds\n   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
     timeds = inputint("Timer interval");
     if(timeds < 0)
       return(0);
+
     keyflag = inputint("Send key presses to LE_KEYPRESS callback 0=No 1=Yes");  
     if(keyflag < 0)
       return(0);
@@ -338,69 +361,131 @@ int server()
       keys_to_callback(KEY_OFF,0);
     else
       keys_to_callback(KEY_ON,0);  
+
+    le_pair(localnode(),pairflags,passkey);  
+        
     le_server(le_callback,timeds);
     }
-  else if(serverflag == 0 || serverflag == 1)
-    {  // node or classic
+  else if(serverflag == 0)
+    {  // node    
     printf("\nInput node of client that will connect\n");
-   
-    if(serverflag == 0)
-      clinode = inputnode(BTYPE_ME | BTYPE_CL,0);  
-    else
-      clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
+    clinode = inputnode(BTYPE_ME,0);  
     if(clinode < 0)
       {
       printf("Cancelled\n");
       return(0);
       }
-    if(serverflag == 0)   // node
-      node_server(clinode,node_classic_callback,endchar);
-    else
-      {  // classic
-      if(clinode != 0 && device_type(clinode) == BTYPE_ME)
-        keyflag = KEY_OFF | PASSKEY_OFF;
-      else
-        {
-        printf("\nClient's security  (0 or 1 to pair or connect Android/Windows.. clients)\n");
-        printf("  0 = Use link key, print passkey here, remote may ask to confirm\n");
-        printf("  1 = No link key,  print passkey here (forces re-pair if pairing fails)\n");
-        printf("  2 = No keys  (connecting client is another mesh Pi)\n");
-        printf("  3 = Use link key, no passkey\n");
-        printf("  4 = Use link key, remote prints passkey, enter it here if asked\n");
-        inkey = inputint("\nClient's security requirement");
+    node_server(clinode,node_classic_callback,endchar);     
+    } 
+  else if(serverflag == 1)
+    {  // classic
+    printf("\nInput node of client that will connect\n");
    
-        if(inkey < 0 || inkey > 4)
-          {
-          printf("Cancelled or invalid entry\n");
-          return(0);
-          }
-      
-        else if(inkey == 0)
-          keyflag = KEY_ON | PASSKEY_LOCAL;  // local prints passkey - confirm on client
-        else if(inkey == 1)
-          keyflag = KEY_OFF | PASSKEY_LOCAL;
-        else if(inkey == 2)
-          keyflag = KEY_OFF | PASSKEY_OFF;
-        else if(inkey == 3)
-          keyflag = KEY_ON | PASSKEY_OFF;    
-        else if(inkey == 4)
-          keyflag = KEY_ON | PASSKEY_REMOTE;  // client prints passkey - enter on local
-        }
-                 
-      printf("\nServer will listen on channel 1 and any of the following UUIDs\n");
-      printf("  Standard serial 2-byte 1101\n");
-      printf("  Standard serial 16-byte\n");
-      printf("  Custom serial set via register serial\n");
-      if(clinode == 0)
-        clinode = ANY_DEVICE;
-      classic_server(clinode,node_classic_callback,endchar,keyflag);
+    clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
+    if(clinode < 0)
+      {
+      printf("Cancelled\n");
+      return(0);
       }
+    if(clinode != 0 && device_type(clinode) == BTYPE_ME)
+      keyflag = KEY_OFF | PASSKEY_OFF;
+    else
+      {
+      printf("\nClient's security  (0,1,3 to pair or connect Android/Windows.. clients)\n");
+      printf("  0 = Use link key, print passkey here, remote may ask to confirm\n");
+      printf("  1 = No link key,  print passkey here (forces re-pair if pairing fails)\n");
+      printf("  2 = No keys  (connecting client is another mesh Pi)\n");
+      printf("  3 = Use link key, no passkey\n");
+      printf("  4 = Use link key, remote prints passkey, enter it here if asked\n");
+      inkey = inputint("\nClient's security requirement");
+   
+      if(inkey < 0 || inkey > 4)
+        {
+        printf("Cancelled or invalid entry\n");
+        return(0);
+        }      
+      else if(inkey == 0)
+        keyflag = KEY_ON | PASSKEY_LOCAL;  // local prints passkey - confirm on client
+      else if(inkey == 1)
+        keyflag = KEY_OFF | PASSKEY_LOCAL;
+      else if(inkey == 2)
+        keyflag = KEY_OFF | PASSKEY_OFF;
+      else if(inkey == 3)
+        keyflag = KEY_ON | PASSKEY_OFF;    
+      else if(inkey == 4)
+        keyflag = KEY_ON | PASSKEY_REMOTE;  // client prints passkey - enter on local
+      }
+                 
+    printf("\nServer will listen on channel 1 and any of the following UUIDs\n");
+    printf("  Standard serial 2-byte 1101\n");
+    printf("  Standard serial 16-byte\n");
+    printf("  Custom serial set via register serial\n");
+    if(clinode == 0)
+      clinode = ANY_DEVICE;
+    classic_server(clinode,node_classic_callback,endchar,keyflag);
     }   
-   else
+  else
     printf("Invalid type\n");
   return(0);
   }  
  
+
+int serversecurity(int *passkey)
+  {
+  int flags,key,auth,jwflag;
+ 
+  flags = 0; 
+  auth = 0;
+  key = 0;
+  jwflag = 0;
+  *passkey = 0;
+
+  printf("\nPAIRING and SECURITY\n");
+  printf("  0 = Random passkey or Just Works or None\n");
+  printf("  1 = Fixed Passkey\n");
+  key = inputint("Input option");
+  if(key <  0)
+     return(-1);
+  
+  if(key == 1)
+    {
+    *passkey = inputint("Fixed 6-digit passkey");        
+    if(*passkey < 0)
+      {
+      *passkey = 0;
+      return(-1);
+      }
+    }
+  else
+    *passkey = 0;
+
+  printf("\nAUTHENTICATION\n");
+  printf("  If authentication is enabled, the client must connect\n");
+  printf("  with passkey security or this server will not\n");
+  printf("  allow characteristic reads/writes\n");
+  auth = inputint("Authentication 0=No 1=Yes");
+  if(auth <  0)
+     return(-1);
+
+  printf("\nPASSKEY SECURITY\n");
+  printf("  0 = No - Ask for Just Works\n");
+  printf("  1 = Yes - Accept Passkey\n");
+  jwflag = inputint("Accept Passkey security if the client asks");
+  if(jwflag < 0)
+    return(-1);   
+ 
+  if(key == 1)
+    flags = PASSKEY_FIXED;
+  if(auth == 1)
+    flags |= AUTHENTICATION_ON; 
+  if(jwflag == 0)
+    flags |= JUST_WORKS;
+      
+  return(flags);
+  }  
+
+
+
 int mesh_callback(int clientnode,unsigned char *buf,int nread)
   {
   int n;
@@ -564,6 +649,7 @@ int node_classic_callback(int clientnode,unsigned char *buf,int nread)
 int clientconnect()
   {
   int node,channel,method,retval,contype,wait;
+  int pairflags,passkey,pairwait;
     
      // only disconnected devices
   node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_ME,0);
@@ -576,7 +662,10 @@ int clientconnect()
    
   channel = 0;
   method = 0;
-  
+  passkey = 0;
+  pairflags = 0;
+  wait = 0;
+   
   if(device_type(node) == BTYPE_ME)
     contype = inputint("\n  0 = Node server\n  1 = Classic server\n  2 = LE server\nInput listening type of remote mesh device");
   else
@@ -615,28 +704,156 @@ int clientconnect()
       }
     }
   else if(device_type(node) == BTYPE_LE)
+    method = CHANNEL_LE;   
+  else
+    {  
+    printf("Invalid device type\n");
+    return(0);
+    }
+    
+  if(method == CHANNEL_LE)
     {
-    method = CHANNEL_LE;
+    if(lesecurity == 2)
+      {
+      printf("\nPAIRING and SECURITY\n");
+      printf("  Most LE servers do not need security\n");
+      printf("  so this option is not necessary\n");
+      lesecurity = inputint("Enable security options 0=No 1=Yes");
+      if(lesecurity < 0)
+        return(0);
+      if(lesecurity > 1)
+        lesecurity = 1;
+      }
+    if(lesecurity == 1)
+      {
+      pairflags = clientsecurity(&passkey);
+      if(pairflags < 0)
+        return(0);
+      }       
+       
     printf("\nCONNECTION COMPLETE TIME\n");
     printf("  After connecting, some LE servers need more time to complete\n");
     printf("  the process or they will disconnect. Zero may work, otherwise\n");
     printf("  find the shortest time that will prevent disconnection.\n");
     printf("  Current value=%d  (x=cancel to keep)  Default value=750\n",set_le_wait(READ_WAIT));
     wait = inputint("Time in ms");
+    if(wait < 0)
+      return(0);
     if(wait >= 0)
-      set_le_wait(wait);   
-    }
-  else
-    {  
-    printf("Invalid device type\n");
-    return(0);
+      set_le_wait(wait);
+    if(pairflags != 0)
+      {
+      printf("\nPAIRING COMPLETE TIME\n");
+      printf("This might include the time to enter a passkey\n");
+      printf("or pairing will fail with a timeout\n");
+      pairwait = inputint("Time in ms");
+      if(pairwait < 0)
+        return(0);
+      }   
     }
   
   retval = connect_node(node,method,channel);
 
+    
+  if(pairflags != 0)
+    {
+    set_le_wait(pairwait);
+    le_pair(node,pairflags,passkey);
+    }
+    
   return(retval);    
   }
 
+
+int clientsecurity(int *passkey)
+  {
+  int flags,pair,keydev,bond;
+  int flaglook[4] = { 0,JUST_WORKS,PASSKEY_FIXED,PASSKEY_RANDOM };
+  int devlook[2] = { PASSKEY_LOCAL,PASSKEY_REMOTE };
+  int bondlook[3] = { 0,BOND_NEW,BOND_REPAIR }; 
+  
+  flags = 0; 
+  pair = 0;
+  keydev = 0;
+  *passkey = 0;
+  
+  printf("\nBONDING  (save pairing info)\n");
+  printf("  0 = Do not bond - OK for most servers\n");
+  printf("  1 = New bond\n");
+  printf("  2 = Re-Pair with a previously bonded device\n");
+  bond = inputint("Bond");
+  if(bond < 0)
+    return(-1);
+  if(bond > 2)
+    {
+    printf("Invalid option\n");
+    return(-1);
+    }
+  flags |= bondlook[bond];
+  if(bond == 2)
+    return(flags);
+   
+  printf("\nPAIRING and SECURITY\n");
+  printf("  0 = Do not pair - OK for most servers\n");
+  printf("  1 = Pair - Just Works\n");
+  printf("  2 = Pair - Fixed Passkey\n");
+  printf("  3 = Pair - Random Passkey\n");
+  pair = inputint("Input pair option");
+  if(pair <  0)
+     return(-1);
+   
+  if(bond == 1 && pair == 0)
+    {
+    printf("Must pair for new bond\n");
+    return(-1);
+    }
+  
+  if(pair > 3)
+    {
+    printf("Invalid option\n");
+    return(-1);
+    }  
+  
+  if(pair == 0)
+    return(0);
+    
+  if(pair == 2 || pair == 3)
+    {  
+    printf("\nPASSKEY chosen by\n");
+    printf("  0 = This local device\n");
+    printf("  1 = Remote server\n");
+    keydev = inputint("Enter 0/1");
+    if(keydev < 0)
+      return(-1);
+    if(keydev > 1)
+      {
+      printf("Invalid option\n");
+      return(-1);
+      }
+    }
+     
+  if(pair == 2)
+    {
+    *passkey = inputint("Fixed 6-digit passkey");        
+    if(*passkey < 0)
+      {
+      *passkey = 0;
+      return(-1);
+      }
+    if(*passkey > 999999)
+      {
+      *passkey = 0;
+      printf("Too big\n");
+      return(-1);
+      }
+    }
+  else
+    *passkey = 0;
+  
+  flags |= flaglook[pair] | devlook[keydev]; 
+
+  return(flags);
+  }  
 
 void localdisconnect()
   {
@@ -682,30 +899,7 @@ void settings()
     printf("Invalid option\n");
   }
   
-    
   
-void xsettings()
-  { 
-  int valn;
-
-          
-  valn = inputint("PRINT options\n  0 = None\n  1 = Normal\n  2 = Verbose - all HCI traffic\nInput one of the above options");
-  if(valn >= 0)
-    {
-    if(valn == 0)
-      valn = PRINT_NONE;
-    else if(valn == 1)
-      valn = PRINT_NORMAL;  
-    else if(valn == 2)
-      valn = PRINT_VERBOSE;
-    else
-      printf("Invalid option\n");
-  
-    if(valn < 3)
-      set_print_flag(valn);
-    }
-    
-  }
 
 void readnotify()
   {
@@ -865,7 +1059,7 @@ int sendgetfile()
     return(0);
     }
   else if(device_type(servernode) == BTYPE_CL)
-    printf("*** NOTE *** Server must be programmed like file_server in btlib.c\n");
+    printf("*** NOTE *** Server must understand btferret transfer protocol\n");
   else if(device_connected(servernode) == NODE_CONN)
     maxblock = 400;  // node connect max block size 
   
@@ -1147,8 +1341,8 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
          //  wait for ack = 10 from receiving device
          //  single char read + time out
       buf[0] = 0;
-                // wait for single ack byte 5s time out
-      gotn = read_node_count(node,buf,1,EXIT_TIMEOUT,5000);                
+                // wait for single ack byte 3s time out
+      gotn = read_node_count(node,buf,1,EXIT_TIMEOUT,3000);                
        
       if(gotn != 1 || buf[0] != 10)
         {
@@ -1237,7 +1431,7 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
 
   if(getout != 0)
     {  // error may have left ack in buffer
-    read_node_clear(node);
+    read_node_count(node,temps,1024,EXIT_TIMEOUT,5000);
     if(getout == 1)
       printf("Timed out\n");
     else
@@ -1366,8 +1560,8 @@ int receivefilex(char *fname,int clientnode)
       nblock = ntogo;
        // read nblock with time out
 
-    // read nblock bytes 5s time out
-    nread = read_node_count(clientnode,temps,nblock,EXIT_TIMEOUT,5000);  
+    // read nblock bytes 3s time out
+    nread = read_node_count(clientnode,temps,nblock,EXIT_TIMEOUT,3000);  
      
     if(nread == nblock)   // got nblock chars
       {
@@ -1428,7 +1622,7 @@ int receivefilex(char *fname,int clientnode)
 
   if(getout != 0 || crc != 0)
     {   // error may have left data in buffer
-    read_node_clear(clientnode);
+    read_node_count(clientnode,temps,1024,EXIT_TIMEOUT,1000);
     if(getout == 1)
       printf("Timed out\n");
     else if(getout == 2)

@@ -1,8 +1,16 @@
      ; semicolon is comment char
      ; This file must list all network devices - here are some examples
-DEVICE = My Pi         TYPE=MESH node=1  ADDRESS = B8:27:EB:F1:50:C3
+     ; Set the local device's address on the first line below 
+     
+DEVICE = My Pi         TYPE=MESH    NODE=1  ADDRESS = B8:27:EB:F1:50:C3
+  PRIMARY_SERVICE = 1800
+    LECHAR = Device name  PERMIT=06  SIZE=16  UUID=2A00   ; index 0
+  PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00
+    LECHAR = My data  PERMIT=06  SIZE=16 UUID=ABCD        ; index 1    
+    
+DEVICE = Windows PC    TYPE=CLASSIC  NODE=4   address=00:1A:7D:DA:71:13
 
-DEVICE = Windows PC    TYPE=classic node=4   address=00:1A:7D:DA:71:13
+DEVICE = LE device     TYPE=LE      NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
 
 DEVICE = Android phone TYPE=CLASSIC node=10  ADDRESS = 98:80:EE:75:4D:EB
 
@@ -13,17 +21,14 @@ DEVICE = My Other Pi   TYPE=mesh NODE=2  ADDRESS = DC:A6:32:04:DB:56
   ; Specify UUIDs and let system allocate handles
   PRIMARY_SERVICE = 1800
     LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0
-    LECHAR = Appearance   PERMIT=02 SIZE=2  UUID=2A01   ; index 1
   PRIMARY_SERVICE = 1801
-    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; index 2
-  PRIMARY_SERVICE = 180A
-    LECHAR = PnP ID          PERMIT=02 SIZE=7 UUID=2A50 ; index 3
+    LECHAR = Service changed PERMIT=20 SIZE=4 UUID=2A05 ; index 1
   PRIMARY_SERVICE = 112233445566778899AABBCCDDEEFF00
-    LECHAR = Control  PERMIT=06 SIZE=8 UUID=ABCD        ; index 4
-    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; index 5
+    LECHAR = Control  PERMIT=06 SIZE=8 UUID=ABCD        ; index 2
+    LECHAR = Info     PERMIT=06 SIZE=1 UUID=CDEF        ; index 3
 
-DEVICE = LE device     TYPE=LE      NODE=7   ADDRESS = 00:1E:C0:2D:17:7C
-  ; Characteristics of the above LE server device
+DEVICE = Pictail LE    TYPE=LE      NODE=12   ADDRESS = 00:1E:C0:3A:24:1C
+  ; Characteristics of the LE server device
   ; Specify UUID, but find_citcs() must be called to find handle
   LECHAR = Device Name  PERMIT=02 SIZE=16 UUID=2A00   ; index 0
   ; If handles are known and specifed, find_ctics() is not needed

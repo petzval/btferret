@@ -1,4 +1,4 @@
-/********** Version 13 *********/
+/********* Version 14 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,7 +10,11 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <fcntl.h>
-#include "btlib.h"     
+#include "btlib.h"       
+
+#ifdef BTFPYTHON
+  #include "btfpython.c"
+#endif
 
 /********** BLUETOOTH defines ********/
   
@@ -31,7 +35,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 13
+#define VERSION 14
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -57,6 +61,7 @@ struct cticdata
   int type;    // CTIC_UNUSED=allocated but unused CTIC_ACTIVE=used CTIC_END=terminate
   int cticn;   // index
   int size;    // number of bytes 0=unknown
+  int origsize;  // local - from devices file
   int perm;    // permissions 0=unknown 02=read 04=write no ack 08=write ack
   int notify;   // 1=enable notifications
   int psnx;
@@ -71,6 +76,9 @@ struct cticdata
   unsigned char uuid[16];
   int (*callback)();
   struct cticdata *nextctic;  // next in chain
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif  
   };
 
 #define CTIC_UNUSED 0
@@ -103,18 +111,21 @@ struct devdata
   int btletods;               // BTLE command time out deci seconds
   int dhandle[2];             // handle returned by connect  [0]=lo [1]=hi
   int linkflag;
-  int datlen;                 // max LE characteristic size
   int setdatlen;
   int foundflag;
   unsigned char linkey[16];
   char pincode[64]; 
-
+  
   unsigned int cryptoflag; 
-  unsigned char pair[7];
+  unsigned char pres[7];
+  unsigned char preq[7];
   unsigned char rrand[16];
   unsigned char irand[16];
   unsigned char confirm[16];
- 
+  unsigned char divrand[16];
+  int lepasskey;
+  int lepairflags;
+   
   struct cticdata *ctic;      // first ctic in chain
   };
 
@@ -196,14 +207,22 @@ struct devdata
   // link key
 
 // KEY_OFF 0
+// PASSKEY_OFF 0
+// AUTHENTICATION_OFF
 // KEY_ON  1
-// PASSKEY_LOCAL 0
-// PASSKEY_REMOTE 2
-// PASSKEY_OFF 4
-#define KEY_FILE 8
-#define KEY_NEW  16
-#define KEY_SENT 32
-
+// PASSKEY_LOCAL 2
+// PASSKEY_REMOTE 4
+// PASSKEY_FIXED 8
+// PASSKEY_RANDOM 16
+// JUST_WORKS 32
+// BOND_NEW 64
+// BOND_REPAIR 128
+// AUTHENTICATION_ON 256
+#define KEY_FILE (1 << 10)
+#define KEY_NEW  (1 << 11)
+#define KEY_SENT (1 << 12)
+#define PAIR_FILE (1 << 13)
+#define PAIR_NEW  (1 << 14)
 
 #define BTYPE_XALL 0
 #define DIRN_FOR  0
@@ -232,10 +251,13 @@ struct globpar
   int printflag;       // PRINT_NONE PRINT_NORMAL PRINT_VERBOSE
   int btleflag;        // 1=BTLE server
   int btlenode;        // Notify node
+  int serveractive;    // 1=is server
   int blockflag;       
   int hci;             // file desc for hci/acl commands sendhci/readhci
   int devid;           // hciX number
   int bluez;           // 0/1 bluez down/up for server functions
+  int lecap;           // LE capable
+  int hcidelay;        // on each sendhci
   int timout;          // long time out for replies ms
   int toshort;         // short time out replies
   int cmdcount;        // command stack pointer
@@ -376,6 +398,7 @@ int findcticuuid(int start,int end,unsigned char *uuidrev,int size);
 char *cticerrs(struct cticdata * cp);
 void addname(void);
 int setlelen(int ndevice,int len,int flag);
+void checkpairflags(int *flags);
 
 int closehci(void);
 int sendhci(unsigned char *cmd,int ndevice);
@@ -398,7 +421,6 @@ int calcc1(unsigned char *key,unsigned char *r,unsigned char *preq,unsigned char
             unsigned char *ia,unsigned char *ra,unsigned char *res);
 int calcs1(unsigned char *key,unsigned char *r1,unsigned char *r2,unsigned char *out);
 int setupcrypt(void);
-int lepair(int ndevice);
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
                               // 1 still available
@@ -503,12 +525,16 @@ unsigned char lemask[20] = { 12,0,0,0,0x01,0x01,0x20,0x08,0xFF,0x05,0,0,0,0,0,0 
 unsigned char lesetscan[16] = { 11,0,0,0,0x01,0x0B,0x20,0x07,0x01,0x10,0x00,0x10,0x00,0x00,0x02 };
 unsigned char locbadd[10] = {4,0,0,0,0x01,0x09,0x10,0};
 unsigned char btreset[10] = {4,0,0,0,0x01,0x03,0x0C,0};
+unsigned char wln[8] = { 252,0,0,0,1,0x13,0x0C,0xF8 };  // copied to [256]
 unsigned char lesuggest[16] = { 8,0,0,0,1,0x24,0x20,4,0xF8,0,TRANSMITUS & 0xFF,(TRANSMITUS >> 8) & 0xFF};
 unsigned char leopen[40] = {29,0,S2_BADD,0,
-  1,0x0D,0x20,0x19,0x60,0,0x60,0,0,0,0x7C,0x17,0x2D,0xC0,0x1E,0,0,0x18,0,0x28,0,0,0,0x11,0x01,0,0,0,0}; // len 29
+  1,0x0D,0x20,0x19,0x60,0,0x60,0,0,0,0x7C,0x17,0x2D,0xC0,0x1E,0,0,0x18,0,0x28,0,0x00,0,0x11,0x01,0,0,0,0}; // len 29
 unsigned char leconnup[32] = {21,0,S2_HAND,0,2,0x40,0,0x10,0,0x0C,0,0x05,0,0x12,0x03,0x08,0x00,0x06,0x00,0x06,0x00,0,0,0xF4,0x01};
 unsigned char leupdate[32] = {18,0,S2_HAND,0,1,0x13,0x20,0x0E,0,0,0x18,0,0x28,0,0,0,0xF4,0x01,0,0,0,0}; // len 18
 unsigned char lerrf[20] = {6,0,0,0,1,0x16,0x20,0x02,0,0}; // len 6
+unsigned char authto[16] = {8,0,S2_HAND,0,1,0x7C,0x0C,0x04,0,0,0xB8,0x0B};
+unsigned char lerepair[40] = {32,0,S2_HAND,0,1,0x19,0x20,0x1C,0,0,0,0,0,0,0,0,0,0,0,0,
+                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
                                  // LE open [10]... board address     [23][24] = timeout x 10ms
 unsigned char lecancel[8] = {4,0,0,0,0x01,0x0E,0x20,0};
 unsigned char leconnreply[20] = {15,0,S2_HAND,0,2,0x40,0,0x0A,0,0x06,0,0x05,0,0x13,0x01,2,0,0,0 };
@@ -636,7 +662,7 @@ unsigned char linkreply[20] = { 10,0,S2_BADD,0,0x01,0x0C,0x04,0x06,0x56,0xDB,0x0
 
 unsigned char iocapreply[20] = { 13,0,S2_BADD,0,0x01,0x2B,0x04,0x09,0x56,0xDB,0x04,0x32,0xA6,0xDC,0x03,0x00,0x00};     
 unsigned char confreply[16] = { 10,0,S2_BADD,0,0x01,0x2C,0x04,0x06,0x56,0xDB,0x04,0x32,0xA6,0xDC};
-unsigned char encrypt[16] = {  7,0,S2_HAND,0,0x01,0x13,0x04,0x03,0x0C,0x00,0x01};
+unsigned char encryptx[16] = {  7,0,S2_HAND,0,0x01,0x13,0x04,0x03,0x0C,0x00,0x01};
 
 unsigned char psmreply[32] = { 21,0,S2_HAND | S2_ID,S3_SCID1 | S3_DCID2,0x02,0x0C,0x00,0x10,0x00,0x0C,0x00,0x01,0x00,0x03,0x03,0x08,0x00,0x04,0x00,0x42,0x00,0x00,0x00,0x00,0x00 };
 
@@ -720,7 +746,7 @@ unsigned char lefail[20] =  {14,0,S2_HAND,0,2,0x40,0,9,0,5,0,4,0,0x01,0x08,0,0,0
 unsigned char custuuid[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 char custname[64] = "None";
 
-unsigned char preq[20]  = {16,0,S2_HAND,0,2,0x40,0,0x0B,0,0x07,0,6,0,0x01,0x03,0x00,0x00,0x10,0x00,0x01}; 
+unsigned char preq[20]  = {16,0,S2_HAND,0,2,0x40,0,0x0B,0,0x07,0,6,0,0x01,0x04,0x00,0x00,0x10,0x00,0x01}; 
 unsigned char pres[20]  = {16,0,S2_HAND,0,2,0x40,0,0x0B,0,0x07,0,6,0,0x02,0x03,0x00,0x00,0x10,0x00,0x01}; 
 unsigned char confirm[32] = {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x03,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 unsigned char sendrand[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x04,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
@@ -730,6 +756,7 @@ unsigned char ltkcrypt[40] = { 32,0,S2_HAND,0,1,0x19,0x20,0x1C,0x40,0x00,0,0,0,0
                      1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 unsigned char sendltk[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x06,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 unsigned char sendci[32] =  {20,0,S2_HAND,0,2,0x40,0,0x0F,0,0x0B,0,6,0,0x07,1,2,3,4,5,6,7,8,9,10 };
+unsigned char confail[16] =  {11,0,S2_HAND,0,2,0x40,0,0x06,0,0x02,0,6,0,0x05,4 };
 unsigned char conup[32] = { 18,0,S2_HAND,0,1,0x13,0x20,14,0x40,0,0x30,0x00,0x30,0x00,0x02,0x00,0xC0,0x03,0x00,0x00,0x00,0x00 };
 
 /********************** END sendhci() PACKETS *********************/
@@ -1122,7 +1149,7 @@ char *errorle[20] = {
 "Read Not Permitted",
 "Write Not Permitted",
 "Invalid PDU",
-"Insufficient Authentication",
+"No Authentication (need passkey security)",
 "Request Not Supported",
 "Invalid Offset",
 "Insufficient Authorization",
@@ -1244,7 +1271,7 @@ int init_blue(char *filename)
 int init_blue_ex(char *filename,int hcin)
   {
   int n,dn,k,sn,hn,i,len,flag,errflag,errcount,psnx;
-  int clflag,leflag,readret,meshcount,lecap,btleindex,reportflag;
+  int clflag,leflag,readret,meshcount,btleindex,reportflag;
   unsigned int ind[16];
   struct cticdata *cp;
   char s[256],buf[128],*es;
@@ -1252,7 +1279,6 @@ int init_blue_ex(char *filename,int hcin)
   FILE *stream;
   struct timespec ts;
   static char errs[16] = {"   ERROR **** "};
-  static unsigned char wln[8] = { 252,0,0,0,1,0x13,0x0C,0xF8 };
   static int initflag = 0;
     
      // global parameters 
@@ -1264,10 +1290,17 @@ int init_blue_ex(char *filename,int hcin)
   else
     gpar.btleflag = 0;
   
-  gpar.btlenode = 0; 
+  gpar.btlenode = 0;
+  gpar.serveractive = 0; 
   gpar.timout = 1000;   // reply wait ms time out
   gpar.toshort = 5;    // ms
   gpar.cmdcount = 0;
+  gpar.lecap = 0;
+#ifdef BTFPYTHON
+  gpar.hcidelay = 25;  // 25ms
+#else
+  gpar.hcidelay = 5; 
+#endif
   gpar.btletimerds = 0;
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
@@ -1357,15 +1390,15 @@ int init_blue_ex(char *filename,int hcin)
     {
     if(hcisock() == 0)
       {    
-      NPRINT "No root permission or Bluetooth (hci%d) is off\n",gpar.devid); 
+      NPRINT "No root permission or Bluetooth (hci%d) is off or crashed\n",gpar.devid); 
       NPRINT "Must run with root permission via sudo as follows:\n"); 
-      NPRINT "sudo ./btferret\n");
+      NPRINT "  sudo ./btferret (for C) or  sudo python3 btferret.py\n");
       flushprint();
       return(0);
       }
     }
     
-  lecap = 0;
+  gpar.lecap = 0;
   flag = 0;
   VPRINT "Read local supported commands\n");
   sendhci(locsup,0);
@@ -1377,7 +1410,7 @@ int init_blue_ex(char *filename,int hcin)
       { 
       flag = 1;
       if((insdatn[29] & 0xA2) == 0xA2 && (insdatn[30] & 0x3E) == 0x3E)
-        lecap = 1;  // LE capable
+        gpar.lecap = 1;  // LE capable
       }
     }
   while(n >= 0 && flag == 0);
@@ -1406,7 +1439,7 @@ int init_blue_ex(char *filename,int hcin)
     errcount = 1000;
     }
 
-  if(lecap != 0)
+  if(gpar.lecap != 0)
     {
     // read LE buffer size for mesh node read/write
     gpar.lebufsize = 0; 
@@ -1697,6 +1730,7 @@ int init_blue_ex(char *filename,int hcin)
           buf[i] = s[sn+i];
         buf[len] = 0;
         cp->size = atoi(buf);
+        cp->origsize = cp->size;
         if(cp->size < 1 || cp->size > LEDATLEN)
           {
           NPRINT "%sSIZE must be 1-%d\n",errs,LEDATLEN);
@@ -1882,7 +1916,7 @@ int init_blue_ex(char *filename,int hcin)
     strcpy(dev[0]->name,buf);    
     NPRINT "\nThis local device has been allocated NODE = %d\n",dev[0]->node);
     NPRINT "It should be added to the %s file as follows:\n",filename);
-    NPRINT "DEVICE=this device name  TYPE=MESH  NODE=choose  ADDRESS=%s\n",baddstr(dev[0]->baddr,0));
+    NPRINT "DEVICE=name (e.g. My Pi) TYPE=MESH  NODE=choose (e.g. 1)  ADDRESS=%s\n",baddstr(dev[0]->baddr,0));
     }
   else
     {  // write local name
@@ -1912,7 +1946,7 @@ int init_blue_ex(char *filename,int hcin)
   initflag = 1;
 
 
-  if(lecap == 0)
+  if(gpar.lecap == 0)
     {
     NPRINT "\n*** Bluetooth adapter is not LE capable ***\n");
     NPRINT "*** Mesh/LE functions will not work *******\n");
@@ -1997,9 +2031,10 @@ int localctics()
         return(0);
         }
       if(cp->size > LEDATLEN)
+        {
         cp->size = LEDATLEN;
-      if(cp->size > dev[j]->datlen)
-        dev[j]->datlen = cp->size;      
+        cp->origsize = LEDATLEN;
+        }
       }  
     }
     
@@ -2204,12 +2239,14 @@ int localctics()
     if(cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0)
       { // device name
       j = 0;
-      while(dev[0]->name[j] != 0 && j < LEDATLEN-1 && j < cp->size-1)
+      while(dev[0]->name[j] != 0 && j < LEDATLEN-1)
         {
         cp->value[j] = dev[0]->name[j];
         ++j;
         }
-      cp->value[j] = 0;
+      for(k = j ; k < LEDATLEN ; ++k)
+        cp->value[k] = 0;
+      cp->size = j;
       }
      
     if(cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x05)
@@ -2489,7 +2526,8 @@ struct cticdata *cticalloc(int ndevice)
      
   cp->type = CTIC_UNUSED;
   cp->cticn = j;
-  cp->size = 0;   
+  cp->size = 0;
+  cp->origsize = 0;   
   cp->perm = 0;
   cp->notify = 0;
   cp->chandle = 0;
@@ -2500,7 +2538,9 @@ struct cticdata *cticalloc(int ndevice)
   cp->iflag = 0;
   cp->nextctic = &cticnull;  // with type = CTIC_END
   cp->callback = NULL;
-  
+#ifdef BTFPYTHON
+  cp->pycallback = NULL;
+#endif  
   for(j = 0 ; j < 16 ; ++j)
     cp->uuid[j] = 0;
   
@@ -2548,15 +2588,18 @@ int devalloc()
   dp->xwantlen = 0;
   dp->btletods = 0;
   dp->matchname = 0;
-  dp->datlen = 20;
   dp->setdatlen = 20;
   dp->foundflag = 0;
   dp->cryptoflag = 0;
-  
+  dp->lepasskey = 0;
+  dp->lepairflags = 0;  
   for(j = 0 ; j < 6 ; ++j)
     dp->baddr[j] = 0;
   for(j = 0 ; j < 16 ; ++j)
+    {
     dp->linkey[j] = lkey[j];
+    dp->divrand[j] = 0;
+    }
   dp->linkflag = 0;        
   dp->type = 0;
   dev[dn]->name[0] = 0; 
@@ -2612,7 +2655,9 @@ int lescanx()
   VPRINT "Disable LE scan\n");
   sendhci(lescanoff,0);
   // statusok(0,lescanoff);  
-   
+
+  for(n = 0 ; devok(n) != 0 ; ++n)
+    dev[n]->foundflag = 0;   
      
   count= 0;
   newcount = 0;
@@ -2634,106 +2679,110 @@ int lescanx()
       {  // each response
       // rp[2]...[7]  board address
 
-      NPRINT "%d FOUND %s - %s\n",count+1,baddstr(rp+2,1),fixran[rp[1] & 1]);      
-      flushprint();
+      ndevice = devnfrombadd(rp+2,BTYPE_LE | BTYPE_ME,DIRN_REV);
       
-      type = BTYPE_LE;  
-      meshflag = 0;
-      buf[0] = 0;  // for name             
+      if(ndevice < 0 || dev[ndevice]->foundflag == 0)      
+        {  // not found  
+        NPRINT "%d FOUND %s - %s\n",count+1,baddstr(rp+2,1),fixran[rp[1] & 1]);      
+        flushprint();
+      
+        type = BTYPE_LE;  
+        meshflag = 0;
+        buf[0] = 0;  // for name             
         // find name in data at rp[9] length rp[8]
       
-      j = 9;
-      while(j-9 < rp[8])   // && dp->name[0] == 0)
-        {  // each data entry
-        // rp[j]=length type+data  rp[j+1]=type   rp[j+2]=data
-        tn = rp[j+1];  // type
-             // convert to valid adlist[] index
-        if(tn == 0xFF)
-          tn = 47;
-        else if(tn == 0x3D)
-          tn = 46;
-        else if(tn > 0x2D)
-          tn = 0;
+        j = 9;
+        while(j-9 < rp[8])   // && dp->name[0] == 0)
+          {  // each data entry
+          // rp[j]=length type+data  rp[j+1]=type   rp[j+2]=data
+          tn = rp[j+1];  // type
+               // convert to valid adlist[] index
+          if(tn == 0xFF)
+            tn = 47;
+          else if(tn == 0x3D)
+            tn = 46;
+          else if(tn > 0x2D)
+            tn = 0;
 
-        if(rp[j+1] == 0xFF && (rp[j+2] ==  ((rp[2] ^ rp[3]) ^ rp[4]) )  &&
+          if(rp[j+1] == 0xFF && (rp[j+2] ==  ((rp[2] ^ rp[3]) ^ rp[4]) )  &&
                               (rp[j+3] == (((rp[5] ^ rp[6]) ^ rp[7]) | 0xC0) ) )
-          {
-          if(bincmp(rp+j+4,advert,5,DIRN_FOR) != 0)
             {
-            type = BTYPE_ME;
-            meshflag = 2;  // is a MESH devices
-            }
-          else
-            meshflag = 1;  // might be a MESH device
-          }
-                        
-        if(rp[j+1] == 8 || rp[j+1] == 9)  // found name 8=short 9=full
-          {  // length rp[j]
-          if(rp[j] > 1)
-            {
-            k = 0;
-            while(k < rp[j]-1 && k < NAMELEN-1)   // to name[NAMELEN]
+            if(bincmp(rp+j+4,advert,5,DIRN_FOR) != 0)
               {
-              buf[k] = rp[j+2+k];
-              ++k;
-              }  
-            buf[k] = 0;
-            NPRINT "    Name = %s (Use this for MATCH_NAME)\n",buf);
-            }
-          }
-        else
-          {  // length rp[j]
-          if(rp[j] > 1)
-            {
-            if(tn == 2 || tn == 3)
-              {  // 2-byte UUIDs
-              NPRINT "    %s\n",adlist[tn]);         
-              k = 0;
-              while(k < rp[j]-1)
-                {
-                if((k % 2) != 0)
-                  {
-                  if(rp[j+2+k] == 0xFE && rp[j+1+k] == 0xAA)
-                    NPRINT "      FEAA Eddystone beacon\n");
-                  else if(rp[j+2+k] == 0xFD && rp[j+1+k] == 0x6F)
-                    NPRINT "      FD6F Contact tracing\n");
-                  else
-                    NPRINT "      %02X%02X %s\n",rp[j+2+k],rp[j+1+k],uuidlist+finduuidtext((rp[j+2+k] << 8) + rp[j+1+k]));                 
-                  }
-                ++k;
-                }
+              type = BTYPE_ME;
+              meshflag = 2;  // is a MESH devices
               }
             else
+              meshflag = 1;  // might be a MESH device
+            }
+                        
+          if(rp[j+1] == 8 || rp[j+1] == 9)  // found name 8=short 9=full
+            {  // length rp[j]
+            if(rp[j] > 1)
               {
-              if(rp[j] == 0x1A && rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
-                NPRINT "    iBeacon =");
+              k = 0;
+              while(k < rp[j]-1 && k < NAMELEN-1)   // to name[NAMELEN]
+                {
+                buf[k] = rp[j+2+k];
+                ++k;
+                }  
+              buf[k] = 0;
+              NPRINT "    Name = %s (Use this for MATCH_NAME)\n",buf);
+              }
+            }
+          else
+            {  // length rp[j]
+            if(rp[j] > 1)
+              {
+              if(tn == 2 || tn == 3)
+                {  // 2-byte UUIDs
+                NPRINT "    %s\n",adlist[tn]);         
+                k = 0;
+                while(k < rp[j]-1)
+                  {
+                  if((k % 2) != 0)
+                    {
+                    if(rp[j+2+k] == 0xFE && rp[j+1+k] == 0xAA)
+                      NPRINT "      FEAA Eddystone beacon\n");
+                    else if(rp[j+2+k] == 0xFD && rp[j+1+k] == 0x6F)
+                      NPRINT "      FD6F Contact tracing\n");
+                    else
+                      NPRINT "      %02X%02X %s\n",rp[j+2+k],rp[j+1+k],uuidlist+finduuidtext((rp[j+2+k] << 8) + rp[j+1+k]));                 
+                    }
+                  ++k;
+                  }
+                }
               else
                 {
-                if(rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
-                  NPRINT "    Apple =");
-                else if(rp[j+1] == 0xFF && rp[j+2] == 0x06 && rp[j+3] == 0x00)
-                  NPRINT "    Microsoft =");       
-                else if(rp[j+1] == 0xFF && rp[j+2] == 0x75 && rp[j+3] == 0x00)
-                  NPRINT "    Samsung =");       
-                else       
-                  NPRINT "    %s =",adlist[tn]);
-                }         
-              k = 0;
-              while(k < rp[j]-1)
-                {
-                if((tn == 6 || tn == 7) && k > 0 && (k & 0x0F) == 0)
-                  NPRINT "\n       ");  // 16-byte UUIDs new line  
-                NPRINT " %02X",rp[j+2+k]);
-                ++k;
-                }
-              NPRINT "\n");
-              }                     
-            }
-          }  
+                if(rp[j] == 0x1A && rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
+                  NPRINT "    iBeacon =");
+                else
+                  {
+                  if(rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
+                    NPRINT "    Apple =");
+                  else if(rp[j+1] == 0xFF && rp[j+2] == 0x06 && rp[j+3] == 0x00)
+                    NPRINT "    Microsoft =");       
+                  else if(rp[j+1] == 0xFF && rp[j+2] == 0x75 && rp[j+3] == 0x00)
+                    NPRINT "    Samsung =");       
+                  else       
+                    NPRINT "    %s =",adlist[tn]);
+                  }         
+                k = 0;
+                while(k < rp[j]-1)
+                  {
+                  if((tn == 6 || tn == 7) && k > 0 && (k & 0x0F) == 0)
+                    NPRINT "\n       ");  // 16-byte UUIDs new line  
+                  NPRINT " %02X",rp[j+2+k]);
+                  ++k;
+                  }
+                NPRINT "\n");
+                }                     
+              }
+            }  
             
-        flushprint();   
-        j += rp[j] + 1;  // next entry   
-        }
+          flushprint();   
+          j += rp[j] + 1;  // next entry   
+          }
 
       /******
       if(rp[j] > 0x7F)
@@ -2754,115 +2803,113 @@ int lescanx()
         }
       ******/   
         
-      // compare board address with known devices  no type check
-              
-        
-      ndevice = devnfrombadd(rp+2,BTYPE_LE | BTYPE_ME,DIRN_REV);
-     
-      if(ndevice < 0 && buf[0] != 0)
-        {  // no board address match and have name in buf
+    
+        if(ndevice < 0 && buf[0] != 0)
+          {  // no board address match and have name in buf
            // look for name match or random address change   
-        for(k = 1 ; ndevice < 0 && devok(k) != 0 ; ++k)
-          {
-          if(dev[k]->type == BTYPE_LE)
+          for(k = 1 ; ndevice < 0 && devok(k) != 0 ; ++k)
             {
-            if((dev[k]->matchname & 1) != 0)
-              {  // MATCH_NAME
-              flag = 0;
-              for(i = 0 ; i < (int)strlen(dev[k]->name) && flag == 0 ; ++i)
-                {
-                if(dev[k]->name[i] != buf[i])
-                  flag = 1;
-                }
-              if(flag == 0)
-                {
-                NPRINT "    Found via MATCH_NAME\n");
-                dev[k]->matchname |= 2;  // found address flag
-                dev[k]->leaddtype = rp[1] & 1;  // type public/random
-                dev[k]->leaddtype |= 2;         // found by scan
-                ndevice = k;
-                for(i = 0 ; i < 6 ; ++i)
-                  dev[k]->baddr[i] = rp[7-i];          
-                }
-              }            
-            else if((dev[k]->leaddtype & 1) != 0 && (rp[1] & 1) != 0 && strcmp(buf,dev[k]->name) == 0)
+            if(dev[k]->type == BTYPE_LE)
               {
-              NPRINT "    Random address changed\n");
-              ndevice = k;
-              // changed board address
-              for(i = 0 ; i < 6 ; ++i)
-                dev[k]->baddr[i] = rp[7-i];
+              if((dev[k]->matchname & 1) != 0)
+                {  // MATCH_NAME
+                flag = 0;
+                for(i = 0 ; i < (int)strlen(dev[k]->name) && flag == 0 ; ++i)
+                  {
+                  if(dev[k]->name[i] != buf[i])
+                    flag = 1;
+                  }
+                if(flag == 0)
+                  {
+                  NPRINT "    Found via MATCH_NAME\n");
+                  dev[k]->matchname |= 2;  // found address flag
+                  dev[k]->leaddtype = rp[1] & 1;  // type public/random
+                  dev[k]->leaddtype |= 2;         // found by scan
+                  ndevice = k;
+                  for(i = 0 ; i < 6 ; ++i)
+                    dev[k]->baddr[i] = rp[7-i];          
+                  }
+                }            
+              else if((dev[k]->leaddtype & 1) != 0 && (rp[1] & 1) != 0 && strcmp(buf,dev[k]->name) == 0)
+                {
+                NPRINT "    Random address changed\n");
+                ndevice = k;
+                // changed board address
+                for(i = 0 ; i < 6 ; ++i)
+                  dev[k]->baddr[i] = rp[7-i];
+                }
               }
             }
           }
-        }
       
             
-      if(ndevice >= 0)
-        {
-        NPRINT "    Known device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
-        if((dev[ndevice]->leaddtype & 1) != (rp[1] & 1))
+        if(ndevice >= 0)
           {
-          NPRINT "    Changing fixed/random address type\n");
-          if((dev[ndevice]->leaddtype & 2) == 0)
-            NPRINT "    *** Fixed/Random info in devices file is wrong ***\n"); 
-          dev[ndevice]->leaddtype = (rp[1] & 1) | (dev[ndevice]->leaddtype & 2);
-          }
-        if(dev[ndevice]->type == BTYPE_ME && dev[ndevice]->node >= 1000)
-          NPRINT "    Add to devices.txt with node < 1000 to authorise mesh packets\n");
-        if(dev[ndevice]->type != BTYPE_LE && dev[ndevice]->type != BTYPE_ME)
-          NPRINT "    But not listed as LE or Mesh\n");
-        }
-      else
-        {  // not already stored
-        if(meshflag != 0)  // auto detect mesh device
-          {
-          if(meshflag == 2)
-            NPRINT "                    MESH device\n");
-          else
-            NPRINT "                    May be a MESH device\n");
-          NPRINT "                    To receive mesh packets from this device\n");
-          NPRINT "                    add to devices.txt with node < 1000\n");
-          }
-        // find next free entry
-        ndevice = devalloc();
-        if(ndevice < 0)  // failed
-          {
-          instack[n] = INS_POP;
-          return(0);
-          }
-        ++newcount;
-        dp = dev[ndevice];
-        dp->type = type;  // BTYPE_LE or BTYPE_ME 
-        dp->leaddtype |= rp[1] & 1;  // type public/random
-        dp->leaddtype |= 2;          // found by scan
-        dp->node = newnode();
-        for(k = 0 ; k < 6 ; ++k)
-          dp->baddr[k] = rp[7-k];
-        
-        if(buf[0] == 0)
-          {  // no name
-          k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) == 0)
-            strcpy(buf,dev[k]->name);  // is also a classic with name 
-          else
+          NPRINT "    Known device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+          if((dev[ndevice]->leaddtype & 1) != (rp[1] & 1))
             {
-            sprintf(buf,"LE node %d",dp->node);
-            NPRINT "    No name so set = %s\n",buf);
+            NPRINT "    Changing fixed/random address type\n");
+            if((dev[ndevice]->leaddtype & 2) == 0)
+              NPRINT "    *** Fixed/Random info in devices file is wrong ***\n"); 
+            dev[ndevice]->leaddtype = (rp[1] & 1) | (dev[ndevice]->leaddtype & 2);
             }
+          if(dev[ndevice]->type == BTYPE_ME && dev[ndevice]->node >= 1000)
+            NPRINT "    Add to devices.txt with node < 1000 to authorise mesh packets\n");
+          if(dev[ndevice]->type != BTYPE_LE && dev[ndevice]->type != BTYPE_ME)
+            NPRINT "    But not listed as LE or Mesh\n");
           }
         else
-          {  // got name
-          k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) != 0)
-            strcpy(dev[k]->name,buf);  // is also a classic without name 
-          }
+          {  // not already stored
+          if(meshflag != 0)  // auto detect mesh device
+            {
+            if(meshflag == 2)
+              NPRINT "                    MESH device\n");
+            else
+              NPRINT "                    May be a MESH device\n");
+            NPRINT "                    To receive mesh packets from this device\n");
+            NPRINT "                    add to devices.txt with node < 1000\n");
+            }
+          // find next free entry
+          ndevice = devalloc();
+          if(ndevice < 0)  // failed
+            {
+            instack[n] = INS_POP;
+            return(0);
+            }
+          ++newcount;
+          dp = dev[ndevice];
+          dp->type = type;  // BTYPE_LE or BTYPE_ME 
+          dp->leaddtype |= rp[1] & 1;  // type public/random
+          dp->leaddtype |= 2;          // found by scan
+          dp->node = newnode();
+          for(k = 0 ; k < 6 ; ++k)
+            dp->baddr[k] = rp[7-k];
+        
+          if(buf[0] == 0)
+            {  // no name
+            k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) == 0)
+              strcpy(buf,dev[k]->name);  // is also a classic with name 
+            else
+              {
+              sprintf(buf,"LE node %d",dp->node);
+              NPRINT "    No name so set = %s\n",buf);
+              }
+            }
+          else
+            {  // got name
+            k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) != 0)
+              strcpy(dev[k]->name,buf);  // is also a classic without name 
+            }
           
-        strcpy(dev[ndevice]->name,buf);
+          strcpy(dev[ndevice]->name,buf);
                       
-        NPRINT "    New device %s\n",dev[ndevice]->name);
-        }  
-           
+          NPRINT "    New device %s\n",dev[ndevice]->name);
+          }
+        if(ndevice >= 0)
+          dev[ndevice]->foundflag = 1;  
+        }  // end not found       
       flushprint();          
       // next device entry is length 10+rp[8] away
       rp += rp[8] + 10;
@@ -3276,24 +3323,49 @@ void mesh_server(int(*callback)())
   {
   int nread,retval,clientnode;
   unsigned char buf[32];
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif
 
+  if(gpar.serveractive != 0)
+    {
+    NPRINT "Cannot start a second server\n");
+    return;
+    }
+
+#ifdef BTFPYTHON
+  pycallback = py_mecallback;    
+#endif
+
+  gpar.serveractive = 1;
   mesh_on(); 
   meshpacket(NULL);  // enable unknown device message
    
   NPRINT "Mesh server listening (x = stop server)\n");
   flushprint();
+  retval = SERVER_CONTINUE;
   do
     {
     nread = read_mesh(&clientnode,buf,32,EXIT_KEY,0);
     if(nread > 0)
-      retval = (*callback)(clientnode,buf,nread);
+      {
+#ifdef BTFPYTHON
+      if(pycallback != NULL)
+        retval = py_mesh_callback(pycallback,clientnode,buf,nread);
+#else
+      if(callback != NULL)
+        retval = (*callback)(clientnode,buf,nread);
+#endif
+      }
     else
       retval = SERVER_EXIT;
       
     flushprint();
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
 
+  gpar.serveractive = 0;
+  
   if(read_error() == ERROR_KEY)
     NPRINT "Key press stop server\n");
   else if(read_error() == ERROR_FATAL)
@@ -3336,12 +3408,22 @@ void btle_notifynode(int node)
 
 int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds)
   {
-  int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag,flag;
+  int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag;
   struct devdata *dp;
   unsigned char *badd;
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif
+
+  if(gpar.serveractive != 0)
+    {
+    NPRINT "Cannot start a second server\n");
+    return(0);
+    }
      
   mesh_on();   
   oldkm = setkeymode(1); 
+  dp = dev[0];
   
   if(gpar.btleflag == 0)
     {
@@ -3357,8 +3439,10 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   if(gpar.hidflag == 0)
     badd = dev[0]->baddr;
   else
+    {
     badd = gpar.randbadd;
-  
+    dev[0]->lepairflags = JUST_WORKS;
+    }
   if((gpar.hidflag & 1) == 0)  
     NPRINT "Advertising as %s %s\n",baddstr(badd,0),dev[0]->name);
   else
@@ -3371,6 +3455,10 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   for(dn = 0 ; devok(dn) != 0 ; ++dn)
     dev[dn]->btletods = 0;
 
+#ifdef BTFPYTHON
+  pycallback = py_lecallback;
+#endif
+  gpar.serveractive = 1;
 
   retval = SERVER_CONTINUE;  
   do
@@ -3391,60 +3479,45 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
         VPRINT "%s has disconnected\n",dp->name);
       else if(op == LE_CONNECT)
         {
-        flag = 0;
-        if(gpar.hidflag != 0)
-          {  // 6 sec for crypto
-          NPRINT "Waiting...\n");           
-          if((gpar.hidflag & 3) == 2)
-            {  // not HID
-            readhci(ndevice,IN_AUTOEND,0,1000,0);
-            n = findhci(IN_AUTOEND,ndevice,INS_POP);
-            if(n >= 0 && insdat[n] == AUTO_PAIRREQ)
-              VPRINT "Pair request\n");  
-            else
-              flag = 1;  // no crypto wait
+        if((gpar.hidflag & 1) != 0)
+          {  // HID wait for AUTO_PAIROK
+          NPRINT "Wait for pair...\n");  
+          readhci(ndevice,IN_AUTOEND,0,gpar.leclientwait,0);
+          n = findhci(IN_AUTOEND,ndevice,INS_POP);
+          if(n >= 0)
+            {
+            if(insdat[n] == AUTO_PAIROK)
+              NPRINT "PAIR OK\n");
             }
           else
-            {
-            readhci(ndevice,IN_AUTOEND,0,6000,0);
-            n = findhci(IN_AUTOEND,ndevice,INS_POP);
-            }         
-            
-          if(flag == 0)
-            {
-            if(gpar.leclientwait > 3000)
-              readhci(0,0,0,gpar.leclientwait,0);
-            else if(gpar.leclientwait > 0)
-              readhci(0,0,0,0,gpar.leclientwait);
-            }
-             
-            
-          NPRINT "End wait\n");
-          }
- 
+            NPRINT "PAIR time out\n");
+          }       
+
         VPRINT "%s has connected\n",dp->name);
         dp->btletods = 0;
         if((gpar.hidflag & 1) == 0)  
           {
           mesh_on();
-          if(flag != 2)
-            {
-            VPRINT "Set larger data length\n");  
-            sendhci(datlenset,ndevice);
-            } 
+          VPRINT "Set larger data length\n");  
+          sendhci(datlenset,ndevice);
           }
         }   
 
       flushprint();
       popins();     
         
+      setkeymode(0);
+#ifdef BTFPYTHON
+      if(pycallback != NULL)
+        retval = py_le_callback(pycallback,dp->node,op,cticn);
+      cbflag = 1; 
+#else
       if(callback != NULL)
-        {
-        setkeymode(0);
         retval = callback(dp->node,op,cticn);
-        setkeymode(1);                
-        cbflag = 1;
-        }
+      cbflag = 1;
+#endif
+      setkeymode(1);                
+     
       if(op == LE_DISCONNECT)
         {  // clear all operations from this device
         dp->btletods = 0; 
@@ -3478,12 +3551,15 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       ++timecount;
       if(timecount >= timerds)
         {
+        setkeymode(0);
+#ifdef BTFPYTHON
+        if(pycallback != NULL)
+          retval = py_le_callback(pycallback,localnode(),LE_TIMER,0);
+#else
         if(callback != NULL)
-          {
-          setkeymode(0);
           retval = callback(localnode(),LE_TIMER,0);
-          setkeymode(1);
-          }
+#endif
+        setkeymode(1);
         timecount = 0;
         }
       }
@@ -3514,7 +3590,14 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       else
         {
         VPRINT "Key code %d\n",key); 
-        retval = callback(localnode(),LE_KEYPRESS,key);
+
+#ifdef BTFPYTHON
+        if(pycallback != NULL)
+          retval = py_le_callback(pycallback,localnode(),LE_KEYPRESS,key);
+#else
+        if(callback != NULL)
+          retval = callback(localnode(),LE_KEYPRESS,key);
+#endif
         key = 0;
         }
       }  
@@ -3543,7 +3626,8 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
 
   popins();    
   mesh_on();
-  
+  gpar.serveractive = 0;
+    
   return(1);
   }  
 
@@ -3572,7 +3656,16 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
   int nread,key,ndevice,retval,oldkm;
   unsigned char buf[1024];
   struct devdata *dp;
-     
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif
+    
+  if(gpar.serveractive != 0)
+    {
+    NPRINT "Cannot start a second server\n");
+    return(0);
+    }    
+
   ndevice = devn(clientnode);
   if(ndevice <= 0 || dev[ndevice]->type != BTYPE_ME)
     {
@@ -3607,25 +3700,37 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
       popins();
       return(0);
       }
-    }    
-  
-  
+    } 
+    
   popins();  
   setkeymode(oldkm);
+
+#ifdef BTFPYTHON
+  pycallback = py_callback;
+#endif
+  gpar.serveractive = 1;
 
   NPRINT "Connected OK\n");
   NPRINT "Waiting for data from %s (x = stop server)\n",dp->name);
   setlelen(ndevice,LEDATLEN,0); 
-
+  retval = SERVER_CONTINUE;
   do
     {
     nread = read_node_endchar(clientnode,buf,1024,endchar,EXIT_KEY,0);
     if(nread > 0)
-      retval = (*callback)(clientnode,buf,nread);
+      {
+#ifdef BTFPYTHON
+      if(pycallback != NULL)
+        retval = py_cmn_callback(pycallback,clientnode,buf,nread);
+#else      
+      if(callback != NULL)
+        retval = (*callback)(clientnode,buf,nread);
+#endif
+      }
     else
       retval = SERVER_EXIT;  // key press or error
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press stop server...\n");
@@ -3639,6 +3744,7 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
                                 // wait_for_disconnect
     
   mesh_on();
+  gpar.serveractive = 0;
   
   return(1);
   }  
@@ -3653,7 +3759,16 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
   char *s;
   unsigned char buf[1024];
   struct devdata *dp;
-  
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif  
+    
+  if(gpar.serveractive != 0)
+    {
+    NPRINT "Cannot start a second server\n");
+    return(0);
+    }
+    
   if(clientnode == ANY_DEVICE)
     {
     ndevice = CL_SERV;
@@ -3716,7 +3831,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
         
         dp->conflag = CON_SERVER;  
         dp->linkflag &= KEY_FILE | KEY_NEW;
-        dp->linkflag |= keyflagx & (KEY_ON | PASSKEY_LOCAL | PASSKEY_REMOTE | PASSKEY_OFF);
+        dp->linkflag |= keyflagx & (KEY_ON | PASSKEY_LOCAL | PASSKEY_REMOTE);
                         
         retval = classicserverx(ndevice);
         flushprint();
@@ -3790,18 +3905,31 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
     return(0);
     }
     
+#ifdef BTFPYTHON
+  pycallback = py_callback;
+#endif  
+  gpar.serveractive = 1;    
+    
   NPRINT "Connected OK\n");
   NPRINT "Waiting for data from %s (x = stop server)\n",dp->name);
-
+  retval = SERVER_CONTINUE;
   do
     {
     nread = read_node_endchar(dp->node,buf,1024,endchar,EXIT_KEY,0);
     if(nread > 0)
-      retval = (*callback)(dp->node,buf,nread);
+      {
+#ifdef BTFPYTHON
+      if(pycallback != NULL)
+        retval = py_cmn_callback(pycallback,dp->node,buf,nread);
+#else      
+      if(callback != NULL)
+        retval = (*callback)(dp->node,buf,nread);
+#endif
+      }
     else
       retval = SERVER_EXIT;
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() == 0);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press - stopping server\n");
@@ -3815,7 +3943,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
   disconnect_node(dp->node);  // sever initiated here
                                 // client should be running
                                 // wait_for_disconnect
-      
+  gpar.serveractive = 0;    
   return(1);
   }  
 
@@ -4313,9 +4441,8 @@ int leconnect(int ndevice)
     leopen[PAKHEADSIZE+20] = 0;
     }
     
-  if(dev[ndevice]->type == BTYPE_ME)
-    mesh_on();
-
+  mesh_off();
+  
   VPRINT "SEND LE connect to %s\n",dp->name);
 
   dp->setdatlen = 20;
@@ -4335,14 +4462,13 @@ int leconnect(int ndevice)
     VPRINT "Handle = %02X%02X\n",dp->dhandle[1],dp->dhandle[0]);
 
     setlelen(ndevice,LEDATLEN,flag);    
-
-    // if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
+   
+      // if(dev[ndevice]->type != BTYPE_ME && gpar.leclientwait > 0)
     if(gpar.leclientwait > 0)
       readhci(0,0,0,gpar.leclientwait,0);  // server may request attributes
 
     popins();
-    flushprint();
-    //pair here      
+    flushprint(); 
     return(1);
     }      
   
@@ -4365,23 +4491,148 @@ int leconnect(int ndevice)
   }
 
 
-int lepair(int ndevice)
+int le_pair(int node,int flags,int passkey)
   {  
-  int n;
+  int n,ndevice;
+  struct devdata *dp;
+ 
+  ndevice = devnp(node);
+  if(ndevice < 0)
+    return(0);
+  dp = dev[ndevice];
   
-  sendhci(preq,ndevice); 
-  readhci(ndevice,IN_AUTOEND,0,5000,0);
-  n = findhci(IN_AUTOEND,ndevice,INS_POP);
-  if(n >= 0 && insdat[n] == AUTO_PAIROK)
-    NPRINT "PAIR OK\n");
+  if(ndevice != 0 && dp->conflag != CON_LE) 
+    {  // client
+    NPRINT "Pair %s - not connected as LE server\n",dp->name);
+    flushprint();
+    return(0);
+    }
+
+  dp->lepairflags = flags;
+  dp->lepasskey = 0;
+  if((flags & PASSKEY_FIXED) != 0)
+    {
+    if(passkey < 0 || passkey > 999999)
+      {
+      NPRINT "Invalid passkey 1-999999\n");
+      flushprint();
+      return(0);
+      }
+    dp->lepasskey = passkey;
+    }
+      
+  if(ndevice == 0)  // server
+    {
+    dp->lepairflags &= AUTHENTICATION_ON | PASSKEY_FIXED | JUST_WORKS;
+    if(dp->lepairflags != flags)
+      NPRINT "Server flag ignored in le_pair\n");
+    if((dp->lepairflags & PASSKEY_FIXED) != 0)
+      dp->lepasskey = passkey;
+    return(1);
+    }
+  
+  if((dp->lepairflags & BOND_REPAIR) != 0)
+    {
+    if((dp->linkflag & (PAIR_NEW | PAIR_FILE)) == 0)
+      {
+      NPRINT "No bond information - cannot re-pair\n");
+      flushprint();
+      return(0);
+      }
+    dp->lepairflags = BOND_REPAIR | PASSKEY_RANDOM | PASSKEY_REMOTE;    
+    lerepair[PAKHEADSIZE+14] = dp->divrand[0];
+    lerepair[PAKHEADSIZE+15] = dp->divrand[1];
+    for(n = 0 ; n < 8 ; ++n)
+      lerepair[PAKHEADSIZE+n+6] = dp->divrand[n+2];
+        
+    for(n = 0 ; n < 16 ; ++n)
+      lerepair[PAKHEADSIZE+n+16] = dp->linkey[n];  
+
+    sendhci(lerepair,ndevice);
+    }
   else
-    NPRINT "PAIR FAIL\n");
-     
+    {  
+    checkpairflags(&dp->lepairflags);
+    
+    preq[PAKHEADSIZE+10] = 3;  // No io - just works
+    preq[PAKHEADSIZE+12] = 0;  // no bond
+    preq[PAKHEADSIZE+15] = 1;  // link
+
+    if((dp->lepairflags & (PASSKEY_RANDOM | PASSKEY_FIXED | PASSKEY_LOCAL | PASSKEY_REMOTE)) != 0)
+      {
+      preq[PAKHEADSIZE+12] = 0x04;  // passkey     
+      preq[PAKHEADSIZE+10] = 0;     // D LOCAL
+      if((dp->lepairflags & PASSKEY_REMOTE) != 0)
+        preq[PAKHEADSIZE+10] = 4;  // D+K
+      }
+
+    if((dp->lepairflags & (BOND_NEW | BOND_REPAIR)) != 0)
+      preq[PAKHEADSIZE+12] |= 1; // bond 
+      
+    for(n = 0 ; n < 7 ; ++n)
+      dp->preq[n] = preq[n+PAKHEADSIZE+9];          
+
+    sendhci(preq,ndevice);
+    } 
+
+  readhci(ndevice,IN_AUTOEND,0,gpar.leclientwait,0);
+  n = findhci(IN_AUTOEND,ndevice,INS_POP);
   popins();
+
+  if(n >= 0 && insdat[n] == AUTO_PAIROK)
+    {
+    NPRINT "PAIR OK\n");
+    flushprint();
+    return(1);
+    }
+  NPRINT "PAIR FAIL\n");  
   flushprint();
-  return(1);
+  return(0);
   }
 
+void checkpairflags(int *flags)
+  {
+  int n;
+
+  if(*flags == 0)
+    {
+    *flags = JUST_WORKS;
+    return;
+    }
+      
+  if((*flags & JUST_WORKS) != 0)
+    {
+    *flags &= (JUST_WORKS | BOND_NEW | BOND_REPAIR);
+    return;
+    }
+         
+  if((*flags & (PASSKEY_RANDOM | PASSKEY_FIXED | PASSKEY_LOCAL | PASSKEY_REMOTE)) != 0)
+    {
+    n = PASSKEY_RANDOM | PASSKEY_FIXED;
+    if((*flags & n) == 0)
+      {
+      NPRINT "WARNING - No PASSKEY_ type\n");
+      *flags |= PASSKEY_RANDOM;
+      }
+    else if((*flags & n) == n)
+      {
+      NPRINT "WARNING - Two PASSKEY_ types\n");
+      *flags &= ~PASSKEY_FIXED;
+      }
+    
+    n = PASSKEY_LOCAL | PASSKEY_REMOTE;
+    if((*flags & n) == 0)
+      {
+      *flags |= PASSKEY_LOCAL;
+      NPRINT "WARNING - No PASSKEY_ device\n");
+      }
+    else if((*flags & n) == n)
+      {
+      NPRINT "WARNING - Two PASSKEY_ devices\n");
+      *flags &= ~PASSKEY_REMOTE;
+      }
+    }       
+  }
 
 int set_le_interval(int min,int max)
   {
@@ -4669,7 +4920,7 @@ void close_all()
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();    
+  // printins();   
   }  
   
   
@@ -4732,8 +4983,8 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
       return(0);
       }
 
-    if(count == 0 || count > cp->size || notflag != 0)
-      locsize = cp->size;  // known number of bytes in device info
+    if(count <= 0)
+      locsize = cp->origsize;  // devices.txt
     else
       locsize = count;
 
@@ -4744,12 +4995,14 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
       cp->notify = 1;  // and send existing value - not data[]
     else if(notflag == NOTIFY_DISABLE)
       cp->notify = 0;
-    else
+    else if(notflag == 0)
       {
       for(n = 0 ; n < locsize ; ++n)
         cp->value[n] = data[n];
-      } 
-
+      for(n = locsize ; n < LEDATLEN ; ++n)
+        cp->value[n] = 0;  // pad zero
+      cp->size = locsize;
+      }
   
     flag = 0;  
     for(devn = 1 ; cp->notify != 0 && devok(devn) != 0 ; ++devn)
@@ -4837,7 +5090,7 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     return(0);
     }
   
-  if(notflag == 0 && (cp->perm & 0x0C) == 0)
+  if(notflag == 0 && (cp->perm & 0x4C) == 0) 
     {
     if(cp->perm == 0)
       {
@@ -4861,15 +5114,15 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     return(0);
     }
     
-  if(cp->size == 0 && count == 0)
+  if(cp->origsize == 0 && count <= 0)
     {
     NPRINT "Must specify byte count\n");
     flushprint();
     return(0);
     }
     
-  if(count == 0)
-    locsize = cp->size;  // known number of bytes in device info
+  if(count <= 0)
+    locsize = cp->origsize;  // known number of bytes in device info
   else
     locsize = count;
     
@@ -4897,6 +5150,9 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
         VPRINT "Enable notify for handle %04X\n",chandle);
       data[0] = 1;  // enable
       cp->callback = callback;
+#ifdef BTFPYTHON
+      cp->pycallback = py_ncallback;
+#endif  
       } 
     else
       {
@@ -4906,6 +5162,9 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
         VPRINT "Disable notify for handle %04X\n",chandle);
       data[0] = 0;  // disable
       cp->callback = NULL;
+#ifdef BTFPYTHON
+      cp->pycallback = NULL;
+#endif  
       }
     data[1] = 0;
              
@@ -5023,12 +5282,18 @@ int read_ctic(int node,int cticn,unsigned char *data,int datlen)
   int n,k,k0,chandle,flag,retval,ndevice;
   unsigned char *cmd,*pack;
  
+  for(n = 0 ; n < datlen ; ++n)
+    data[n] = 0;
+
   gpar.readerror = ERROR_FATAL;
- 
+  
   ndevice = devnp(node);
   if(ndevice < 0)
     return(0);
-
+  cp = ctic(0,0);
+  chandle = 0;
+   
+    
   if(ndevice == 0)
     {  // local
     cp = ctic(0,cticn);
@@ -5217,7 +5482,8 @@ int sendhci(unsigned char *s,int ndevice)
     
   cmd = s + PAKHEADSIZE;   // skip over header bytes to command 
   len = s[0] + (s[1] << 8);        // length of cmd from header
-
+  dp = dev[0];
+  
   cmdflag = 0;
     
   // s[2/3] = flags to set info in cmd string
@@ -5416,6 +5682,8 @@ int sendhci(unsigned char *s,int ndevice)
       return(1);
     }  
     
+  if(gpar.hcidelay > 0)
+    usleep(gpar.hcidelay * 1000);
     
   ntogo = len;  // first header entry is length of cmd
   timstart = timems(TIM_LOCK);  
@@ -5430,7 +5698,7 @@ int sendhci(unsigned char *s,int ndevice)
       }   
     if(timems(TIM_RUN) - timstart > 5000)   // 5 sec timeout
       {
-      NPRINT "Send CMD timeout\n");
+      NPRINT "Send CMD timeout - may need to reboot\n");
       timems(TIM_FREE);
       return(0);
       }
@@ -5745,6 +6013,8 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   xflag = 0;
   xprintflag = 0;
   disflag = 0;
+  savtimendms = 0;
+  len = 0;
   
   do   
     {
@@ -5845,7 +6115,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
             if(xflag != 0)
               {
-              NPRINT "Missing extra data\n");
+              NPRINT "Missing extra data - add time delays\n");
               immediate(lookflag | locmustflag);
               }
               
@@ -6045,7 +6315,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         gpar.ledatlenflag = 1;  // data length change ok
         } 
        
-        // find sending devicen  
+      if(buf[1] == 0x0F && buf[3] == 0x0C)
+        NPRINT "Command %02X %02X not allowed by adapter\n",buf[5],buf[6]);
+   
+      // find sending devicen  
        
       if((n0 & 0x80) != 0)
         {  // handle at n0
@@ -6279,7 +6552,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         //firstpacket = 0;
         // add to existing stack entry
         if(xflag == 0 || dev[devicen]->xwantlen == 0)
-          NPRINT "Unexpected extra data\n");
+          NPRINT "Unexpected extra data - add time delays\n");
         else
           {
           datlen = buf[3] + (buf[4] << 8);  // length
@@ -6310,7 +6583,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         // firstpacket = 1;
         if(dev[devicen]->xwantlen > 0 && xflag > 0)
           {  
-          NPRINT "Missing extra data\n");
+          NPRINT "Missing extra data - add time delays\n");
           dev[devicen]->xwantlen = 0;
           dev[devicen]->nx = -1;
           --xflag;
@@ -6704,10 +6977,10 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
 void immediate(long long lookflag)
   {
-  int n,j,devicen,id,ch,psm,flag;
+  int n,j,devicen,id,ch,psm;
   int bn,getout,cticn,chandle;
   unsigned char *rsp,buf[16];
-  char sbuf[16];
+  char *dum,sbuf[16];
   long long int gotflag;
   struct devdata *dp;
   struct cticdata *cp;
@@ -6979,12 +7252,12 @@ void immediate(long long lookflag)
       }
     else if(gotflag == IN_IOCAPREQ)
       {
-      if((dp->linkflag & PASSKEY_OFF) != 0)
-        j = 3;   // no i/o 
+      if((dp->linkflag & PASSKEY_LOCAL) != 0)
+        j = 1;  // display y/n prints passkey here PASSKEY_LOCAL 
       else if((dp->linkflag & PASSKEY_REMOTE) != 0)
         j = 2;  // remote prints passkey - keyboard enter here 
       else
-        j = 1;  // display y/n prints passkey here PASSKEY_LOCAL 
+        j = 3;   // no i/o 
       
       iocapreply[PAKHEADSIZE+10] = (char)j;  // io cap
 
@@ -7006,9 +7279,11 @@ void immediate(long long lookflag)
         j = setkeymode(0);
         do
           {
-          fgets(dp->pincode,64,stdin);
+          dum = fgets(dp->pincode,64,stdin);
           }
         while(dp->pincode[0] == 10);
+        if(dum != NULL)
+          dum = NULL;
         setkeymode(j); 
         j = 0;
         while(j < 63 && dp->pincode[j] != 0 && dp->pincode[j] != 10)
@@ -7037,9 +7312,9 @@ void immediate(long long lookflag)
       j = setkeymode(0);
       do
         {
-        fgets(sbuf,16,stdin);
+        dum = fgets(sbuf,16,stdin);
         }
-      while(buf[0] == 10);
+      while(sbuf[0] == 10);
       setkeymode(j); 
 
       j = atoi(sbuf);
@@ -7102,8 +7377,13 @@ void immediate(long long lookflag)
         for(j = 0 ; j < bn ; ++j)
           VPRINT " %02X",insdat[n+3+j]);
         VPRINT "\n");
+#ifdef BTFPYTHON
+        if(cp->pycallback != NULL)
+          py_notify_callback(cp->pycallback,dp->node,cticn,insdat+n+3,bn);
+#else  
         if(cp->callback != NULL)
           (*cp->callback)(dp->node,cticn,insdat+n+3,bn);
+#endif
         }
       }
     else if(gotflag == IN_PARAMREQ)
@@ -7142,35 +7422,92 @@ void immediate(long long lookflag)
      if(insdat[n] == 1)
        {
        VPRINT "GOT pair request - SEND response\n");
-       // save preq for confirm calc
-       for(j = 0 ; j < 7 ; ++j)
-         sp->pair[j] = insdat[n+j];   // request
-       if((insdat[n+3] & 1) == 0)
-         pres[PAKHEADSIZE+12] = 0;
-       else
-         pres[PAKHEADSIZE+12] = 1;  // bond
+       pres[PAKHEADSIZE+10] = 3;  // no inout JustWorks      
+       pres[PAKHEADSIZE+12] = 0;  // no passkey/bond
+       pres[PAKHEADSIZE+15] = 0;  // no link key
+         
+       if(insdat[n+1] == 4)
+         pres[PAKHEADSIZE+10] = 0;  // d      
+       else if(insdat[n+1] == 0)
+         pres[PAKHEADSIZE+10] = 4;  // k+d      
+       
+       if((insdat[n+3] & 1) != 0)
+         pres[PAKHEADSIZE+12] = 1;   // bond
+
+       if((insdat[n+3] & 4) != 0)
+         pres[PAKHEADSIZE+12] |= 4;  // passkey
+         
+       if((insdat[n+6] & 1) != 0)
+         pres[PAKHEADSIZE+15] = 1;   // link
+
+       if((rp->lepairflags & JUST_WORKS) != 0)
+         {    
+         pres[PAKHEADSIZE+10] = 3;   // no io                    
+         pres[PAKHEADSIZE+12] &= 1;  // nix passkey
+         }                    
+         
        sendhci(pres,devicen);
-       if((gpar.hidflag & 3) == 2)
+       
+       // save for confirm calc
+       for(j = 0 ; j < 7 ; ++j)
          {
-         buf[0] = AUTO_PAIRREQ;
-         pushins(IN_AUTOEND,devicen,1,buf);
+         sp->preq[j] = insdat[n+j];   // request
+         sp->pres[j] = pres[j+PAKHEADSIZE+9];      
          }
+  
+       if((rp->lepairflags & JUST_WORKS) != 0)
+         rp->lepasskey = 0;
+       else if((sp->preq[3] & 4) != 0 && sp->preq[1] == 4 && (rp->lepairflags & PASSKEY_FIXED) == 0)
+         {
+         key[0] = rand() & 0xFF;
+         key[1] = rand() & 0xFF;
+         key[2] = rand() & 0x0F;
+         if(key[2] == 0x0F)
+           key[2] = 0x0E;
+         rp->lepasskey = (key[2] << 16) + (key[1] << 8) + key[0];
+         flushprint();
+         printf("Passkey = %06d\n",rp->lepasskey);
+         }
+       sp->cryptoflag = 1;
        }          
      else if(insdat[n] == 3)
        {
        VPRINT "GOT I confirm - SEND R confirm\n");
-       //iat = ip->leaddtype & 1;
-       //rat = rp->leaddtype & 1;
+       
+       if((sp->preq[3] & 4) != 0 && sp->preq[1] != 4)
+         {
+         if(sp->preq[1] != 0)
+            NPRINT "WARNING - Expected client to have a DisplayOnly agent\n");
+         flushprint();
+         printf("Input passkey: ");
+         j = setkeymode(0);
+         do
+           {
+           dum = fgets(sbuf,16,stdin);
+           }
+         while(sbuf[0] == 10);
+         setkeymode(j); 
+         rp->lepasskey = atoi(sbuf);
+         }
+
        for(j = 0 ; j < 16 ; ++j)
          {
          sp->confirm[j] = insdat[n+j+1];  // I confirm
          key[j] = 0;   // Just Works
          }    
-       
+
+       if((sp->preq[3] & 4) != 0)
+         {
+         j = rp->lepasskey;          
+         key[0] = j & 0xFF;
+         key[1] = (j >> 8) & 0xFF;
+         key[2] = (j >> 16) & 0xFF;
+         }
+               
        for(j = 0 ; j < 16 ; ++j)
          sp->rrand[j] = rand() & 0xFF;
                                   
-       calcc1(key,sp->rrand,sp->pair,pres+PAKHEADSIZE+9,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
+       calcc1(key,sp->rrand,sp->preq,sp->pres,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
        sendhci(confirm,devicen);
        }
      else if(insdat[n] == 4)
@@ -7181,30 +7518,44 @@ void immediate(long long lookflag)
          sp->irand[j] = insdat[n+j+1];
          key[j] = 0;   // Just Works 
          }
-       calcc1(key,sp->irand,sp->pair,pres+PAKHEADSIZE+9,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,out);
+
+       if((sp->preq[3] & 4) != 0)
+         {
+         j = rp->lepasskey;          
+         key[0] = j & 0xFF;
+         key[1] = (j >> 8) & 0xFF;
+         key[2] = (j >> 16) & 0xFF;
+         }
+               
+       calcc1(key,sp->irand,sp->preq,sp->pres,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,out);
        getout = 0;
        for(j = 0 ; j < 16 && getout == 0 ; ++j)
          {
          if(sp->confirm[j] != out[j])
            getout = 1;
          }
-       if(getout == 0)
+         
+       if(getout == 0)   
          {
          VPRINT "I confirm OK\n");
          sp->cryptoflag = 1;
+         VPRINT "SEND R random\n");
+         for(j = 0 ; j < 16 ; ++j)
+           sendrand[j+PAKHEADSIZE+10] = sp->rrand[j];         
+         sendhci(sendrand,devicen);
          }
        else
-         VPRINT "I confirm fail\n");
-         
-       VPRINT "SEND R random\n");
-       for(j = 0 ; j < 16 ; ++j)
-         sendrand[j+PAKHEADSIZE+10] = sp->rrand[j];         
-       sendhci(sendrand,devicen);
+         {
+         NPRINT "PAIR confirm fail\n");
+         sendhci(confail,devicen);
+         }  
+      
        }
      else if(insdat[n] == 0xFF)
-       {     
+       {
        if(sp->cryptoflag == 0)
          {
+         VPRINT "Client re-pairing with bond info\n");      
          // LEkey available? index=[n+3] forward address
          if((sp->linkflag & (KEY_NEW | KEY_FILE)) == KEY_FILE &&
                 bincmp(sp->baddr,insdat+n+3,6,DIRN_FOR) == 0)
@@ -7218,28 +7569,36 @@ void immediate(long long lookflag)
            }
          if((sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
            {
-           NPRINT "KEY fail - On client: Unpair/Remove, Bluetooth off/on and retry\n");       
+           NPRINT "PAIR fail - No bond info\n");       
            sendhci(negkey,devicen);
            }
          else
            {
+           sp->divrand[0] = insdat[n+11]; // ediv 0=was jw 1=was pk
            for(j = 0 ; j < 16 ; ++j)
              sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
            VPRINT "SEND key\n");
            sendhci(sendkey,devicen);
-           }        
-          // bincmp(sp->baddr,insdat+n+3,6,DIRN_FOR) = add/random id match 
+           }
          }
-       else if(sp->cryptoflag == 1)
+       else 
          {
          VPRINT "STK encrypt\n");
          for(j = 0 ; j < 16 ; ++j)
            key[j] = 0;
+  
+         if((sp->preq[3] & 4) != 0)
+           {
+           j = rp->lepasskey;          
+           key[0] = j & 0xFF;
+           key[1] = (j >> 8) & 0xFF;
+           key[2] = (j >> 16) & 0xFF;
+           }
+                    
          calcs1(key,sp->rrand,sp->irand,sp->linkey);
          for(j = 0 ; j < 16 ; ++j)
            sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
          sendhci(sendkey,devicen);
-         sp->linkflag |= KEY_NEW;  // saves LEkey 
          }
        }
      else if(insdat[n] == 0xFE)
@@ -7247,34 +7606,69 @@ void immediate(long long lookflag)
        if(sp->cryptoflag == 0)
          { // reconnect
          VPRINT "Reconnect using LTK\n");
-         flag = 0;
          for(j = 0 ; ctic(0,j)->type == CTIC_ACTIVE ; ++j)
-           {
+           {   // HID Reports re-enable notify 
            cp = ctic(0,j);
            if(cp->uuidtype == 2 && (cp->perm & 0x30) != 0 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
-             {
-             cp->notify = 1;
-             if(flag == 0 && (gpar.hidflag & 1) != 0)
-               {
-               flag = 1;
-               buf[0] = AUTO_NOTIFY;
-               pushins(IN_AUTOEND,devicen,1,buf);
-               }
-             }
+              cp->notify = 1;
+           }
+         if((gpar.hidflag & 1) != 0)
+           {  
+           sp->cryptoflag = 3;    
+           buf[0] = AUTO_PAIROK; 
+           pushins(IN_AUTOEND,devicen,1,buf);
+           }
+         else
+           {
+           if(sp->divrand[0] == 1)
+             sp->cryptoflag = 3;  
+           else 
+             sp->cryptoflag = 2;
            }
          }
        else
          {
          VPRINT "LTK encrypt\n");
-   
+        
          for(j = 0 ; j < 16 ; ++j)
+           {
+           sp->linkey[j] = rand() & 0xFF;
+           if(j == 15 && sp->linkey[15] == 0)
+             sp->linkey[15] = 0xA5;  // avoid devrand signature
            sendltk[j+PAKHEADSIZE+10] = sp->linkey[j];
+           }
+                             
          for(j = 0 ; j < 6 ; ++j)
-           sendci[j+PAKHEADSIZE+12] = sp->baddr[j];  // random id = address
-              
+           sendci[j+PAKHEADSIZE+12] = sp->baddr[j];  // devrand
+    
+         if((sp->preq[3] & 4) == 0)
+           sendci[PAKHEADSIZE+10] = 0;  // ediv jw
+         else
+           sendci[PAKHEADSIZE+10] = 1;  // pk can auth on repair
+                       
+           
+         if((sp->preq[3] & 1) != 0)  // bond
+           {
+           if((sp->preq[3] & 4) == 0 && (rp->lepairflags & AUTHENTICATION_ON) != 0)
+             NPRINT "Must bond AUTHENTICATION_ON server with passkey\n");
+           else
+             sp->linkflag |= KEY_NEW;  // bond req saves LEkey 
+           }                           
          sendhci(sendltk,devicen);
          sendhci(sendci,devicen);
-         }  
+                   
+         if((gpar.hidflag & 1) != 0)
+           sp->cryptoflag = 7;   // auth + delay AUTO_PAIROK to notify enable in leserver
+         else
+           {
+           if((sp->preq[3] & 4) != 0)  // passkey for auth
+             sp->cryptoflag = 3;
+           else
+             sp->cryptoflag = 2;
+           }
+         }
+       if((gpar.hidflag & 1) == 0)
+         NPRINT "PAIR OK\n");
        // AUTO_PAIROK    
        }
      else if(insdat[n] == 0xFD || insdat[n] == 5)
@@ -7286,10 +7680,13 @@ void immediate(long long lookflag)
          j = insdat[n+3];
          if(j > 69)
            j = 0;  // no error0f text
-         NPRINT "FAIL %s\n",error0f[j]);
-         // j 0x3D MIC fail
+         NPRINT "PAIR FAIL %s\n",error0f[j]);
          }
-       // AUTO_PAIRFAIL
+       if((gpar.hidflag & 1) != 0)
+         {  
+         buf[0] = AUTO_PAIRFAIL; 
+         pushins(IN_AUTOEND,devicen,1,buf);
+         }
        }
      }
     else if(gotflag == IN_CRYPTO && (dev[devicen]->conflag & CON_LX) == 0)
@@ -7307,15 +7704,60 @@ void immediate(long long lookflag)
        VPRINT "GOT pair response - SEND I confirm\n");
        // save for confirm calc
        for(j = 0 ; j < 7 ; ++j)
-         sp->pair[j] = insdat[n+j];  // response 
-                           
+         sp->pres[j] = insdat[n+j];  // response 
+         
+       if((sp->lepairflags & BOND_NEW) != 0 && (sp->pres[3] & 3) == 0)                  
+         NPRINT "Bonding refused\n");
+    
        for(j = 0 ; j < 16 ; ++j)
          sp->irand[j] = rand() & 0xFF;
 
        for(j = 0 ; j < 16 ; ++j)
          key[j] = 0;   // Just Works
 
-       calcc1(key,sp->irand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
+       if((sp->lepairflags & PASSKEY_RANDOM) != 0)
+         {
+         if(sp->pres[1] == 3)
+           {
+           NPRINT "Server wants Just Works\n");
+           sp->lepasskey = 0;  // server wants just works
+           }
+         else if((sp->lepairflags & PASSKEY_REMOTE) != 0)
+           { // passkey displayed on server
+           if(sp->pres[1] != 0)
+             NPRINT "WARNING - Expected server to have a DisplayOnly agent\n");
+           flushprint();
+           printf("Input passkey: ");
+           j = setkeymode(0);
+           do
+             {
+             dum = fgets(sbuf,16,stdin);
+             }
+           while(sbuf[0] == 10);
+           setkeymode(j); 
+           sp->lepasskey = atoi(sbuf);
+           }
+         else if((sp->lepairflags & PASSKEY_LOCAL) != 0)
+           {
+           if(sp->pres[1] != 4)
+             NPRINT "WARNING - Expected server to have KeyboardDisplay agent\n");
+           key[0] = rand() & 0xFF;
+           key[1] = rand() & 0xFF;
+           key[2] = rand() & 0x0F;
+           if(key[2] == 0x0F)
+             key[2] = 0x0E;
+           sp->lepasskey = (key[2] << 16) + (key[1] << 8) + key[0];
+           flushprint();
+           printf("Passkey = %06d\n",sp->lepasskey);
+           }
+         }
+       
+       j = sp->lepasskey;          
+       key[0] = j & 0xFF;
+       key[1] = (j >> 8) & 0xFF;
+       key[2] = (j >> 16) & 0xFF;    
+    
+       calcc1(key,sp->irand,sp->preq,sp->pres,0,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
        sendhci(confirm,devicen);
        }
      else if(insdat[n] == 3)
@@ -7337,7 +7779,13 @@ void immediate(long long lookflag)
          sp->rrand[j] = insdat[n+j+1];
          key[j] = 0;   // Just Works 
          }
-       calcc1(key,sp->rrand,preq+PAKHEADSIZE+9,sp->pair,0,rp->leaddtype & 1,ia,ra,out);
+         
+       j = sp->lepasskey;          
+       key[0] = j & 0xFF;
+       key[1] = (j >> 8) & 0xFF;
+       key[2] = (j >> 16) & 0xFF;    
+         
+       calcc1(key,sp->rrand,sp->preq,sp->pres,0,rp->leaddtype & 1,ia,ra,out);
        getout = 0;
        for(j = 0 ; j < 16 && getout == 0 ; ++j)
          {
@@ -7348,33 +7796,57 @@ void immediate(long long lookflag)
          {
          VPRINT "R confirm OK\n");
          sp->cryptoflag = 1;
+         VPRINT "SEND LTK encrypt\n");
+         calcs1(key,sp->rrand,sp->irand,sp->linkey);
+         for(j = 0 ; j < 16 ; ++j)
+           ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
+         sendhci(ltkcrypt,devicen);
          }
        else
-         VPRINT "I confirm fail\n");
-         
-       VPRINT "SEND LTK encrypt\n");
-       calcs1(key,sp->rrand,sp->irand,sp->linkey);
-       for(j = 0 ; j < 16 ; ++j)
          {
-         key[j] = 0;   // Just Works 
-         ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
-         }
-       sendhci(ltkcrypt,devicen);
+         NPRINT "PAIR confirm fail\n");
+         sendhci(confail,devicen);
+         buf[0] = AUTO_PAIRFAIL;
+         pushins(IN_AUTOEND,devicen,1,buf);
+         }         
        }
-     else if(sp->cryptoflag != 2 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
+     else if(sp->cryptoflag < 2 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
        {
        VPRINT "PAIR OK\n");
        buf[0] = AUTO_PAIROK;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag = 2;
        }
-     else if(sp->cryptoflag != 2 && (insdat[n] == 5 || insdat[n] == 0xFD))
+     else if(sp->cryptoflag < 2 && (insdat[n] == 5 || insdat[n] == 0xFD))
        {
-       VPRINT "PAIR FAIL\n");  // codes V3 pH 3.5.5
+       if(insdat[n] == 5)
+         NPRINT "PAIR FAIL code %02X\n",insdat[n+1]);  // codes V3 pH 3.5.5 
+       else
+         {   
+         j = insdat[n+3];
+         if(j > 69)
+           j = 0;  // no error0f text
+         NPRINT "PAIR FAIL %s\n",error0f[j]);
+         }
        buf[0] = AUTO_PAIRFAIL;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag = 2;
        }
+       
+     if(insdat[n] == 7)
+       {
+       for(j = 0 ; j < 10 ; ++j)
+         sp->divrand[j] = insdat[n+j+1];
+       if((sp->lepairflags & BOND_NEW) != 0)
+         sp->linkflag |= PAIR_NEW;
+       }  
+     if(insdat[n] == 6)
+       {
+       for(j = 0 ; j < 16 ; ++j)
+         sp->linkey[j] = insdat[n+j+1];
+       if((sp->lepairflags & BOND_NEW) != 0)
+         sp->linkflag |= KEY_NEW;  // saves LEkey 
+       }  
      }  
     else 
       VPRINT "Unrecognised immediate\n");
@@ -7389,26 +7861,12 @@ void immediate(long long lookflag)
 
 
 
-/******* LE SERVER ************
-
-handles 1-3
-opcode 05/09/11 packet data returned in reply to reuqest opcodes 04/08/10
-eog = end of group handle inserted in 11 reply as 4th/5th bytes
-
-handle  opcode 05 reply     opcode 09/11 reply  (first byte = number of following bytes)            
-0001    01 01 00 00 28      04 01 00 00 18        empty service UUID=2800  valueUUID=1800 Generic Access  eog = 0001
-0002    01 02 00 00 28      04 02 00 01 18        empty service UUID=2800  valueUUID=1801 Generic Attribute  eog = 0002
-0003    01 03 00 00 28      12 03 00 FF...11      private characteristic services UUID=2800 eog = FFFF
-                                                  value UUID = 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF FF              
-handles 0004...  characteristics
-
-***********************/
-
+/******* LE SERVER ************/
 
 void leserver(int ndevice,int count,unsigned char *dat)
   {
   int n,dn,cticn,flag,notflag,handle,start,end,startx,psflag,eog;
-  int size,uuidtype,aflag,xflag,acticn,ahandle,psn,locsize,datcount;
+  int size,uuidtype,aflag,xflag,acticn,ahandle,psn,datcount;
   unsigned char cmd[2],*s,*data,errcode,buf[32];
   struct cticdata *cp;
 
@@ -7424,10 +7882,26 @@ void leserver(int ndevice,int count,unsigned char *dat)
   acticn = 0;
   ahandle = 0;
   xflag = 0;   // stop error
+  uuidtype = 0;
+  size = 0;
   // node = dev[0]->node;
   
   if(dat[0] == 0x52 || dat[0] == 0x12 || dat[0] == 0x0A)
     {  // read/write
+    if((dev[0]->lepairflags & AUTHENTICATION_ON) != 0 &&
+            (dev[ndevice]->cryptoflag & 3) != 3) 
+      {
+      lefail[PAKHEADSIZE+10] = dat[0];  // operation
+      lefail[PAKHEADSIZE+11] = dat[1];
+      lefail[PAKHEADSIZE+12] = dat[2];
+      lefail[PAKHEADSIZE+13] = 5;
+      NPRINT "No Authentication - must pair with passkey\n"); 
+      sendhci(lefail,ndevice);
+      flushprint();
+      return;
+      }
+
+
     xflag = 1;   // stop opcode not supported
     flag = 0;      
     handle = dat[1] + (dat[2] << 8);
@@ -7501,17 +7975,15 @@ void leserver(int ndevice,int count,unsigned char *dat)
               datcount = count-3;
               data = dat+3;
               
-              if(datcount == 0 || datcount > cp->size)
-                locsize = cp->size;  // known number of bytes in device info
-              else
-                locsize = datcount;
-
-              if(locsize > LEDATLEN)
-                locsize = LEDATLEN;
+              if(datcount > LEDATLEN)
+                datcount = LEDATLEN;
   
-              for(n = 0 ; n < locsize ; ++n)
-                cp->value[n] = data[n];              
-                
+              for(n = 0 ; n < datcount ; ++n)
+                cp->value[n] = data[n];
+              for(n = datcount ; n < LEDATLEN ; ++n)
+                cp->value[n] = 0;
+                                
+              cp->size = datcount;  
               if(dat[0] == 0x12)
                 {  // no check cp->perm & 8 write with ack
                 VPRINT "Send acknowledgement\n");
@@ -7530,10 +8002,11 @@ void leserver(int ndevice,int count,unsigned char *dat)
             else
               {
               VPRINT "%s notify enable\n",cp->name);
-              if((gpar.hidflag & 1) != 0 && cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
+              if((dev[ndevice]->cryptoflag & 4) != 0 && cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
                 {
-                buf[0] = AUTO_NOTIFY;
+                buf[0] = AUTO_PAIROK;
                 pushins(IN_AUTOEND,ndevice,1,buf);
+                dev[ndevice]->cryptoflag &= 3;
                 }
               } 
             if(dat[0] == 0x12)
@@ -7930,17 +8403,26 @@ void leserver(int ndevice,int count,unsigned char *dat)
               }
             else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
               {   // value
-              size = cp->size;
-              if(dn != 0)
-                {  // insert end of group handle  
-                s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
-                s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+              if((dev[0]->lepairflags & AUTHENTICATION_ON) != 0 &&
+                                    (dev[ndevice]->cryptoflag & 3) != 3) 
+                {
+                errcode = 5;  // No Authentication
+                flag = 2;
                 }
-              if(size > LEDATLEN)
-                size = LEDATLEN;
-              for(n = 0 ; n < size ; ++n)
-                s[13+n+dn] = cp->value[n];
-              flag = 1; 
+              else
+                {
+                size = cp->size;
+                if(dn != 0)
+                  {  // insert end of group handle  
+                  s[13] = pserv[cp->psnx & 0xFFFF].eog & 0xFF;
+                  s[14] = (pserv[cp->psnx & 0xFFFF].eog >> 8) & 0xFF;
+                  }
+                if(size > LEDATLEN)
+                  size = LEDATLEN;
+                for(n = 0 ; n < size ; ++n)
+                  s[13+n+dn] = cp->value[n];
+                flag = 1; 
+                }
               }
             }            
           startx = handle + 1;
@@ -7955,7 +8437,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
       VPRINT "Attribute/UUID not found\n");
       errcode = 0x0A; // att not found
       }
-    else
+    else if(flag == 1)
       {
       if(aflag != 0)
         {
@@ -8034,7 +8516,8 @@ int nextctichandle(int start,int end,int *handle,int flag)
   {
   int n,cticn,minhandle,del,del0,notdel,minpshand,pshand,psn;
   struct cticdata *cp;
-  
+
+  psn = 0;  
   minpshand = 0;
   for(n = 0 ; minpshand == 0 && pserv[n].handle > 0 && n < 32 ; ++n)
     {
@@ -8108,36 +8591,17 @@ int stuuid(unsigned char *s)
   
 void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   {
-  int n,k,j,i,addcount,flag;
+  int n,k,i,j,addcount,flag;
   unsigned char *badd,*key;
   struct devdata *dp;
   FILE *stream;
-  static char fname[256]; 
+  static char *fname = "/etc/btferret.dat";
   static int count = -1;
   static int delflag = 0;
-  static unsigned char *table;
-
-  if(count < 0)
-    {  // first read
-    if(rwflag != 0)
-      return; 
-    n = readlink("/proc/self/exe",fname,256);
-    flag = 0;
-    if(n > 2)
-      {    
-      --n; 
-      while(n > 0 && fname[n] != '/')
-        --n;
-      if(n >= 0 && fname[n] == '/')
-        {
-        fname[n+1] = 0;
-        flag = 1;
-        }
-      }
-    if(flag == 0)
-      fname[0] = 0;
-    strcat(fname,"link.key");  
-    }
+  static int writeflag = 0;
+  static unsigned char zero[6] = {0,0,0,0,0,0};
+  static unsigned char *table = NULL; 
+  
         
   if(rwflag == 0)
     {
@@ -8147,30 +8611,33 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       
     if(count < 0)
       {
-      count = 0;
+      count = 0;  // in file
       stream = fopen(fname,"rb");
       if(stream == NULL)
         return;
  
       n = 0;
       count = fgetc(stream);
-      k = count*22;
-      table = (unsigned char *)malloc(k);
-
-      if(table == NULL)
-        n = 1;
-      else if(fread(table,1,k,stream) != (unsigned int)k)
-        n = 1;
-
-      fclose(stream);
-      if(n != 0)
+      
+      if(count != 0 && count != 0xFF)
         {
-        NPRINT "Read link.key file failed\n");
+        k = count*22;
+        table = (unsigned char *)malloc(k);
+
+        if(table != NULL && fread(table,1,k,stream) == (unsigned int)k)
+          n = 1;
+        }
+             
+      fclose(stream);
+      if(n == 0)
+        {
+        count = 0;
+        NPRINT "Read key data failed\n");
         return;
         }
       }
      
-    for(k = 0 ; k < count ; ++k)
+    for(k = 0 ; k < count && table != NULL ; ++k)
       {
       badd = table + k*22;
       key = badd+6;
@@ -8185,11 +8652,18 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       if( (ndevice == 0 && n > 0) || (ndevice > 0 && n == ndevice) )
         {  // all on init (ndevice=0)  or ndevice only
         dp = dev[n];
-        for(n = 0 ; n < 16 ; ++n)
-          dp->linkey[n] = key[n];
-        dp->linkflag |= KEY_FILE;
-        if(ndevice > 0)
-          return;  // found        
+        if((dp->linkflag & KEY_FILE) != 0 && bincmp(zero,key+10,6,DIRN_FOR) != 0)
+          {
+          for(n = 0 ; n < 10 ; ++n)
+            dp->divrand[n] = key[n];
+          dp->linkflag |= PAIR_FILE;
+          }
+        else
+          {          
+          for(n = 0 ; n < 16 ; ++n)
+            dp->linkey[n] = key[n];
+          dp->linkflag |= KEY_FILE;
+          }     
         }
       }
   
@@ -8197,8 +8671,14 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   else if(rwflag == 1)
     {  // write   
     // update table
+    if(writeflag != 0)
+      {
+      NPRINT "WARNING 2nd close\n");
+      return;
+      }
+    writeflag = 1;
     flag = 0;  // no changes to table
-    if(count > 0 && delflag == 0) 
+    if(count > 0 && table != NULL && delflag == 0) 
       {
       for(k = 0 ; k < count ; ++k)
         {
@@ -8208,7 +8688,17 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         if(n > 0)
           { 
           dp = dev[n];
-          if((dp->linkflag & KEY_NEW) != 0)
+          if(bincmp(zero,key+10,6,DIRN_FOR) != 0)
+            {   
+            if((dp->linkflag & PAIR_NEW) != 0)
+              {
+              for(n = 0 ; n < 16 ; ++n)
+                key[n] = dp->divrand[n];
+              dp->linkflag &= ~PAIR_NEW;
+              }
+            flag = 1;
+            }
+          else if((dp->linkflag & KEY_NEW) != 0)
             {   // must be KEY_FILE also
             for(n = 0 ; n < 16 ; ++n)
               key[n] = dp->linkey[n];
@@ -8223,23 +8713,25 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     addcount = 0;    
     for(n = 1 ; devok(n) != 0 ; ++n)
       {
-      if((dev[n]->linkflag & KEY_NEW) != 0)   // && dev[n]->type == BTYPE_CL) != 0)
+      if((dev[n]->linkflag & KEY_NEW) != 0) 
+        ++addcount;
+      if((dev[n]->linkflag & PAIR_NEW) != 0)
         ++addcount;
       }
  
     if(flag == 0 && delflag == 0 && addcount == 0)   
       return;   // no changes
       
-    if(count + addcount > 63)
+    if(count + addcount > 100)
       {
-      NPRINT "link.key file of paired devices is large\n");  
+      NPRINT "/etc/btferret.dat file of paired devices is large\n");  
       NPRINT "Recommendation: delete it and re-pair devices\n");
       }
       
-    if(count + addcount > 255)
+    if(count + addcount > 254)
       {
-      NPRINT "Too many link keys - delete link.key file\n");
-      NPRINT "to reset and then re-pair devices\n");
+      NPRINT "Too many paired devices - delete /etc/btferret.dat\n");
+      NPRINT "file to reset and then re-pair devices\n");
       return;
       }
 
@@ -8254,16 +8746,24 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     for(n = 1 ; k < addcount && devok(n) != 0 ; ++n)
       {
       dp = dev[n];
-      if((dp->linkflag & KEY_NEW) != 0)   // && dev[n]->type == BTYPE_CL)
+      if((dp->linkflag & KEY_NEW) != 0)  
         {
         fwrite(dp->baddr,1,6,stream);
         fwrite(dp->linkey,1,16,stream);
+        dp->linkflag &= ~KEY_NEW;
+        ++k;
+        }
+      if((dp->linkflag & PAIR_NEW) != 0) 
+        {
+        fwrite(dp->baddr,1,6,stream);
+        fwrite(dp->divrand,1,16,stream);
+        dp->linkflag &= ~PAIR_NEW;
         ++k;
         }
       }
     fclose(stream);
     }
-  else if(rwflag == 2 && count > 0 && ndevice > 0)
+  else if(rwflag == 2 && count > 0 && table != NULL && ndevice > 0)
     {  // delete
     flag = 0;
     for(k = 0 ; k < count && flag == 0 ; ++k)
@@ -8287,18 +8787,16 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     } 
   else if(rwflag == 3 && count > 0) 
     {
-    NPRINT "%s\n",fname);
-    for(k = 0 ; k < count ; ++k)
+    for(k = 0 ; k < count && table != NULL ; ++k)
       {
       badd = table + k*22;
       n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);
-      i = 0;
       if(n >= 0)
-        {
         NPRINT "%s =",dev[n]->name);
-        i = 6;
-        }
-      for(j = i ; j < 22 ; ++j)
+      else
+        NPRINT "Unknown ="); 
+      
+      for(j = 0 ; j < 22 ; ++j)
         {
         NPRINT " %02X",badd[j]);
         if(j == 5)
@@ -8508,7 +9006,8 @@ int addins(int nx,int len,unsigned char *s)
 
   oldlen = instack[nx+1] + (instack[nx+2] << 8);
   newlen = oldlen + len;
-    
+  
+  xn = 0;  
   k = 0;
   while(instack[k] != INS_FREE)
     {
@@ -8704,6 +9203,7 @@ void printins()
     ++count;
     flushprint();
     }
+  rwlinkey(3,0,NULL);
   }
 
 
@@ -8802,8 +9302,7 @@ int hcisock()
   statusok(0,setcto);
   sendhci(setpto,0);  // page timeout = 10 sec
   statusok(0,setpto);
-  sendhci(lesuggest,0);
-  statusok(0,lesuggest);    
+    
   VPRINT "HCI Socket OK\n");
   flushprint();
   return(1);
@@ -9259,16 +9758,14 @@ int clconnectxx(int ndevice)
     
   dp = dev[ndevice];
   dp->setdatlen = 20;     
-  dp->linkflag &= KEY_NEW | KEY_FILE;  // clear KEY_  PASSKEY_ 
+  dp->linkflag &= KEY_NEW | KEY_FILE;  // all off KEY_OFF  PASSKEY_OFF 
   if(dp->type == BTYPE_CL)
     {
-    if((dp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
-      dp->linkflag |= KEY_OFF | PASSKEY_LOCAL; 
-    else
-      dp->linkflag |= KEY_ON | PASSKEY_LOCAL;
+    dp->linkflag |= PASSKEY_LOCAL;
+    if((dp->linkflag & (KEY_NEW | KEY_FILE)) != 0)
+      dp->linkflag |= KEY_ON;
     } 
-  else  // mesh pi
-    dp->linkflag |= KEY_OFF | PASSKEY_OFF;
+  // else mesh pi  KEY_OFF PASSKEY_OFF  
          
   VPRINT "Open classic connection to %s\n",baddstr(dp->baddr,0));
       
@@ -9343,7 +9840,7 @@ int clconnectxx(int ndevice)
  
    
   VPRINT "SEND encrypt\n");    
-  sendhci(encrypt,ndevice);
+  sendhci(encryptx,ndevice);
   readhci(ndevice,IN_ENCR,0,gpar.timout,gpar.toshort);
   if(findhci(IN_ENCR,ndevice,INS_POP) < 0)
     {
@@ -10272,7 +10769,7 @@ int printctics0(int devicen,int flags)
     if(  (flags & (CTIC_R | CTIC_W | CTIC_NOTIFY)) == 0 || (perm == 0 && (flags & CTIC_NOTIFY) == 0) ||
          ( (flags & CTIC_NOTIFY) != 0 && (perm & 0x30) != 0) ||
          ( (flags & CTIC_R)   != 0 && (perm & 0x02) != 0) ||
-         ( (flags & CTIC_W)   != 0 && (perm & 0x0C) != 0)  ) 
+         ( (flags & CTIC_W)   != 0 && (perm & 0x4C) != 0)  ) 
       {
       vn[count] = n;   // save index of valid entry
       if(count < 2047)
@@ -10902,6 +11399,7 @@ int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,in
   loclevel = sdpp->level;
   locaidflag = 0;  // set 1 if this is aid level
   aidflip = 0;     // aid/value alternate
+  uuid = 0;
   
   loop = 0;
   s = sin;
@@ -11591,6 +12089,9 @@ int readserial(int *node,unsigned char *inbuff,int count,char endchar,int flag,i
   {
   int n,nread,meshcon,clcon,onedevn,ndevice,oldkm;
 
+  for(n = 0 ; n < count ; ++n)
+    inbuff[n] = 0;
+    
   gpar.readerror = ERROR_FATAL;  // fatal error
 
   if( (flag & (EXIT_TIMEOUT | EXIT_KEY)) == 0  || count == 0)
@@ -12003,7 +12504,7 @@ int output_file(char *filename)
   
 void flushprint()
   {
-  int n;
+  int n,dum;
 
   if(gpar.prtp == gpar.prtp0)
     return;   // nothing added since last flush
@@ -12017,14 +12518,14 @@ void flushprint()
     {      
     if(gpar.prtp > gpar.prtp0)  // does not wrap  
       {
-      write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtp - gpar.prtp0);
+      dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtp - gpar.prtp0);
       n = gpar.prtp - gpar.prtp0;
       }
     else if(gpar.prtw > gpar.prtp0) // should be anyway 
       {
-      write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtw - gpar.prtp0);
+      dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtw - gpar.prtp0);
       n = gpar.prtw - gpar.prtp0;
-      write(STDOUT_FILENO,gpar.s,gpar.prtp);
+      dum = write(STDOUT_FILENO,gpar.s,gpar.prtp);
       n += gpar.prtp;
       }
     }
@@ -12062,12 +12563,13 @@ void flushprint()
   ++gpar.prts;   // one past line end    
   if(gpar.prts == gpar.prtw)
     gpar.prts = 0;
-  
+  if(dum != 0)
+    dum = 0; 
   }
 
 void scroll_back()
   {
-  int n,incn,count,startn,startnx,endn;
+  int n,incn,count,startn,startnx,endn,dum;
  
   if(gpar.prte == gpar.prts)
     {
@@ -12115,19 +12617,21 @@ void scroll_back()
   else
     {
     if(gpar.prte >= startn)  
-      write(STDOUT_FILENO,gpar.s+startn,gpar.prte - startn);
+      dum = write(STDOUT_FILENO,gpar.s+startn,gpar.prte - startn);
     else
       {
-      write(STDOUT_FILENO,gpar.s+startn,gpar.prtw - startn);
-      write(STDOUT_FILENO,gpar.s,gpar.prte);
+      dum = write(STDOUT_FILENO,gpar.s+startn,gpar.prtw - startn);
+      dum = write(STDOUT_FILENO,gpar.s,gpar.prte);
       }
     printf("****** SCROLLED UP 10 lines\n");
-    }   
+    }
+  if(dum != 0)
+    dum = 0;    
   }
   
 void scroll_forward()
   {
-  int n,incn,count,startn,endn;
+  int n,incn,count,startn,endn,dum;
 
   
   if(gpar.prte == gpar.prtp)
@@ -12170,16 +12674,17 @@ void scroll_forward()
     gpar.prte = gpar.prtp;  // end of data
      
   if(gpar.prte >= startn)  
-    write(STDOUT_FILENO,gpar.s+startn,gpar.prte - startn);
+    dum = write(STDOUT_FILENO,gpar.s+startn,gpar.prte - startn);
   else
     {
-    write(STDOUT_FILENO,gpar.s+startn,gpar.prtw - startn);
-    write(STDOUT_FILENO,gpar.s,gpar.prte);
+    dum = write(STDOUT_FILENO,gpar.s+startn,gpar.prtw - startn);
+    dum = write(STDOUT_FILENO,gpar.s,gpar.prte);
     }
 
   if(gpar.prte == gpar.prtp)
     printf("**** SCROLLED DOWN - reached end\n");
-
+  if(dum != 0)
+    dum = 0; 
   }
 
 /******************** TIME in milliseconds *************       
@@ -12557,6 +13062,8 @@ void readleatt(int node,int xhandle)
   hx = xhandle & 0xFFFF;
   h0 = hx;
   delh = 0;
+  len = 0;
+  
   if((xhandle & 0x10000) != 0)
     {
     endff = 1;

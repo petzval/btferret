@@ -117,3 +117,15 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    in the devices file. Fixes a bug - when
    the devices file only specified one primary service: 1800 with characteristics.
 
+### Version 14
+
+1. Python interface. The library can now be compiled as a Python module. Instructions for Python
+   coding have been added to the documentation.
+   
+2. New function le\_pair(). Implements pairing and bonding from an LE client, and authentication
+   for an LE server.
+   
+3. Revised HID code keyboard.c to make use of le\_pair.
+
+4. The Python capability has made it necessary to change the way pairing information is
+   stored. Any existing pairing information generated with previous versions will be lost.

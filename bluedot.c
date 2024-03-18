@@ -1,6 +1,6 @@
-/****** SAMPLE mesh network procedure *********
+/****** BLUEDOT server *********
 REQUIRES
-  btlib.c version 13
+  btlib.c 
   btlib.h
   bluedot.txt 
 COMPILE 
@@ -61,7 +61,7 @@ int main()
   
   do
     {  
-    printf("\n  s - Server - wait for Blue Dot device to pair or connect\n");
+    printf("\n  s or S - Server. Wait for Blue Dot device to pair or connect\n");
     printf("  h - Help\n");
     printf("  q - Exit\n");
     printf("Enter one of the above commands : ");
@@ -168,5 +168,7 @@ void help()
   printf("  will then wait for a connection from Blue Dot as below.\n\n");
   printf("If already paired, enter s here. This device will wait for a\n"); 
   printf("connection from Blue Dot. Start Blue Dot and tap this device.\n");
+  printf("If re-connection requires a k press on the Pi to change the key\n");
+  printf("option, enter S instead of s here to start the server.\n");
   printf("Tapping the bluedot buttons will trigger thc callback code here\n\n");
   }

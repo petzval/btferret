@@ -2,9 +2,9 @@
 Download from https://github.com/petzval/btferret
   keyboard.c
   keyboard.txt
-  btlib.c    Version 13 or later
-  btlib.h    Version 13 or later
-
+  btlib.c    Version 14 or later
+  btlib.h    Version 14 or later
+ 
 Edit keyboard.txt to set ADDRESS=
 to the address of the local device
 that runs this code
@@ -54,9 +54,6 @@ more infomation.
 
 int lecallback(int clientnode,int op,int cticn);
 int send_key(int key);
-
-void getstring(char *prompt,char *s,int len);  //################
-int inputint(char *ps);
 
 /*********  keyboard.txt DEVICES file ******
 DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
@@ -121,7 +118,7 @@ unsigned char reportmap[47] = {0x05,0x01,0x09,0x06,0xA1,0x01,0x85,0x01,0x05,0x07
     //   LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
 unsigned char report[8] = {0,0,0,0,0,0,0,0};
 
-unsigned char name[4] = { 'H','I','D',0};
+unsigned char *name = "HID"; 
 unsigned char appear[2] = {0xC1,0x03};  // 03C1 = keyboard icon appears on connecting device 
 unsigned char pnpinfo[7] = {0x02,0x6B,0x1D,0x46,0x02,0x37,0x05};
 unsigned char protocolmode[1] = {0x01};
@@ -135,10 +132,16 @@ int main()
   if(init_blue("keyboard.txt") == 0)
     return(0);
     
+  if(localnode() != 1)
+    {
+    printf("ERROR - Edit keyboard.txt to set ADDRESS = %s\n",device_address(localnode()));
+    return(0);
+    }
+
   // Write data to local characteristics
   uuid[0] = 0x2A;
   uuid[1] = 0x00;
-  write_ctic(localnode(),find_ctic_index(localnode(),UUID_2,uuid),name,0); 
+  write_ctic(localnode(),find_ctic_index(localnode(),UUID_2,uuid),name,3); 
 
   uuid[0] = 0x2A;
   uuid[1] = 0x01;
@@ -187,8 +190,10 @@ int main()
      
   keys_to_callback(KEY_ON,0);  // enable LE_KEYPRESS calls in lecallback
                                // 0 = GB keyboard  
-  set_le_wait(2000);  // Allow 2 seconds for connection to complete
-                      // If connect fails, try increasing this value
+  set_le_wait(20000);  // Allow 20 seconds for connection to complete
+                                         
+  le_pair(localnode(),JUST_WORKS,0);  // Easiest option, but if client requires
+                                      // passkey security - remove this command  
   le_server(lecallback,0);
   
   close_all();
@@ -306,62 +311,3 @@ int send_key(int key)
   write_ctic(localnode(),reportindex,buf,0); 
   return(1);
   }
-
-
-/******** GET STRING *******
-from keyboard input
-return in s with terminate 0
-len = length of s
-***********************/
-
-void getstring(char *prompt,char *s,int len)
-  {
-  int n;
-  
-  do
-    {
-    printf("%s",prompt);
-    fgets(s,len,stdin);
-    }
-  while(s[0] == 10);
-
-  n = 0;
-  while(s[n] != 10 && s[n] != 13 && s[n] != 0)
-    ++n;
-  s[n] = 0;
-  }  
-     
-/***** INPUT INTEGER ********/     
-     
-
-int inputint(char *ps)
-  {
-  int n,flag;
-  char s[128];
- 
-  do
-    {
-    printf("%s  (x=cancel)\n",ps);
-  
-    getstring("? ",s,128);
-       
-    flag = 0;
-    for(n = 0 ; s[n] != 0 ; ++n)
-      {
-      if(s[n] < '0' || s[n] > '9')
-        flag = 1;
-      }
-    if(flag == 0)
-      n = atoi(s);
-    else if(s[0] == 'x')
-      {
-      n = -1;
-      flag = 0;
-      }
-    else
-      printf("Not a number\n");
-    }
-  while(flag != 0);
-  return(n);
-  } 
-
