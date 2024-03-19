@@ -14,7 +14,7 @@ def callback(clientnode,operation,cticn):
   elif(operation == btfpy.LE_DISCONNECT):
     # clientnode has just disconnected
     # uncomment next line to stop LE server when client disconnects
-    # return(btfpy.SERVER_EXIT);
+    # return(btfpy.SERVER_EXIT)
     # otherwise LE server will continue and wait for another connection
     # or operations from other clients that are still connected
     print("Disconnected")
