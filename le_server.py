@@ -44,6 +44,25 @@ print("The local device must be the first entry in devices.txt")
 print("(My Pi) that defines the LE characteristics")  
   # Set My data (index 1) value  
 btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)    
+
+
+# ********* CONNECTIOM/PAIRING problems ********
+# If you have connection problems - especially from
+# Android/iOS/Windows, uncomment these four commands
+# to use a random address. This creates a new identity
+# for the server, with a different Bluetooth address.
+# Choose 6 bytes for random address
+# 2 hi bits of [0] must be 1
+
+#randadd  = [0xD3,0x56,0xDB,0x24,0x32,0xA0]
+#btfpy.Set_le_random_address(randadd)
+#btfpy.Set_le_wait(5000)     # wait 5 seconds for connection/pairing                                         
+#btfpy.Le_pair(btfpy.Localnode(),btfpy.JUST_WORKS,0)  # Easiest option, but if client requires
+                                                     # passkey security - remove this command  
+  
+#******** end CONNECTION problems *******
+
+
 btfpy.Le_server(callback,0)   # timerds=0
     
 btfpy.Close_all()

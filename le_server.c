@@ -8,6 +8,9 @@ int callback(int clientnode,int operation,int ctic_index);
 int main()
   {
   unsigned char *mydata = {"Hello world"};
+    // random address - 2 hi bits of [0] must be 1
+  static unsigned char randadd[6] = {  0xD3,0x56,0xDB,0x24,0x32,0xA0 };
+
   
   if(init_blue("devices.txt") == 0)
     return(0);
@@ -16,6 +19,23 @@ int main()
   printf("(MyPi) that defines the LE characteristics\n");  
     // Set My data (index 1) value  
   write_ctic(localnode(),1,mydata,strlen(mydata));    
+
+  /********* CONNECTIOM/PAIRING problems ********/
+  
+  // If you have connection problems - especially from
+  // Android/iOS/Windows, uncomment these three instructions
+  // to use a random address. This creates a new identity
+  // for the server, with a different Bluetooth address.
+  // Choose 6 bytes for randadd[] = random address
+  
+  //set_le_random_address(randadd);
+  //set_le_wait(5000);   // wait 5 seconds for connection/pairing                                         
+  //le_pair(localnode(),JUST_WORKS,0);  // Easiest option, but if client requires
+                                      // passkey security - remove this command  
+  
+  /******** end CONNECTION problems *******/
+
+
   le_server(callback,0);  // timerds=0
   close_all();
   return(1);
