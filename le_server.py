@@ -42,6 +42,8 @@ if btfpy.Init_blue("devices.txt") == 0:
 print()
 print("The local device must be the first entry in devices.txt")
 print("(My Pi) that defines the LE characteristics")  
+print("Connection/pairing problems? See motes in le_server.py")
+
   # Set My data (index 1) value  
 btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)    
 
@@ -52,7 +54,7 @@ btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)
 # to use a random address. This creates a new identity
 # for the server, with a different Bluetooth address.
 # Choose 6 bytes for random address
-# 2 hi bits of [0] must be 1
+# 2 hi bits of the 1st byte must be 1
 
 #randadd  = [0xD3,0x56,0xDB,0x24,0x32,0xA0]
 #btfpy.Set_le_random_address(randadd)

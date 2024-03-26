@@ -17,6 +17,7 @@ int main()
 
   printf("\nThe local device must be the first entry in devices.txt\n");
   printf("(MyPi) that defines the LE characteristics\n");  
+  printf("Connection/pairing problems? See notes in le_server.c\n");
     // Set My data (index 1) value  
   write_ctic(localnode(),1,mydata,strlen(mydata));    
 

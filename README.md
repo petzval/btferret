@@ -33,8 +33,9 @@ btferret/btlib Bluetooth Interface
         - [3.6.2 Random Address](#3-6-2-random-address)            
         - [3.6.3 Pairing and Security](#3-6-3-pairing-and-security)    
     - [3.7 LE server](#3-7-le-server) 
-        - [3.7.1 Notifications](#3-7-1-notifications)
-        - [3.7.2 Pairing and Security](#3-7-2-pairing-and-security)            
+        - [3.7.1 Alternative setup](#3-7-1-alternative-setup)    
+        - [3.7.2 Notifications](#3-7-2-notifications)
+        - [3.7.3 Pairing and Security](#3-7-3-pairing-and-security)            
     - [3.8 Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection) 
         - [3.8.1 Binary Data](#3-8-1-binary-data)
     - [3.9 Broadcast to all mesh servers](#3-9-broadcast-to-all-mesh-servers) 
@@ -624,7 +625,11 @@ int main()
   printf("\nUse 1st entry in devices.txt (My Pi) for\n");
   printf("this device to define LE characteristics\n");  
     // Set My data (index 1) value  
-  write_ctic(localnode(),1,mydata,strlen(mydata));    
+  write_ctic(localnode(),1,mydata,strlen(mydata));  
+  
+    // CONNECTION/PAIRING PROBLEMS?
+    // See section 3-7-1 Alternative setup 
+        
   le_server(callback,0);
   close_all();
   return(1);
@@ -664,7 +669,11 @@ if btfpy.Init_blue("devices.txt") == 0:
 print("Use 1st entry in devices.txt (My Pi) for")
 print("this device to define LE characteristics")  
   # Set My data (index 1) value  
-btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)    
+btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)   
+
+    # CONNECTION/PAIRING PROBLEMS?
+    # See section 3-7-1 Alternative setup 
+ 
 btfpy.Le_server(callback,0)
 btfpy.Close_all()
 ```
@@ -1925,12 +1934,14 @@ btfpy.Le_pair(7,btfpy.BOND_REPAIR,0)
 
 An LE server waits for connections from LE clients which will then read and write
 the server's characteristics. The characteristics are specified in the devices.txt
-file, and the server can set their values via write\_ctic to it's own local node.
-The client may be another
-Pi acting as an LE client, or a phone app such
+file, and the server can set their values via write\_ctic to its own local node.
+The client may be another Pi acting as an LE client, or a phone app such
 as [nRF](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile).
 The other types of server (CLASSIC and NODE) can only be connected by one client at a time, but an LE
 server can be connected by multiple clients simultaneously.
+
+There are two ways of setting up an LE server. Sometimes Android/Apple/Windows devices have trouble
+connecting and pairing. In this case there is an [alternative setup](#3-7-1-alternative-setup) method.
 
 ```
 
@@ -1939,10 +1950,12 @@ btferret commands
 i - Print device info. The local device should list
     the characteristics defined in the devices.txt file.
 v - Read services. The characteristic info will be listed
-r - Read a characteristic - enter its characteristic index from the list
-w - Write a characteristic
+r - Read a characteristic - select Local device
+w - Write a characteristic - select Local device
 s - Become a server and wait for clients to connect, select LE server option.
 d - Disconnect
+
+Note - the alternative setup method cannot be done from the btferret command line
 
 ```
 
@@ -2014,6 +2027,10 @@ int main()
   keys_to_callback(KEY_ON,0); // OPTIONAL - key presses are sent to le_callback
                               // with operation=LE_KEYPRESS and cticn=key code 
                               // The key that stops the server changes from x to ESC
+                              
+    // CONNECTION/PAIRING PROBLEMS?
+    // See next section 3-7-1 Alternative setup                               
+                              
   le_server(le_callback,100);
                    // Become an LE server and wait for clients to connect.   
                    // when a client performs an operation such as connect, or
@@ -2136,6 +2153,10 @@ btfpy.Keys_to_callback(btfpy.KEY_ON,0)
                               # OPTIONAL - key presses are sent to le_callback
                               # with operation=LE_KEYPRESS and cticn=key code 
                               # The key that stops the server changes from x to ESC
+                              
+    # CONNECTION/PAIRING PROBLEMS?
+    # See next section 3-7-1 Alternative setup 
+                              
 btfpy.Le_server(le_callback,100)
                    # Become an LE server and wait for clients to connect.   
                    # when a client performs an operation such as connect, or
@@ -2144,7 +2165,66 @@ btfpy.Le_server(le_callback,100)
 btfpy.Close_all()
 ```
 
-### 3-7-1 Notifications
+### 3-7-1 Alternative setup
+
+Android/Apple/Windows devices sometimes have trouble connecting and pairing to le\_server because they get confused
+by the multiple identities of a Pi running btferret. They store information about devices and they might have
+seen the Pi with its bluez identity, or as a btferret Classic device, or LE device. One solution is to clear
+all the stored information from the connecting client - especially unpairing if previously paired. A more certain
+solution is to set up a new identity when starting an LE server. This is done by calling 
+[set\_le\_random\_address](#4-2-44-set\_le\_random\_address) which changes the Bluetooth address of the server
+to something that you choose, and then advertises as a pure LE device.
+
+Just add a few instructions before calling le\_server.
+
+C code
+
+```
+unsigned char randadd[6];
+
+ // Choose a new 6-byte address (D3:56:DB:04:32:A6 here)
+randadd[0] = 0xD3;  // 2 hi bits must be 1
+randadd[1] = 0x56;
+randadd[2] = 0xDB;
+randadd[3] = 0x04;
+randadd[4] = 0x32;
+randadd[5] = 0xA6;
+set_le_random_address(randadd);
+
+set_le_wait(5000);  // 5 second wait for connect/pair to complete
+
+le_pair(localnode(),JUST_WORKS,0); // Easiest option, but if client requires
+                                   // passkey security - remove this command 
+
+le_server(lecallback,0);
+```
+
+PYTHON code
+
+```
+   # Choose a new 6-byte address (D3:56:DB:04:32:A6 here)
+   # The two hi bits of the first byte must be 1
+
+btfpy.Set_le_random_address([0xD3,0x56,0xDB,0x04,0x32,0xA6])
+
+btfpy.Set_le_wait(5000)   # 5 second wait for connect/pair to complete
+
+   # Ask for Just Works security which avoids passkey entry
+                                  
+btfpy.Le_pair(btfpy.Localnode(),btfpy.JUST_WORKS,0)
+
+btfpy.Le_server(lecallback,0)
+
+```
+
+
+
+
+
+  
+
+
+### 3-7-2 Notifications
 
 Here is server code that illustrates the use of notifications. The server
 increments a counter and sends it as a notification to the client every five seconds.
@@ -2279,7 +2359,7 @@ def notify_callback(lenode,cticn,data,nread)
   return
  ```
 
-### 3-7-2 Pairing and Security
+### 3-7-3 Pairing and Security
 
 Some LE server security parameters can be set up by calling [le\_pair](#4-2-18-le\_pair) before le\_server with
 the local node as the first parameter. Normally, it is not necessary to do this. A server will comply with the
