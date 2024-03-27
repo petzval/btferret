@@ -318,8 +318,10 @@ int clientsend(int cmd)
 
 int server()
   {
-  int serverflag,clinode,keyflag,inkey,timeds,passkey,pairflags;
-
+  int serverflag,clinode,keyflag,inkey,timeds,passkey,pairflags,addr;
+     // choose this random address (2 hi bits of 1st byte must be 1)
+  static unsigned char randadd[6] = {  0xD9,0x56,0xDB,0x38,0x32,0xA2 };
+  
   pairflags = 0;
   passkey = 0;
      
@@ -349,20 +351,36 @@ int server()
         return(0);
       }
       
-    printf("Input LE_TIMER interval in deci (0.1) seconds\n   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
+    printf("\nDEVICE IDENTITY\n");
+    printf("Some clients may fail to connect/pair if the Local address is used\n");
+    printf("Random will set up a new LE address and identity for this device\n");
+    printf("  0 = Local Bluetooth address\n");
+    printf("  1 = Random Bluetooth address\n");
+    addr = inputint("Input 0/1");
+    if(addr < 0)
+      return(0);
+
+    printf("\nInput LE_TIMER interval in deci (0.1) seconds\n   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
     timeds = inputint("Timer interval");
     if(timeds < 0)
       return(0);
 
-    keyflag = inputint("Send key presses to LE_KEYPRESS callback 0=No 1=Yes");  
+    keyflag = inputint("\nSend key presses to LE_KEYPRESS callback 0=No 1=Yes");  
     if(keyflag < 0)
       return(0);
+      
+    if(addr != 0)
+      {  // Random address identity
+      set_le_random_address(randadd);
+      }                
+        
     if(keyflag == 0)
       keys_to_callback(KEY_OFF,0);
     else
       keys_to_callback(KEY_ON,0);  
 
     le_pair(localnode(),pairflags,passkey);  
+    set_le_wait(5000);   // wait 5 seconds for connection/pairing                                         
         
     le_server(le_callback,timeds);
     }

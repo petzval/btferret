@@ -1,5 +1,5 @@
-btferret/btlib Bluetooth Interface
-==================================
+Python and C Bluetooth Library
+==============================
 
 *Version 14*
 
@@ -263,7 +263,8 @@ rfkill list
 ### 2-1-2 C Code
 
 To write your own code using the [btlib](#4-btlib-library)
-functions, start from scratch or modify btferret.c.
+functions, start from scratch or modify btferret.c, or the Hello World client
+and server programs.
 Here is a minimum starting C program, mycode.c.
 
 ```c
@@ -413,7 +414,8 @@ rfkill list
 ### 2-2-2 Python Code
 
 To write your own code using the [btlib](#4-btlib-library)
-functions, start from scratch or modify btferret.py.
+functions, start from scratch or modify btferret.py, or the Hello World
+client and server programs.
 Here is a minimum starting Python program, mycode.py.
 
 ```python
@@ -1944,7 +1946,6 @@ There are two ways of setting up an LE server. Sometimes Android/Apple/Windows d
 connecting and pairing. In this case there is an [alternative setup](#3-7-1-alternative-setup) method.
 
 ```
-
 btferret commands
 
 i - Print device info. The local device should list
@@ -1954,9 +1955,6 @@ r - Read a characteristic - select Local device
 w - Write a characteristic - select Local device
 s - Become a server and wait for clients to connect, select LE server option.
 d - Disconnect
-
-Note - the alternative setup method cannot be done from the btferret command line
-
 ```
 
 The server's characteristics are defined in the devices.txt file, full details
@@ -2171,11 +2169,12 @@ Android/Apple/Windows devices sometimes have trouble connecting and pairing to l
 by the multiple identities of a Pi running btferret. They store information about devices and they might have
 seen the Pi with its bluez identity, or as a btferret Classic device, or LE device. One solution is to clear
 all the stored information from the connecting client - especially unpairing if previously paired. A more certain
-solution is to set up a new identity when starting an LE server. This is done by calling 
+solution is to set up a new identity with a different address when starting an LE server. This is done by calling 
 [set\_le\_random\_address](#4-2-44-set\_le\_random\_address) which changes the Bluetooth address of the server
 to something that you choose, and then advertises as a pure LE device.
 
-Just add a few instructions before calling le\_server.
+Just add a few instructions before calling le\_server. Setting a wait time and a Just Works request
+may also assist connection and pairing.
 
 C code
 
@@ -6152,27 +6151,31 @@ btfpy.Set_le_interval_update(3,24,40)
 ## 4-2-44 set\_le\_random\_address
 
 ```c
-void set_le_random_address(unsigned char *add)
+void set_le_random_address(unsigned char *address)
 btfpy.Set_le_random_address(address)
 ```
 
-Sets a chosen random Bluetooth address for use by HID devices.
-See [Problems caused by connecting device](#problems-caused-by-connecting-device)
-in [HID Devices](#3-11-hid-devices). If set\_le\_random\_address is not called,
-an HID LE server will use a different random address each time, set by the system. 
-
+Sets a chosen random Bluetooth address to replace the local address for an LE server.
+Some clients (Windows/Apple/Android)
+store infomation about devices they have seen, and can get confused by the multiple identities
+displayed at various times by the local address (bluez, Classic, LE). This command sets up a new
+address for the server and advertises it as a pure LE device, so a client will always see the same
+identity for that address. Used for HID devices (see keyboard.c/py).
+See [alternative setup](#3-7-1-alternative-setup).    
 
 PARAMETERS
 
 ```
-add[6] = 6-byte address
-         The 2 hi bits of add[0] must be 1
+address[6] = 6-byte address
+             The 2 hi bits of address[0] must be 1
 ```
 
 SAMPLE CODE
 
 ```
 unsigned char add[6];
+
+  // Set Bluetooth address of LE server to D3:56:DB:04:32:A6
 
 add[0] = 0xD3;  // 2 hi bits must be 1
 add[1] = 0x56;
@@ -6186,6 +6189,7 @@ le_server(lecallback,0);
 
 PYTHON
 btfpy.Set_le_random_address([0xD3,0x56,0xDB,0x04,0x32,0xA6])
+btfpy.Le_server(lecallback,0)
 ```
 
 ## 4-2-45 set\_le\_wait
@@ -6878,6 +6882,8 @@ So an opcode:ID = 0A:04 expects a reply 0B:04
 ## 5-2-4 Starting 02 Channel 0004 and 0006
 
 Channel 0004 LE Characteristic read/write. Vol 3 Part F Section 3.4
+
+Channel 0005 L2CAP Vol 3 Part A Section 4
 
 Channel 0006 LE Pairing and security. Vol 3, Part H, Section 3.5
 

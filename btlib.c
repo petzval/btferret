@@ -3362,7 +3362,7 @@ void mesh_server(int(*callback)())
       
     flushprint();
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
 
   gpar.serveractive = 0;
   
@@ -3439,10 +3439,8 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   if(gpar.hidflag == 0)
     badd = dev[0]->baddr;
   else
-    {
     badd = gpar.randbadd;
-    dev[0]->lepairflags = JUST_WORKS;
-    }
+
   if((gpar.hidflag & 1) == 0)  
     NPRINT "Advertising as %s %s\n",baddstr(badd,0),dev[0]->name);
   else
@@ -3730,7 +3728,7 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
     else
       retval = SERVER_EXIT;  // key press or error
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press stop server...\n");
@@ -3929,7 +3927,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
     else
       retval = SERVER_EXIT;
     }
-  while((retval & SERVER_CONTINUE) != 0 && read_error() < 2);
+  while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press - stopping server\n");

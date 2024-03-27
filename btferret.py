@@ -792,7 +792,7 @@ def clientsecurity():
   pair = 0
   keydev = 0
  
-  print("BONDING  (save pairing info)")
+  print("\nBONDING  (save pairing info)")
   print("  0 = Do not bond - OK for most servers")
   print("  1 = New bond")
   print("  2 = Re-pair with a previously bonded device")
@@ -807,7 +807,7 @@ def clientsecurity():
   if(bond == 2):
     return(flags,0)
   
-  print("PAIRING and SECURITY")
+  print("\nPAIRING and SECURITY")
   print("  0 = Do not pair - OK for most servers")
   print("  1 = Pair - Just Works")
   print("  2 = Pair - Fixed Passkey")
@@ -829,7 +829,7 @@ def clientsecurity():
     return(0,0)
      
   if(pair == 2 or pair == 3):
-    print("PASSKEY chosen by")
+    print("\nPASSKEY chosen by")
     print("  0 = This local device")
     print("  1 = Remote server")
     keydev = inputint("Enter 0/1")
@@ -916,7 +916,7 @@ def clientconnect():
   if(method == btfpy.CHANNEL_LE):
 
     if(lesecurity == 2):
-      print("PAIRING and SECURITY")
+      print("\nPAIRING and SECURITY")
       print("  Most LE servers do not need security")
       print("  so this option is not necessary")
       lesecurity = inputint("Enable security options 0=No 1=Yes")
@@ -931,7 +931,7 @@ def clientconnect():
         return(0)
     
     curval = btfpy.Set_le_wait(btfpy.READ_WAIT)
-    print("CONNECTION COMPLETE TIME")
+    print("\nCONNECTION COMPLETE TIME")
     print("  After connecting, some LE servers need more time to complete")
     print("  the process or they will disconnect. Zero may work, otherwise")
     print("  find the shortest time that will prevent disconnection.")
@@ -942,7 +942,7 @@ def clientconnect():
     if(wait >= 0):
       btfpy.Set_le_wait(wait)   
     if(pairflags != 0):
-      print("PAIRING COMPLETE TIME")
+      print("\nPAIRING COMPLETE TIME")
       print("This might include the time to enter a passkey")
       print("or pairing may fail with a timeout")
       pairwait = inputint("Time in ms")
@@ -1034,7 +1034,7 @@ def serversecurity():
   auth = 0
   key = 0
   
-  print("PAIRING and SECURITY")
+  print("\nPAIRING and SECURITY")
   print("  0 = Random Passkey or Just Works or None")
   print("  1 = Fixed Passkey")
   key = inputint("Input option")
@@ -1048,7 +1048,7 @@ def serversecurity():
   else:
     passkey = 0
 
-  print("AUTHENTICATION")
+  print("\nAUTHENTICATION")
   print("  If authentication is enabled, the client must connect")
   print("  with passkey security or this server will not")
   print("  allow characteristic reads/writes")
@@ -1056,7 +1056,7 @@ def serversecurity():
   if(auth <  0):
      return(-1,0)
 
-  print("PASSKEY SECURITY")
+  print("\nPASSKEY SECURITY")
   print("  0 = No - Ask for Just Works")
   print("  1 = Yes - Accept Passkey")
   jwflag = inputint("Accept Passkey security if the client asks")
@@ -1093,7 +1093,7 @@ def server():
   elif(serverflag == 2):  # LE
       
     if(lesecurity == 2):
-      print("PAIRING and SECURITY")
+      print("\nPAIRING and SECURITY")
       print("  Most LE servers do not need security")
       print("  so this option is not necessary")
       lesecurity = inputint("Enable security options 0=No 1=Yes")
@@ -1106,22 +1106,38 @@ def server():
       (pairflags,passkey) = serversecurity()
       if(pairflags < 0):
         return(0)
+
+    print("\nDEVICE IDENTITY")
+    print("Some clients may fail to connect/pair if the Local address is used")
+    print("Random will set up a new LE address and identity for this device")
+    print("  0 = Local Bluetooth address")
+    print("  1 = Random Bluetooth address")
+    addr = inputint("Input 0/1")
+    if(addr < 0):
+      return(0)
         
-    print("Input LE_TIMER interval in deci (0.1) seconds")
+    print("\nInput LE_TIMER interval in deci (0.1) seconds")
     print("   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...")
     timeds = inputint("Timer interval")
     if(timeds < 0):
       return(0)
       
-    keyflag = inputint("Send key presses to LE_KEYPRESS callback 0=No 1=Yes")
+    keyflag = inputint("\nSend key presses to LE_KEYPRESS callback 0=No 1=Yes")
     if(keyflag < 0):
       return(0)
+
+    if(addr != 0):
+      # Random address identity - choose 6-byte address (2 hi bits of 1st byte must be 1)
+      btfpy.Set_le_random_address([0xD1,0x58,0xD3,0x24,0x32,0xA7])
+    
     if(keyflag == 0):
       btfpy.Keys_to_callback(btfpy.KEY_OFF,0)
     else:
       btfpy.Keys_to_callback(btfpy.KEY_ON,0)
       
     btfpy.Le_pair(btfpy.Localnode(),pairflags,passkey)
+    btfpy.Set_le_wait(5000)   # wait 5 seconds for connection/pairing
+
     btfpy.Le_server(le_callback,timeds)
   elif(serverflag == 0):  # node
     print("\nInput node of client that will connect")
@@ -1137,7 +1153,7 @@ def server():
     if(clinode != 0 and btfpy.Device_type(clinode) == btfpy.BTYPE_ME):
       keyflag = btfpy.KEY_OFF | btfpy.PASSKEY_OFF
     else:
-      print("Client's security  (0,1,3 to pair or connect Android/Windows.. clients)")
+      print("\nClient's security  (0,1,3 to pair or connect Android/Windows.. clients)")
       print("  0 = Use link key, print passkey here, remote may ask to confirm")
       print("  1 = No link key,  print passkey here (forces re-pair if pairing fails)")
       print("  2 = No keys  (connecting client is another mesh Pi)")

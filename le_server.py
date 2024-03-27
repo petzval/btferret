@@ -42,13 +42,13 @@ if btfpy.Init_blue("devices.txt") == 0:
 print()
 print("The local device must be the first entry in devices.txt")
 print("(My Pi) that defines the LE characteristics")  
-print("Connection/pairing problems? See motes in le_server.py")
+print("Connection/pairing problems? See notes in le_server.py")
 
   # Set My data (index 1) value  
 btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)    
 
 
-# ********* CONNECTIOM/PAIRING problems ********
+# ********* CONNECTION/PAIRING problems ********
 # If you have connection problems - especially from
 # Android/iOS/Windows, uncomment these four commands
 # to use a random address. This creates a new identity

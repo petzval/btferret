@@ -21,7 +21,7 @@ int main()
     // Set My data (index 1) value  
   write_ctic(localnode(),1,mydata,strlen(mydata));    
 
-  /********* CONNECTIOM/PAIRING problems ********/
+  /********* CONNECTION/PAIRING problems ********/
   
   // If you have connection problems - especially from
   // Android/iOS/Windows, uncomment these three instructions
