@@ -1,4 +1,4 @@
-/********* Version 14 *********/
+/********* Version 14.1 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -232,8 +232,7 @@ struct devdata
 #define TIM_RUN 0
 #define TIM_LOCK 1
 #define TIM_FREE 2
-#define TIM_OVER (0xF0000000 >> 10)
-             // 72.8 hours before overflow
+#define TIM_COUNT 3
              
 #define SERVDAT 128
 struct servicedata 
@@ -249,6 +248,8 @@ struct servicedata
 struct globpar 
   {
   int printflag;       // PRINT_NONE PRINT_NORMAL PRINT_VERBOSE
+  int screenoff;       // printflag+8
+  int debug;
   int btleflag;        // 1=BTLE server
   int btlenode;        // Notify node
   int serveractive;    // 1=is server
@@ -1291,13 +1292,15 @@ int init_blue_ex(char *filename,int hcin)
     gpar.btleflag = 0;
   
   gpar.btlenode = 0;
+  gpar.screenoff = 0;
+  gpar.debug = 0;
   gpar.serveractive = 0; 
   gpar.timout = 1000;   // reply wait ms time out
   gpar.toshort = 5;    // ms
   gpar.cmdcount = 0;
   gpar.lecap = 0;
 #ifdef BTFPYTHON
-  gpar.hcidelay = 25;  // 25ms
+  gpar.hcidelay = 10; 
 #else
   gpar.hcidelay = 5; 
 #endif
@@ -4918,7 +4921,7 @@ void close_all()
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();   
+  // printins();     
   }  
   
   
@@ -5685,15 +5688,20 @@ int sendhci(unsigned char *s,int ndevice)
     
   ntogo = len;  // first header entry is length of cmd
   timstart = timems(TIM_LOCK);  
+
+ 
   do
     {
     nwrit = write(gpar.hci,cmd,ntogo);
- 
+
     if(nwrit > 0)
       {
       ntogo -= nwrit;
       cmd += nwrit;
-      }   
+      }
+    else
+      usleep(500);
+        
     if(timems(TIM_RUN) - timstart > 5000)   // 5 sec timeout
       {
       NPRINT "Send CMD timeout - may need to reboot\n");
@@ -6081,7 +6089,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             len = 0;
           else if((pfd[0].events & POLLIN) != 0)
             len = read(gpar.hci,&buf[blen],sizeof(buf)-blen);           
- 
+          else
+            len = 0;
+             
            // len = number of bytes read  0=EOF -1=error
            
           if(len <= 0 && (timendms == 0 || (timems(TIM_RUN) - timstart) >= timendms))  
@@ -9190,7 +9200,7 @@ void printins()
   
   count= 1;
   n = 0;
-  NPRINT "**INSTACK** CSP=%d\n",cmd_stack_ptr());
+  NPRINT "**INSTACK** CSP=%d TIM=%d DBG=%d\n",cmd_stack_ptr(),timems(TIM_COUNT),gpar.debug);
   flushprint();
   while(instack[n] != INS_FREE)
     {
@@ -9201,7 +9211,7 @@ void printins()
     ++count;
     flushprint();
     }
-  rwlinkey(3,0,NULL);
+  // rwlinkey(3,0,NULL);
   }
 
 
@@ -9422,7 +9432,7 @@ unsigned char calcfcs(unsigned char *s,int count)
 
 int readkey()
   {
-  static unsigned char keystack[64];
+  static unsigned char keystack[1024];
   static int stn = 0;
   unsigned char c;
   unsigned short *seq;
@@ -9527,7 +9537,7 @@ int readkey()
     do
       {
       n = read(STDIN_FILENO,keystack+stn,1);
-      if(n == 1 && stn < 63)
+      if(n == 1 && stn < 1023)
         ++stn;
       }
     while(n == 1);
@@ -12448,15 +12458,17 @@ int set_le_wait(int waitms)
 
 int set_print_flag(int flag)
   {
-  int oldflag;
+  int oldflag,flagx;
   
   oldflag = gpar.printflag;
   
-  if(!(flag == PRINT_NONE || flag == PRINT_NORMAL || flag == PRINT_VERBOSE))
+  flagx = flag & 7;
+  if(!(flagx == PRINT_NONE || flagx == PRINT_NORMAL || flagx == PRINT_VERBOSE))
     return(oldflag);     
     
-  gpar.printflag = flag;
-
+  gpar.printflag = flagx;
+  gpar.screenoff = flag & 8;
+  
   if(gpar.printflag == PRINT_VERBOSE)
     {   // verbose - include VPRINTs  
     gpar.prtv = &gpar.prtp;
@@ -12516,14 +12528,17 @@ void flushprint()
     {      
     if(gpar.prtp > gpar.prtp0)  // does not wrap  
       {
-      dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtp - gpar.prtp0);
+      if(gpar.screenoff == 0)
+        dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtp - gpar.prtp0);
       n = gpar.prtp - gpar.prtp0;
       }
     else if(gpar.prtw > gpar.prtp0) // should be anyway 
       {
-      dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtw - gpar.prtp0);
+      if(gpar.screenoff == 0)
+        dum = write(STDOUT_FILENO,gpar.s+gpar.prtp0,gpar.prtw - gpar.prtp0);
       n = gpar.prtw - gpar.prtp0;
-      dum = write(STDOUT_FILENO,gpar.s,gpar.prtp);
+      if(gpar.screenoff == 0)
+        dum = write(STDOUT_FILENO,gpar.s,gpar.prtp);
       n += gpar.prtp;
       }
     }
@@ -12687,7 +12702,6 @@ void scroll_forward()
 
 /******************** TIME in milliseconds *************       
 return time in milliseconds since first call reset
-approximate because assumes 1024 = 1000
 ****************************************************/       
 
 unsigned int timems(int flag)
@@ -12696,12 +12710,14 @@ unsigned int timems(int flag)
   int dtn;
   struct timespec ts;
   static unsigned int ntim0;
-  static unsigned int tim0;
+  static time_t tim0;
   static int xflag = 0;  // force reset on first call
   static int count = 0;
   
 
-  if(flag == TIM_FREE)
+  if(flag == TIM_COUNT)
+    return(count);
+  else if(flag == TIM_FREE)
     {
     --count;
     return(0);
@@ -12720,7 +12736,7 @@ unsigned int timems(int flag)
     }   
     
   dt = ts.tv_sec - tim0;  // whole seconds
-  if((dt & TIM_OVER) == TIM_OVER && flag == TIM_LOCK && count == 0)
+  if((dt & 0xFFE00000) != 0 && flag == TIM_LOCK && count == 0)
     {   // overflow 
     tim0 = ts.tv_sec;
     ntim0 = ts.tv_nsec; 
@@ -12734,7 +12750,7 @@ unsigned int timems(int flag)
     --dt;
     }
     
-  return( (dt << 10) + (dtn >> 20) );   // approx ms
+  return((dt*(unsigned int)1000) + (unsigned int)(dtn/1e6));   
   }
 
 
