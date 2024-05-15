@@ -14,7 +14,7 @@ import btfpy
 # that runs this code
 #
 # Run
-#   python3 keyboard.py
+#   sudo python3 keyboard.py
 #
 # Connect from phone/tablet/PC to "HID" device
 #

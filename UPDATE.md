@@ -129,3 +129,12 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
 
 4. The Python capability has made it necessary to change the way pairing information is
    stored. Any existing pairing information generated with previous versions will be lost.
+   
+### Version 15
+
+1. Secure Connection pairing added to le\_pair options.
+
+2. An amusing, but probably useless program to turn a Pi into a Bluetooth mouse. Connect from a PC/tablet and
+   the Pi's arrow keys move the cursor. Function keys F1/2/3 execute left/middle/right button clicks.
+   See mouse.c/py. An example of HID programming.
+

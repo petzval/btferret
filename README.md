@@ -1,7 +1,7 @@
 Python and C Bluetooth Library
 ==============================
 
-*Version 14*
+*Version 15*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -33,7 +33,7 @@ Python and C Bluetooth Library
         - [3.6.2 Random Address](#3-6-2-random-address)            
         - [3.6.3 Pairing and Security](#3-6-3-pairing-and-security)    
     - [3.7 LE server](#3-7-le-server) 
-        - [3.7.1 Alternative setup](#3-7-1-alternative-setup)    
+        - [3.7.1 Random address alternative setup](#3-7-1-random-address-alternative-setup)    
         - [3.7.2 Notifications](#3-7-2-notifications)
         - [3.7.3 Pairing and Security](#3-7-3-pairing-and-security)            
     - [3.8 Pi-Pi client-server connection](#3-8-pi-pi-client-server-connection) 
@@ -630,7 +630,7 @@ int main()
   write_ctic(localnode(),1,mydata,strlen(mydata));  
   
     // CONNECTION/PAIRING PROBLEMS?
-    // See section 3-7-1 Alternative setup 
+    // See section 3-7-1 Random address alternative setup 
         
   le_server(callback,0);
   close_all();
@@ -674,7 +674,7 @@ print("this device to define LE characteristics")
 btfpy.Write_ctic(btfpy.Localnode(),1,"Hello world",0)   
 
     # CONNECTION/PAIRING PROBLEMS?
-    # See section 3-7-1 Alternative setup 
+    # See section 3-7-1 Random address alternative setup 
  
 btfpy.Le_server(callback,0)
 btfpy.Close_all()
@@ -871,7 +871,8 @@ btfpy.Close_all()
 
 ## 3-1 Bluetooth Connections
 
-There are two standard flavours of Bluetooth implemented by this library - Classic and LE (low energy).
+There are two standard flavours of Bluetooth implemented by this library - Classic and LE (low energy,
+also known as GATT).
 In the Classic case, a client
 connects to a listening server and the two can then exchange large amounts of serial data.
 A Pi running btferret/btlib
@@ -1888,14 +1889,21 @@ But a warning - if the re-pairing fails the pairing information must be deleted 
 Windows/Android server to re-set the system. The btferret.c/py code asks just once if you want to 
 enable security settings input.
 
+If the pairing includes a passkey entry, separate wait times (set\_le\_wait) should
+be set for connection and pairing. Connection will complete quickly, so a wait of one second
+will usually work. A longer time should then be set for pairing to allow for passkey entry.
+
+There are two pairing procedures: Legacy and Secure Connection.
+The difference is that the Secure Connection pairing procedure is more resistant to attack.
+
 
 ```
    // Connect to an LE device first
-
+set_le_wait(1000);    // 1 second wait for connect
 connect_node(7,CHANNEL_LE,0);
-set_le_wait(10000);  // 10 second wait to allow time for possible passkey entry
+set_le_wait(20000);  // 20 second wait for pairing to allow time for possible passkey entry
 
-  // After connection - Secure connection by one of the following options: 
+  // After connection - Pair connection by one of the following options: 
 
 le_pair(7,JUST_WORKS,0);      // Server should use a NoInputNoOutput agent
   
@@ -1910,6 +1918,9 @@ le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL,0);   // Local client chooses passkey a
                                                // Enter on remote server when prompted
                                                // Server should use a KeyboardDisplay agent
                                                
+                             // Secure Connection rather than Legacy      
+le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL | SECURE_CONNECT,0);                                              
+                                               
    // BONDING saves pairing information
    // Pair (using any method) and Bond on first connection
    
@@ -1921,12 +1932,14 @@ le_pair(7,BOND_REPAIR,0);
                                                
 
 PYTHON
+btfpy.Set_le_wait(1000)    # 1 second wait for connect
 btfpy.Connect_node(7,btfpy.CHANNEL_LE,0)
-btfpy.Set_le_wait(10000)
+btfpy.Set_le_wait(20000)   # 20 second wait for pairing to allow for passkey entry
 btfpy.Le_pair(7,btfpy.JUST_WORKS,0)
 btfpy.Le_pair(7,btfpy.PASSKEY_FIXED | btfpy.PASSKEY_REMOTE,123456)
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_REMOTE,0) 
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_LOCAL,0)
+btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_LOCAL | btfpy.SECURE_CONNECT,0)
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_REMOTE | btfpy.BOND_NEW,0)
 btfpy.Le_pair(7,btfpy.BOND_REPAIR,0)
 ```
@@ -1943,7 +1956,8 @@ The other types of server (CLASSIC and NODE) can only be connected by one client
 server can be connected by multiple clients simultaneously.
 
 There are two ways of setting up an LE server. Sometimes Android/Apple/Windows devices have trouble
-connecting and pairing. In this case there is an [alternative setup](#3-7-1-alternative-setup) method.
+connecting and pairing. In this case there is
+an [alternative setup](#3-7-1-random-address-alternative-setup) method using a random address.
 
 ```
 btferret commands
@@ -2027,7 +2041,7 @@ int main()
                               // The key that stops the server changes from x to ESC
                               
     // CONNECTION/PAIRING PROBLEMS?
-    // See next section 3-7-1 Alternative setup                               
+    // See next section 3-7-1 Random address alternative setup                               
                               
   le_server(le_callback,100);
                    // Become an LE server and wait for clients to connect.   
@@ -2153,7 +2167,7 @@ btfpy.Keys_to_callback(btfpy.KEY_ON,0)
                               # The key that stops the server changes from x to ESC
                               
     # CONNECTION/PAIRING PROBLEMS?
-    # See next section 3-7-1 Alternative setup 
+    # See next section 3-7-1 Random address alternative setup 
                               
 btfpy.Le_server(le_callback,100)
                    # Become an LE server and wait for clients to connect.   
@@ -2163,7 +2177,7 @@ btfpy.Le_server(le_callback,100)
 btfpy.Close_all()
 ```
 
-### 3-7-1 Alternative setup
+### 3-7-1 Random address alternative setup
 
 Android/Apple/Windows devices sometimes have trouble connecting and pairing to le\_server because they get confused
 by the multiple identities of a Pi running btferret. They store information about devices and they might have
@@ -2372,6 +2386,10 @@ enable security settings input.
 
 Passkey security is also known as MITM (Man In The Middle).
 
+There are two pairing procedures: Legacy and Secure Connection.
+The difference is that the Secure Connection pairing procedure is more resistant to attack.
+
+
 The type of security is determined by the connecting client's actions and agent as follows:
 
 ```
@@ -2393,6 +2411,9 @@ SAMPLE CODE for a server.
 le_pair(localnode(),PASSKEY_FIXED,123456);    // Remote client must know this passkey
 le_pair(localnode(),AUTHENTICATION_ON,0);     // Enable authentication 
 le_pair(localnode(),AUTHENTICATION_ON | PASSKEY_FIXED,123456); 
+le_pair(localnode(),SECURE_CONNECT,0);  // Use Secure Connection if the client asks 
+                                        // If not specified - default is Legacy 
+le_pair(localnode(),AUTHENTICATION_ON | SECURE_CONNECT,0);                                          
 le_pair(localnode(),JUST_WORKS,0);
        // Then start the server
                                         
@@ -2405,6 +2426,8 @@ btfpy.Le_pair(btfpy.Localnode(),btfpy.PASSKEY_FIXED,123456)
 btfpy.Le_pair(btfpy.Localnode(),btfpy.AUTHENTICATION_ON,0) 
 btfpy.Le_pair(btfpy.Localnode(),btfpy.AUTHENTICATION_ON | btfpy.PASSKEY_FIXED,123456)
 btfpy.Le_pair(btfpy.Localnode(),btfpy.JUST_WORKS,0)
+btfpy.Le_pair(btfpy.Localnode(),btfpy.SECURE_CONNECT,0)
+btfpy.Le_pair(btfpy.Localnode(),btfpy.AUTHENTICATION_ON | btfpy.SECURE_CONNECT,0) 
 btfpy.Le_server(callback,0)
 ```
 
@@ -2857,6 +2880,7 @@ These files are available.
 
 ```
 keyboard.c/py and keyboard.txt - The Pi acts as a Bluetooth keyboard
+mouse.c/py and mouse.txt - The Pi acts as a Bluetooth mouse. Arrow keys move the cursor
 ```
 
 This is the keyboard.txt devices file that specifies an HID device:
@@ -2953,7 +2977,8 @@ to btferret custom codes and then to HID codes.
 
 To program other HID devices,
 use keyboard.c/py/txt as a starting point. The characteristics that need to
-be modified are Report Map, and possibly the size of Report1. Leave everything else the same.  
+be modified are Report Map, and possibly the size of Report1. Leave everything else the same.
+For example, the mouse.c/py programs emulate an HID mouse.
 
 
 Full information is available here, but some of it applies to a Classic HID device, rather
@@ -2963,6 +2988,8 @@ Device Class Definition for HID, Report Maps:
 
 www.usb.org/sites/default/files/documents/hid1_11.pdf
 
+(See Appendix E.6 for keyboard Report Map)
+
 HID Usage Tables for USB. Details of all possible HID devices: 10 HID Key codes (for keyboard.c/py):
 
 www.usb.org/document-library/hid-usage-tables-14
@@ -2970,6 +2997,9 @@ www.usb.org/document-library/hid-usage-tables-14
 HOGP - HID over GATT profile:
 
 www.bluetooth.com/specifications/specs/hid-over-gatt-profile-1-0/
+
+Silicon Labs [Keyboard code example](https://docs.silabs.com/bluetooth/2.13/code-examples/applications/ble-hid-keyboard)
+with useful description. (But the final three 0x05,0x01 entries in the Report Map listing appear to be a mistake)
 
 
 ### MULTIPLE REPORTS
@@ -3233,7 +3263,7 @@ keys_to_callback(flag,keyboard)
 le_pair(node,flags,passkey)
     flags = JUST_WORKS, PASSKEY_FIXED, PASSKEY_RANDOM
             PASSKEY_OFF, PASSKEY_LOCAL, PASSKEY_REMOTE
-            BOND_NEW, BOND_REPAIR
+            BOND_NEW, BOND_REPAIR, SECURE_CONNECT
             AUTHENTICATION_ON, AUTHENTICATION_OFF
 le_scan()
 le_server(le_callback,timerds)
@@ -3327,7 +3357,7 @@ number_found = Find_ctics(node)
      okfail = Le_pair(node,flags,passkey)
                 flags: JUST_WORKS, PASSKEY_FIXED, PASSKEY_RANDOM
                        PASSKEY_OFF, PASSKEY_LOCAL,.PASSKEY_REMOTE
-                       BOND_NEW, BOND_REPAIR
+                       BOND_NEW, BOND_REPAIR, SECURE_CONNECT
                        AUTHENTICATION_ON, AUTHENTICATION_OFF
        None = Le_scan()
      okfail = Le_server(le_callback,timerds)
@@ -4397,9 +4427,12 @@ which must be specified in this call. A random passkey is displayed on one devic
 be entered on the other device which will prompt for it during the connection procedure. The device that
 chooses and displays the random passkey must be specified in this call. See the examples below for
 the server's agent (input/output capability) setting.
-An LE wait time should be
-set before pairing, and should take account of the time it may take to enter a passkey, or the pairing
-will fail with a timeout error.
+If the pairing includes a passkey entry, separate wait times (set\_le\_wait) should
+be set for connection and pairing. Connection will complete quickly, so a wait of one second
+will usually work. The system will always wait for the set time, because it cannot know what the server
+will do, and there is no identifiable end point. 
+A longer time should then be set for pairing to allow for possible passkey entry. By contrast, this works
+as a time-out, so the wait will end when pairing completes.
 
 Bonding is a separate process that saves the pairing infomation on both devices, so they can be re-paired
 without going through the passkey entry procedure again. The BOND\_NEW and BOND\_REPAIR options implement this.
@@ -4414,10 +4447,22 @@ passkey security. If authentication is enabled,
 the server will only allow reads and writes to its characteristics if the client
 has connected with a passkey.
 
-In btferret.c/py enable security settings input by uncommenting the clientsecurity()
-call in clientconnect() and serversecurity() in server().
-
 Passkey security is also known as MITM (Man In The Middle).
+
+There are two ways of setting up pairing: Legacy and Secure Connection.
+The difference is that the Secure Connection pairing procedure is more resistant to attack.
+
+Security levels are as follows:
+
+```
+No pairing                 - mode 1, level 1
+Just Works, Legacy         - mode 1, level 2
+Just Works, Secure Connect - mode 1, level 2
+Passkey, Legacy            - mode 1, level 3
+Passkey, Secure Connect    - mode 1, level 4
+
+modes 2 and 3 are not supported
+```
 
 
 PARAMETERS
@@ -4441,6 +4486,10 @@ flags =
           PASSKEY_LOCAL   Local device (displays passkey if random)
           PASSKEY_REMOTE  Remote device (displays passkey if random)
           
+        Legacy or Secure Connection
+        OR'ed with
+          SECURE_CONNECT  If not specified, default is Legacy
+          
         Bonding
         OR'ed with
           BOND_NEW        Bond during pairing
@@ -4459,6 +4508,10 @@ flags =
 
         Authentication 
           AUTHENTICATION_ON   Client must connect with passkey security
+          
+        Legacy or Secure Connection
+          SECURE_CONNECT   Agrees to secure connection if client asks.
+                           If not specified, default is Legacy          
 ```
 
 RETURN
@@ -4474,9 +4527,11 @@ SAMPLE CODE for a client connecting to a server that requires security
 ```
      // connect to an LE device first
      
+set_le_wait(1000);  // 1 second wait for connection     
+     
 connect_node(7,CHANNEL_LE,0);
 
-set_le_wait(10000);  // 10 second wait to allow time for possible passkey entry
+set_le_wait(20000);  // 20 second wait to allow time for possible passkey entry
 
   // After connection - Secure connection by one of the following three options: 
   
@@ -4491,7 +4546,11 @@ le_pair(7,PASSKEY_RANDOM | PASSKEY_REMOTE,0);  // Remote server chooses passkey 
 
 le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL,0);   // Local client chooses passkey and displays it
                                                // Enter on remote server when prompted
-                                               // Server should use a KeyboardDisplay agent  
+                                               // Server should use a KeyboardDisplay agent
+                                               
+le_pair(7,PASSKEY_RANDOM | PASSKEY_LOCAL | SECURE_CONNECT,0);  // Secure Connection setup
+                                                               // rather than Legacy                                            
+                                               
    // BONDING saves pairing information
    // Pair (using any method) and Bond on first connection
    
@@ -4504,12 +4563,14 @@ le_pair(7,BOND_REPAIR,0);
                                                
 
 PYTHON
+btfpy.Set_le_wait(1000)    # 1 second wait for connection
 btfpy.Connect_node(7,btfpy.CHANNEL_LE,0)
-btfpy.Set_le_wait(10000)
+btfpy.Set_le_wait(20000)   # 20 second wait for pairing to allow for passkey entry
 btfpy.Le_pair(7,btfpy.JUST_WORKS,0)
 btfpy.Le_pair(7,btfpy.PASSKEY_FIXED | btfpy.PASSKEY_REMOTE,123456)
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_REMOTE,0) 
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_LOCAL,0)
+btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_LOCAL | btfpy.SECURE_CONNECT,0)
 btfpy.Le_pair(7,btfpy.PASSKEY_RANDOM | btfpy.PASSKEY_REMOTE | btfpy.BOND_NEW,0)
 btfpy.Le_pair(7,btfpy.BOND_REPAIR,0)
 ```
@@ -4522,6 +4583,8 @@ SAMPLE CODE for a server.
 le_pair(localnode(),PASSKEY_FIXED,123456);   // Remote client must know this passkey
 le_pair(localnode(),AUTHENTICATION_ON,0);    // Enable authentication
 le_pair(localnode(),AUTHENTICATION_ON | PASSKEY_FIXED,123456);
+                                  // Use Secure Connection if client asks
+le_pair(localnode(),AUTHENTICATION_ON | PASSKEY_FIXED | SECURE_CONNECT,123456); 
 le_pair(localnode(),JUST_WORKS,0);           // Forces Just Works
        // Then start the server
 
@@ -4534,6 +4597,7 @@ btfpy.Le_pair(localnode(),btfpy.PASSKEY_FIXED,123456)
 btfpy.Le_pair(localnode(),btfpy.AUTHENTICATION_ON,0)
 btfpy.Le_pair(localnode(),btfpy.AUTHENTICATION_ON | btfpy.PASSKEY_FIXED,123456)
 btfpy.Le_pair(localnode(),btfpy.JUST_WORKS,0)
+btfpy.Le_pair(localnode(),btfpy.JUST_WORKS | btfpy.SECURE_CONNECT,0)
 btfpy.Le_server(callback,0)
 ```
 
@@ -6161,13 +6225,16 @@ store infomation about devices they have seen, and can get confused by the multi
 displayed at various times by the local address (bluez, Classic, LE). This command sets up a new
 address for the server and advertises it as a pure LE device, so a client will always see the same
 identity for that address. Used for HID devices (see keyboard.c/py).
-See [alternative setup](#3-7-1-alternative-setup).    
+See [alternative setup](#3-7-1-random-address-alternative-setup).    
 
 PARAMETERS
 
 ```
 address[6] = 6-byte address
              The 2 hi bits of address[0] must be 1
+             
+             If address = 00:00:00:00:00:00 cancel random address
+             and revert to local fixed address
 ```
 
 SAMPLE CODE

@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 14 
+  btlib.c/h  Version 15 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -15,7 +15,7 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"   
+#include "btlib.h"     
 
 
 void btlink(void);
@@ -450,12 +450,13 @@ int server()
 
 int serversecurity(int *passkey)
   {
-  int flags,key,auth,jwflag;
+  int flags,key,auth,jwflag,scflag;
  
   flags = 0; 
   auth = 0;
   key = 0;
   jwflag = 0;
+  scflag = 0;
   *passkey = 0;
 
   printf("\nPAIRING and SECURITY\n");
@@ -491,13 +492,24 @@ int serversecurity(int *passkey)
   jwflag = inputint("Accept Passkey security if the client asks");
   if(jwflag < 0)
     return(-1);   
- 
+
+  /******* uncomment for secure connect option
+  printf("\nSECURE CONNECTION\n");
+  printf("  0 = No - Legacy pairing\n");
+  printf("  1 = Yes - Secure Connection pairing\n");
+  scflag = inputint("Accept secure connection if the client asks");
+  if(scflag < 0)
+    return(-1);   
+  ******/
+  
   if(key == 1)
     flags = PASSKEY_FIXED;
   if(auth == 1)
     flags |= AUTHENTICATION_ON; 
   if(jwflag == 0)
     flags |= JUST_WORKS;
+  if(scflag == 1)
+    flags |= SECURE_CONNECT;
       
   return(flags);
   }  
@@ -785,7 +797,7 @@ int clientconnect()
 
 int clientsecurity(int *passkey)
   {
-  int flags,pair,keydev,bond;
+  int flags,pair,keydev,bond,scflag;
   int flaglook[4] = { 0,JUST_WORKS,PASSKEY_FIXED,PASSKEY_RANDOM };
   int devlook[2] = { PASSKEY_LOCAL,PASSKEY_REMOTE };
   int bondlook[3] = { 0,BOND_NEW,BOND_REPAIR }; 
@@ -793,6 +805,7 @@ int clientsecurity(int *passkey)
   flags = 0; 
   pair = 0;
   keydev = 0;
+  scflag = 0;
   *passkey = 0;
   
   printf("\nBONDING  (save pairing info)\n");
@@ -867,9 +880,21 @@ int clientsecurity(int *passkey)
     }
   else
     *passkey = 0;
+
+  /****** uncomment for secure connection option ******
+  printf("\nSECURE CONNECTION\n");
+  printf("  0 = No - Legacy pairing\n");
+  printf("  1 = Yes - Secure Connection pairing\n");
+  scflag = inputint("Ask for secure connection");
+  if(scflag < 0)
+    return(-1);   
+  **************/
   
   flags |= flaglook[pair] | devlook[keydev]; 
 
+  if(scflag != 0)
+    flags |= SECURE_CONNECT;
+    
   return(flags);
   }  
 
