@@ -1,4 +1,4 @@
-/********* Version 14.1 *********/
+/********* Version 15 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,14 +10,16 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <fcntl.h>
-#include "btlib.h"       
+#include "btlib.h"         
 
 #ifdef BTFPYTHON
-  #include "btfpython.c"
+  #include "btfpython.c"  
 #endif
 
 /********** BLUETOOTH defines ********/
-  
+
+// Uncomment RAND_HI for high security random numbers
+// #define RAND_HI  
 #define BTPROTO_HCI 1
 #define BTPROTO_RFCOMM 3
 #define BTPROTO_L2CAP 0
@@ -35,7 +37,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 14
+#define VERSION 15
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -123,6 +125,10 @@ struct devdata
   unsigned char irand[16];
   unsigned char confirm[16];
   unsigned char divrand[16];
+  unsigned char pubkeyx[32];
+  unsigned char pubkeyy[32];
+  unsigned char dhkey[32];
+  int pkround;
   int lepasskey;
   int lepairflags;
    
@@ -233,6 +239,21 @@ struct devdata
 #define TIM_LOCK 1
 #define TIM_FREE 2
 #define TIM_COUNT 3
+
+// cryptoflag
+#define CRY_NEW 1
+#define CRY_SC (1 << 1)
+#define CRY_PKEY (1 << 2)
+#define CRY_BOND (1 << 3)
+#define CRY_DONE (1 << 4)
+#define CRY_AUTHOK (1 << 5)
+#define CRY_POKNOTEN (1 << 6)
+
+#define DISPLAY_ONLY 0
+#define DISPLAY_YN 1
+#define KEY_ONLY 2
+#define NO_INOUT 3
+#define KEY_DISPLAY 4
              
 #define SERVDAT 128
 struct servicedata 
@@ -286,8 +307,10 @@ struct globpar
   unsigned char *ssareply;  // SSA reply packet
   unsigned char *sdp;
   unsigned char randbadd[6];
+  int dhkeydev;
 
   int cryptfd;
+  int cryptfd1;
   int randomfd;
   int hidflag; // 01=HID 10=User add 
   int settings;
@@ -421,7 +444,19 @@ int calce(unsigned char *key,unsigned char *in,unsigned char *out);
 int calcc1(unsigned char *key,unsigned char *r,unsigned char *preq,unsigned char *pres,unsigned char iat,unsigned char rat,
             unsigned char *ia,unsigned char *ra,unsigned char *res);
 int calcs1(unsigned char *key,unsigned char *r1,unsigned char *r2,unsigned char *out);
-int setupcrypt(void);
+int calcf4(unsigned char *u, unsigned char *v,
+           unsigned char *key, unsigned char z, unsigned char *res);
+int calcf5(unsigned char *w, unsigned char *n1,
+           unsigned char *n2, unsigned char *a1, unsigned char *a2,
+           unsigned char *mackey, unsigned char *ltk);
+int calcf6(unsigned char* w, unsigned char* n1,
+           unsigned char* n2, unsigned char* r, unsigned char* io_cap,
+           unsigned char* a1, unsigned char* a2, unsigned char* res);
+int calcg2(unsigned char* u, unsigned char* v,
+           unsigned char* x, unsigned char* y);
+int aes_cmac(unsigned char *key,unsigned char *msg,int msglen,unsigned char *res);
+void getrand(unsigned char *s,int len);
+int setupcrypt(int flag);
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
                               // 1 still available
@@ -577,6 +612,11 @@ unsigned char leadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x0F,0x08,0xFF,0x34,
 unsigned char leadvertx[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x12,0x08,0xFF,0x34,0x12,
 0x00,0x00,0xC0,0xDE,0x99,0x02,0x01,0x06,0x05,0x08,0x61,0x62,0x63,0x64,
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
+
+//iBeacon advert UUID = 112233445566778899AABBCCDDEEFF00 Major=1234 Minor=5678
+//unsigned char ibadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,
+//0x1E,0x02,0x01,0x06,0x1A,0xFF,0x4C,0x00,0x02,0x15,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,
+//0xEE,0xFF,0x00,0x12,0x34,0x56,0x78,0x00,0x00 };
 
    // keyboard appearance bytes = C1 03
 unsigned char hidadvert[40] = { 36,0,0,0,0x01,0x08,0x20,0x20,0x10,0x02,0x01,0x06,0x03,0x19,
@@ -759,6 +799,11 @@ unsigned char sendltk[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x06,1,2
 unsigned char sendci[32] =  {20,0,S2_HAND,0,2,0x40,0,0x0F,0,0x0B,0,6,0,0x07,1,2,3,4,5,6,7,8,9,10 };
 unsigned char confail[16] =  {11,0,S2_HAND,0,2,0x40,0,0x06,0,0x02,0,6,0,0x05,4 };
 unsigned char conup[32] = { 18,0,S2_HAND,0,1,0x13,0x20,14,0x40,0,0x30,0x00,0x30,0x00,0x02,0x00,0xC0,0x03,0x00,0x00,0x00,0x00 };
+unsigned char keypair[16] = {4,0,0,0,1,0x25,0x20,0x00}; 
+unsigned char dhkey[80] =   {68,0,0,0,1,0x26,0x20,0x40}; 
+unsigned char sendxykeys[80] =  {74,0,S2_HAND,0,2,0x40,0,0x45,0,0x41,0,6,0,0x0C };
+unsigned char dhcheck[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x0D };
+
 
 /********************** END sendhci() PACKETS *********************/
 
@@ -1167,6 +1212,26 @@ char *errorle[20] = {
 "Value Not Allowed"
 };  // last = [19]
 
+char *errorcry[16] = {
+"",
+"Passkey entry failed",
+"OOB not available",
+"Authentication not possible",
+"Confirm value fail",
+"Pairing not supported",
+"Key size",
+"Command not supported",
+"Unspecified",
+"Repeated attempts",
+"Invalid parameters",
+"DHKey check fail",
+"Numeric comparison failed",
+"BR/EDR pair in progress",
+"Cross transport not allowed",
+"Key rejected"
+};  // last = [15]
+
+
 /******** LE advertising data type codes *****************/
 
 char *adlist[48] = {
@@ -1319,7 +1384,9 @@ int init_blue_ex(char *filename,int hcin)
   gpar.prts = 0;   // start of circular buffer
   gpar.prte = 0;   // end of print for scroll
   gpar.cryptfd = 0;
-  gpar.randomfd = 0;
+  gpar.cryptfd1 = 0;
+  gpar.dhkeydev = 0;
+  gpar.randomfd = -1;
   gpar.hidflag = 0;
   gpar.settings = 0;
   gpar.keytocb = 0;
@@ -1956,12 +2023,8 @@ int init_blue_ex(char *filename,int hcin)
     }
   else
     {
-    gpar.randbadd[0] = (rand() | 0xC0) & 0xFF;
-    gpar.randbadd[1] = rand() & 0xFF;
-    gpar.randbadd[2] = rand() & 0xFF; 
-    gpar.randbadd[3] = rand() & 0xFF; 
-    gpar.randbadd[4] = rand() & 0xFF; 
-    gpar.randbadd[5] = rand() & 0xFF; 
+    getrand(gpar.randbadd,6);
+    gpar.randbadd[0] |=  0xC0;
 
     for(n = 0 ; n < 6 ; ++n)
       lerandadd[13-n] = gpar.randbadd[n];
@@ -1991,6 +2054,10 @@ int init_blue_ex(char *filename,int hcin)
       sendhci(hidadvert,0);
       statusok(0,hidadvert);
       }
+    VPRINT "Get public keys\n");
+    sendhci(keypair,0);
+    readhci(0,IN_AUTOEND,0,2000,0);
+    n = findhci(IN_AUTOEND,0,INS_POP);
     }
 
   flushprint();
@@ -2758,7 +2825,12 @@ int lescanx()
               else
                 {
                 if(rp[j] == 0x1A && rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
-                  NPRINT "    iBeacon =");
+                  {
+                  NPRINT "    iBeacon UUID ");
+                  for(k = 6 ; k < 22 ; ++k)
+                    NPRINT "%02X",rp[j+k]);
+                  NPRINT " Major %02X%02X Minor %02X%02X",rp[j+22],rp[j+23],rp[j+24],rp[j+25]);
+                  }
                 else
                   {
                   if(rp[j+1] == 0xFF && rp[j+2] == 0x4C && rp[j+3] == 0x00)
@@ -2769,14 +2841,15 @@ int lescanx()
                     NPRINT "    Samsung =");       
                   else       
                     NPRINT "    %s =",adlist[tn]);
-                  }         
-                k = 0;
-                while(k < rp[j]-1)
-                  {
-                  if((tn == 6 || tn == 7) && k > 0 && (k & 0x0F) == 0)
-                    NPRINT "\n       ");  // 16-byte UUIDs new line  
-                  NPRINT " %02X",rp[j+2+k]);
-                  ++k;
+                           
+                  k = 0;
+                  while(k < rp[j]-1)
+                    {
+                    if((tn == 6 || tn == 7) && k > 0 && (k & 0x0F) == 0)
+                      NPRINT "\n       ");  // 16-byte UUIDs new line  
+                    NPRINT " %02X",rp[j+2+k]);
+                    ++k;
+                    }
                   }
                 NPRINT "\n");
                 }                     
@@ -4494,9 +4567,9 @@ int leconnect(int ndevice)
 
 int le_pair(int node,int flags,int passkey)
   {  
-  int n,ndevice;
+  int n,ndevice,scflag;
   struct devdata *dp;
- 
+   
   ndevice = devnp(node);
   if(ndevice < 0)
     return(0);
@@ -4524,7 +4597,7 @@ int le_pair(int node,int flags,int passkey)
       
   if(ndevice == 0)  // server
     {
-    dp->lepairflags &= AUTHENTICATION_ON | PASSKEY_FIXED | JUST_WORKS;
+    dp->lepairflags &= AUTHENTICATION_ON | PASSKEY_FIXED | JUST_WORKS | SECURE_CONNECT;
     if(dp->lepairflags != flags)
       NPRINT "Server flag ignored in le_pair\n");
     if((dp->lepairflags & PASSKEY_FIXED) != 0)
@@ -4556,7 +4629,7 @@ int le_pair(int node,int flags,int passkey)
     checkpairflags(&dp->lepairflags);
     
     preq[PAKHEADSIZE+10] = 3;  // No io - just works
-    preq[PAKHEADSIZE+12] = 0;  // no bond
+    preq[PAKHEADSIZE+12] = 0;  // no bond, legacy
     preq[PAKHEADSIZE+15] = 1;  // link
 
     if((dp->lepairflags & (PASSKEY_RANDOM | PASSKEY_FIXED | PASSKEY_LOCAL | PASSKEY_REMOTE)) != 0)
@@ -4567,6 +4640,17 @@ int le_pair(int node,int flags,int passkey)
         preq[PAKHEADSIZE+10] = 4;  // D+K
       }
 
+    if((dp->lepairflags & SECURE_CONNECT) != 0)
+      {
+      scflag = 0;
+      for(n = 0 ; n < 32 && scflag == 0 ; ++n)
+        scflag |= dev[0]->pubkeyx[n];
+      if(scflag != 0)
+        preq[PAKHEADSIZE+12] |= 8; // sc
+      else 
+        NPRINT "No keys - SECURE_CONNECT cancelled\n");
+      }
+      
     if((dp->lepairflags & (BOND_NEW | BOND_REPAIR)) != 0)
       preq[PAKHEADSIZE+12] |= 1; // bond 
       
@@ -4586,7 +4670,10 @@ int le_pair(int node,int flags,int passkey)
     flushprint();
     return(1);
     }
-  NPRINT "PAIR FAIL\n");  
+  else if(n < 0)
+    NPRINT "PAIR time out (try larger set_le_wait)\n");
+  else
+    NPRINT "PAIR FAIL\n");  
   flushprint();
   return(0);
   }
@@ -4603,7 +4690,7 @@ void checkpairflags(int *flags)
       
   if((*flags & JUST_WORKS) != 0)
     {
-    *flags &= (JUST_WORKS | BOND_NEW | BOND_REPAIR);
+    *flags &= (JUST_WORKS | BOND_NEW | BOND_REPAIR | SECURE_CONNECT);
     return;
     }
          
@@ -4921,7 +5008,7 @@ void close_all()
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();     
+  // printins();      
   }  
   
   
@@ -5944,7 +6031,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   {
   unsigned char b0,*datp,*rsp,ledat[2];   
   int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
-  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb;
+  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb,buf3sav;
   int retval,savtimendms,datlen,ascflag,clsflag,multiflag,seqflag;
   long long int locmustflag,gotflag;
   unsigned int timstart,timx,timendms;
@@ -6152,6 +6239,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     xprintflag = 0;
     devicen = 0;      // sending device unknown
     xwantlen = 0;
+    buf3sav = -1;
     
     if(buf[0] == 4)    // HCI events
       {
@@ -6193,9 +6281,27 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         }
       else if(buf[1] == 0x3E && buf[3] == 5)
         {
+        buf3sav = buf[3];
         buf[3] = 0xFF;
         n0 = 4 | 0x80;  
         gotflag = IN_CRYPTO | IN_IMMED;
+        }
+      else if(buf[1] == 0x3E && buf[3] == 8 && buf[4] == 0)
+        {   // public XY  keys
+        VPRINT "GOT local XY keys\n");
+        for(k = 0 ; k < 32 ; ++k)
+          {
+          dev[0]->pubkeyx[k] = buf[k+5];
+          dev[0]->pubkeyy[k] = buf[k+37];
+          }
+        gotflag = IN_AUTOEND;
+        }     
+      else if(buf[1] == 0x3E && buf[3] == 9 && buf[4] == 0 && gpar.dhkeydev != 0)
+        {    // DHkey
+        VPRINT "GOT DHkey\n");
+        for(k = 0 ; k < 32 ; ++k)
+          dev[gpar.dhkeydev]->dhkey[k] = buf[k+5];
+        gpar.dhkeydev = 0;
         }
       else if(buf[1] == 8 || buf[1] == 0x59)
         {
@@ -6210,10 +6316,14 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         else
           {   // LE server crypto
           if(buf[3] == 0)
+            {
+            buf3sav = 0;
             buf[3] = 0xFE;
+            }
           else
             {
             buf[6] = buf[3];
+            buf3sav = buf[3];
             buf[3] = 0xFD;
             }
           n0 = 4 | 0x80;
@@ -6836,7 +6946,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
       {         // only print le scan reply gotflag == LE_SCAN or meshflag = 1
     //  igflag = 0;
       b0 = buf[0];
-
+      if(buf3sav >= 0)
+        buf[3] = (unsigned char)buf3sav;
+        
       if(b0 == 2 && xprintflag != 0)
         {
         if(xprintflag == 1)
@@ -6985,16 +7097,16 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
 void immediate(long long lookflag)
   {
-  int n,j,devicen,id,ch,psm;
-  int bn,getout,cticn,chandle;
+  int n,j,devicen,id,ch,psm,scflag;
+  int bn,getout,cticn,chandle,cmpok;
   unsigned char *rsp,buf[16];
   char *dum,sbuf[16];
   long long int gotflag;
   struct devdata *dp;
   struct cticdata *cp;
   struct devdata *rp,*ip,*sp;  
-  unsigned char key[16],out[16],ia[6],ra[6];
-      
+  unsigned char rby,key[16],out[16],ia[7],ra[7],mackey[16];
+         
   while(1)
     {
     n = 0;
@@ -7427,31 +7539,57 @@ void immediate(long long lookflag)
        else   
          ra[j] = rp->baddr[5-j];
        }
+     ia[6] = ip->leaddtype & 1;
+     ra[6] = rp->leaddtype & 1;     
+     
      if(insdat[n] == 1)
        {
        VPRINT "GOT pair request - SEND response\n");
        pres[PAKHEADSIZE+10] = 3;  // no inout JustWorks      
        pres[PAKHEADSIZE+12] = 0;  // no passkey/bond
        pres[PAKHEADSIZE+15] = 0;  // no link key
-         
-       if(insdat[n+1] == 4)
-         pres[PAKHEADSIZE+10] = 0;  // d      
-       else if(insdat[n+1] == 0)
-         pres[PAKHEADSIZE+10] = 4;  // k+d      
+ 
+       sp->cryptoflag = CRY_NEW;
+               
+       if(insdat[n+1] == KEY_DISPLAY)
+         pres[PAKHEADSIZE+10] = DISPLAY_ONLY;       
+       else if(insdat[n+1] == DISPLAY_ONLY)
+         pres[PAKHEADSIZE+10] = KEY_DISPLAY;       
        
        if((insdat[n+3] & 1) != 0)
+         {
          pres[PAKHEADSIZE+12] = 1;   // bond
-
+         sp->cryptoflag |= CRY_BOND;
+         }
        if((insdat[n+3] & 4) != 0)
+         {
          pres[PAKHEADSIZE+12] |= 4;  // passkey
+         sp->cryptoflag |= CRY_PKEY;
+         }
          
+       if((insdat[n+3] & 8) != 0 && (rp->lepairflags & SECURE_CONNECT) != 0)
+         {      
+         // got public keys from OCF 25 call?   
+         getout = 0;
+         for(j = 0 ; j < 32 && getout == 0 ; ++j)
+           getout |= rp->pubkeyx[j];
+         if(getout != 0)
+           {
+           pres[PAKHEADSIZE+12] |= 8;  // sc
+           sp->cryptoflag |= CRY_SC;
+           }
+         else
+           NPRINT "No keys - SECURE_CONNECT cancelled\n");
+         }
+                  
        if((insdat[n+6] & 1) != 0)
          pres[PAKHEADSIZE+15] = 1;   // link
 
        if((rp->lepairflags & JUST_WORKS) != 0)
          {    
          pres[PAKHEADSIZE+10] = 3;   // no io                    
-         pres[PAKHEADSIZE+12] &= 1;  // nix passkey
+         pres[PAKHEADSIZE+12] &= 9;  // nix passkey
+         sp->cryptoflag &= ~CRY_PKEY;
          }                    
          
        sendhci(pres,devicen);
@@ -7463,28 +7601,97 @@ void immediate(long long lookflag)
          sp->pres[j] = pres[j+PAKHEADSIZE+9];      
          }
   
-       if((rp->lepairflags & JUST_WORKS) != 0)
+       getrand(sp->rrand,16);
+
+       if((rp->lepairflags & JUST_WORKS) != 0 || (sp->cryptoflag & CRY_PKEY) == 0)
          rp->lepasskey = 0;
-       else if((sp->preq[3] & 4) != 0 && sp->preq[1] == 4 && (rp->lepairflags & PASSKEY_FIXED) == 0)
+       else if((sp->cryptoflag & CRY_PKEY) != 0 && sp->preq[1] == KEY_DISPLAY && (rp->lepairflags & PASSKEY_FIXED) == 0)
          {
-         key[0] = rand() & 0xFF;
-         key[1] = rand() & 0xFF;
-         key[2] = rand() & 0x0F;
+         getrand(key,3);
+         //key[0] = rand() & 0xFF;
+         //key[1] = rand() & 0xFF;
+         key[2] &= 0x0F;
          if(key[2] == 0x0F)
            key[2] = 0x0E;
          rp->lepasskey = (key[2] << 16) + (key[1] << 8) + key[0];
          flushprint();
          printf("Passkey = %06d\n",rp->lepasskey);
          }
-       sp->cryptoflag = 1;
+  
+       sp->pkround = 0;  // sc passkey bit
+       gpar.dhkeydev = 0; 
        }          
      else if(insdat[n] == 3)
        {
-       VPRINT "GOT I confirm - SEND R confirm\n");
-       
-       if((sp->preq[3] & 4) != 0 && sp->preq[1] != 4)
+       if((sp->cryptoflag & CRY_SC) == 0)
+         {  // legacy
+         VPRINT "GOT I confirm - SEND R confirm\n");
+         if((sp->cryptoflag & CRY_PKEY) != 0 && sp->preq[1] != KEY_DISPLAY)
+           {
+           if(sp->preq[1] != DISPLAY_ONLY)
+              NPRINT "WARNING - Expected client to have a DisplayOnly agent\n");
+           flushprint();
+           printf("Input passkey: ");
+           j = setkeymode(0);
+           do
+             {
+             dum = fgets(sbuf,16,stdin);
+             }
+           while(sbuf[0] == 10);
+           setkeymode(j); 
+           rp->lepasskey = atoi(sbuf);
+           }
+
+         for(j = 0 ; j < 16 ; ++j)
+           {
+           sp->confirm[j] = insdat[n+j+1];  // I confirm
+           key[j] = 0;   // Just Works
+           }    
+
+         if((sp->cryptoflag & CRY_PKEY) != 0)
+           {
+           j = rp->lepasskey;          
+           key[0] = j & 0xFF;
+           key[1] = (j >> 8) & 0xFF;
+           key[2] = (j >> 16) & 0xFF;
+           }
+                                           
+         if(calcc1(key,sp->rrand,sp->preq,sp->pres,ia[6],ra[6],ia,ra,confirm+PAKHEADSIZE+10) == 0)
+           {
+           NPRINT "No crypto\n");
+           confail[PAKHEADSIZE+10] = 5;
+           sendhci(confail,devicen);
+           }
+         else
+           sendhci(confirm,devicen);
+         }
+       else if((sp->cryptoflag & CRY_PKEY) != 0)
+         {  // sc passkey round
+         VPRINT "Got I confirm. Send R confirm bit %d\n",sp->pkround);
+
+         for(j = 0 ; j < 16 ; ++j)
+           sp->confirm[j] = insdat[n+j+1];  // I confirm
+  
+         getrand(sp->rrand,16);
+         rby = ((rp->lepasskey >> sp->pkround) & 1) | 0x80;
+         if(calcf4(rp->pubkeyx,sp->pubkeyx,sp->rrand,rby,confirm+PAKHEADSIZE+10) == 0)
+           {
+           NPRINT "No crypto\n");
+           confail[PAKHEADSIZE+10] = 5;
+           sendhci(confail,devicen);
+           }
+         else        
+           sendhci(confirm,devicen);
+         }  
+       }
+     else if(insdat[n] == 0x0C)
+       {
+       sp->cryptoflag |= CRY_SC;  // sc 
+       VPRINT "Got remote XY keys. Calc DHkey. Send XY keys\n");
+
+       if((sp->cryptoflag & CRY_PKEY) != 0 && sp->preq[1] != KEY_DISPLAY)
          {
-         if(sp->preq[1] != 0)
+         if(sp->preq[1] != DISPLAY_ONLY)
             NPRINT "WARNING - Expected client to have a DisplayOnly agent\n");
          flushprint();
          printf("Input passkey: ");
@@ -7498,25 +7705,32 @@ void immediate(long long lookflag)
          rp->lepasskey = atoi(sbuf);
          }
 
-       for(j = 0 ; j < 16 ; ++j)
+       for(j = 0 ; j < 32 ; ++j)
          {
-         sp->confirm[j] = insdat[n+j+1];  // I confirm
-         key[j] = 0;   // Just Works
-         }    
-
-       if((sp->preq[3] & 4) != 0)
-         {
-         j = rp->lepasskey;          
-         key[0] = j & 0xFF;
-         key[1] = (j >> 8) & 0xFF;
-         key[2] = (j >> 16) & 0xFF;
+         sp->pubkeyx[j] = insdat[n+j+1];
+         sp->pubkeyy[j] = insdat[n+j+33];
+         dhkey[j+PAKHEADSIZE+4] = sp->pubkeyx[j];
+         dhkey[j+PAKHEADSIZE+36] = sp->pubkeyy[j];
+         sp->dhkey[j] = 0;
          }
-               
-       for(j = 0 ; j < 16 ; ++j)
-         sp->rrand[j] = rand() & 0xFF;
-                                  
-       calcc1(key,sp->rrand,sp->preq,sp->pres,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
-       sendhci(confirm,devicen);
+       if(gpar.dhkeydev != 0)
+         NPRINT "WARNING - Two devices connecting?\n");  
+       gpar.dhkeydev = devicen;
+       sendhci(dhkey,0); 
+       usleep(200000);
+       for(j = 0 ; j < 32 ; ++j)
+         {
+         sendxykeys[j+PAKHEADSIZE+10] = rp->pubkeyx[j];
+         sendxykeys[j+PAKHEADSIZE+42] = rp->pubkeyy[j];
+         }      
+       sendhci(sendxykeys,devicen);
+       
+       if((sp->cryptoflag & CRY_PKEY) == 0)
+         { // no passkey      
+         VPRINT "Send confirm\n");
+         calcf4(rp->pubkeyx,sp->pubkeyx,sp->rrand,0,confirm+PAKHEADSIZE+10);
+         sendhci(confirm,devicen);
+         }
        }
      else if(insdat[n] == 4)
        {
@@ -7526,52 +7740,119 @@ void immediate(long long lookflag)
          sp->irand[j] = insdat[n+j+1];
          key[j] = 0;   // Just Works 
          }
-
-       if((sp->preq[3] & 4) != 0)
+         
+       cmpok = 1;  
+       if((sp->cryptoflag & CRY_SC) == 0)
+         {  // legacy
+         if((sp->cryptoflag & CRY_PKEY) != 0)
+           {
+           j = rp->lepasskey;          
+           key[0] = j & 0xFF;
+           key[1] = (j >> 8) & 0xFF;
+           key[2] = (j >> 16) & 0xFF;
+           }
+               
+         calcc1(key,sp->irand,sp->preq,sp->pres,ia[6],ra[6],ia,ra,out);
+         cmpok = bincmp(sp->confirm,out,16,DIRN_FOR);
+                  
+         if(cmpok != 0)   
+           VPRINT "I confirm OK\n");
+         else
+           {
+           NPRINT "PAIR confirm fail\n");
+           confail[PAKHEADSIZE+10] = 4;
+           sendhci(confail,devicen);
+           }
+         }
+       else
+         {
+         if((sp->cryptoflag & CRY_PKEY) != 0)
+           {  // sc passkey round
+           rby = (rp->lepasskey >> sp->pkround) & 1;
+           rby |= 0x80;
+           calcf4(sp->pubkeyx,rp->pubkeyx,sp->irand,rby,out);
+           cmpok = bincmp(sp->confirm,out,16,DIRN_FOR);
+           if(cmpok != 0)   
+             VPRINT "I confirm OK\n");
+           else
+             {
+             NPRINT "PAIR confirm fail\n");
+             confail[PAKHEADSIZE+10] = 4;
+             sendhci(confail,devicen);
+             }         
+           ++sp->pkround;
+           }
+         else
+           {  // numeric comparison
+           j = calcg2(sp->pubkeyx,rp->pubkeyx,sp->irand,sp->rrand);
+           NPRINT "Numeric comparison passkey = %d\n",j);
+           }
+         }  
+           
+       if(cmpok != 0)
+         {
+         VPRINT "SEND R random\n");
+         for(j = 0 ; j < 16 ; ++j)
+           sendrand[j+PAKHEADSIZE+10] = sp->rrand[j];         
+         sendhci(sendrand,devicen);
+         } 
+       else
+         {
+         NPRINT "PAIR confirm fail\n");
+         confail[PAKHEADSIZE+10] = 4;
+         sendhci(confail,devicen);
+         }
+       }
+     else if(insdat[n] == 0x0D)
+       {
+       VPRINT "Got DHchk\n");
+       for(j = 0 ; j < 16 ; ++j)
+         key[j] = 0;
+       if((sp->cryptoflag & CRY_PKEY) != 0)
          {
          j = rp->lepasskey;          
          key[0] = j & 0xFF;
          key[1] = (j >> 8) & 0xFF;
          key[2] = (j >> 16) & 0xFF;
          }
-               
-       calcc1(key,sp->irand,sp->preq,sp->pres,ip->leaddtype & 1,rp->leaddtype & 1,ia,ra,out);
+     
        getout = 0;
-       for(j = 0 ; j < 16 && getout == 0 ; ++j)
+       for(j = 0 ; j < 32 && getout == 0 ; ++j)
+         getout |= sp->dhkey[j];
+       if(getout == 0)
          {
-         if(sp->confirm[j] != out[j])
-           getout = 1;
-         }
-         
-       if(getout == 0)   
-         {
-         VPRINT "I confirm OK\n");
-         sp->cryptoflag = 1;
-         VPRINT "SEND R random\n");
-         for(j = 0 ; j < 16 ; ++j)
-           sendrand[j+PAKHEADSIZE+10] = sp->rrand[j];         
-         sendhci(sendrand,devicen);
+         NPRINT "No DHkey\n");
+         confail[PAKHEADSIZE+10] = 11;
+         sendhci(confail,devicen);
          }
        else
-         {
-         NPRINT "PAIR confirm fail\n");
-         sendhci(confail,devicen);
-         }  
-      
+         {         
+         calcf5(sp->dhkey,sp->irand,sp->rrand,ia,ra,mackey,sp->linkey);
+         calcf6(mackey,sp->irand,sp->rrand,key,sp->preq+1,ia,ra,out);  
+         if(bincmp(out,insdat+n+1,16,DIRN_FOR) == 0)
+           {                  
+           NPRINT "DH check fail\n");
+           confail[PAKHEADSIZE+10] = 11;
+           sendhci(confail,devicen);
+           }
+         else
+           {
+           VPRINT "Send DHchk\n");    
+           calcf6(mackey,sp->rrand,sp->irand,key,sp->pres+1,ra,ia,dhcheck+PAKHEADSIZE+10);
+           sendhci(dhcheck,devicen);
+           }
+         } 
        }
      else if(insdat[n] == 0xFF)
        {
-       if(sp->cryptoflag == 0)
+       if((sp->cryptoflag & CRY_NEW) == 0)
          {
-         VPRINT "Client re-pairing with bond info\n");      
-         // LEkey available? index=[n+3] forward address
-         if((sp->linkflag & (KEY_NEW | KEY_FILE)) == KEY_FILE &&
-                bincmp(sp->baddr,insdat+n+3,6,DIRN_FOR) == 0)
-           {  // address change but have invalid LTK from baddr
-           sp->linkflag &= ~KEY_FILE;  // force rwlinkey with index
-           }       
-         if((sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
-           {
+         scflag = 0;
+         for(j = 0 ; j < 10 && scflag == 0 ; ++j)
+           scflag |= insdat[n+j+3];            
+
+         if(scflag != 0 && (sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
+           {  // legacy only - addr in CI
            // address may have changed - index at [n+3] = old address
            rwlinkey(0,devicen,insdat+n+3);
            }
@@ -7582,7 +7863,10 @@ void immediate(long long lookflag)
            }
          else
            {
-           sp->divrand[0] = insdat[n+11]; // ediv 0=was jw 1=was pk
+           if(scflag == 0)
+             sp->cryptoflag |= CRY_SC;  // divrand[0] set by NEW/FILE pair entry 
+           else
+             sp->divrand[0] = insdat[n+11]; // legacy CI ediv 0=was jw 1=was pk
            for(j = 0 ; j < 16 ; ++j)
              sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
            VPRINT "SEND key\n");
@@ -7591,19 +7875,25 @@ void immediate(long long lookflag)
          }
        else 
          {
-         VPRINT "STK encrypt\n");
-         for(j = 0 ; j < 16 ; ++j)
-           key[j] = 0;
+         if((sp->cryptoflag & CRY_SC) == 0)
+           {  // legacy
+           VPRINT "STK encrypt\n");
+           for(j = 0 ; j < 16 ; ++j)
+             key[j] = 0;
   
-         if((sp->preq[3] & 4) != 0)
-           {
-           j = rp->lepasskey;          
-           key[0] = j & 0xFF;
-           key[1] = (j >> 8) & 0xFF;
-           key[2] = (j >> 16) & 0xFF;
-           }
+           if((sp->cryptoflag & CRY_PKEY) != 0)
+             {
+             j = rp->lepasskey;          
+             key[0] = j & 0xFF;
+             key[1] = (j >> 8) & 0xFF;
+             key[2] = (j >> 16) & 0xFF;
+             }
                     
-         calcs1(key,sp->rrand,sp->irand,sp->linkey);
+           calcs1(key,sp->rrand,sp->irand,sp->linkey);
+           }
+         else
+           VPRINT "Send LTK\n");
+           
          for(j = 0 ; j < 16 ; ++j)
            sendkey[j+PAKHEADSIZE+6] = sp->linkey[j];
          sendhci(sendkey,devicen);
@@ -7611,9 +7901,9 @@ void immediate(long long lookflag)
        }
      else if(insdat[n] == 0xFE)
        {
-       if(sp->cryptoflag == 0)
+       if((sp->cryptoflag & CRY_NEW) == 0)
          { // reconnect
-         VPRINT "Reconnect using LTK\n");
+         VPRINT "Paired using bond info\n");
          for(j = 0 ; ctic(0,j)->type == CTIC_ACTIVE ; ++j)
            {   // HID Reports re-enable notify 
            cp = ctic(0,j);
@@ -7622,57 +7912,65 @@ void immediate(long long lookflag)
            }
          if((gpar.hidflag & 1) != 0)
            {  
-           sp->cryptoflag = 3;    
+           sp->cryptoflag |= CRY_AUTHOK;    
            buf[0] = AUTO_PAIROK; 
            pushins(IN_AUTOEND,devicen,1,buf);
            }
          else
            {
            if(sp->divrand[0] == 1)
-             sp->cryptoflag = 3;  
-           else 
-             sp->cryptoflag = 2;
+             sp->cryptoflag |= CRY_AUTHOK | CRY_PKEY;   
            }
          }
        else
          {
-         VPRINT "LTK encrypt\n");
-        
-         for(j = 0 ; j < 16 ; ++j)
-           {
-           sp->linkey[j] = rand() & 0xFF;
-           if(j == 15 && sp->linkey[15] == 0)
-             sp->linkey[15] = 0xA5;  // avoid devrand signature
-           sendltk[j+PAKHEADSIZE+10] = sp->linkey[j];
-           }
-                             
-         for(j = 0 ; j < 6 ; ++j)
-           sendci[j+PAKHEADSIZE+12] = sp->baddr[j];  // devrand
+         if((sp->cryptoflag & CRY_BOND) != 0)
+           {  // bond
+           VPRINT "BOND\n");          
+           if((sp->cryptoflag & CRY_SC) == 0)
+             { // legacy 
+             getrand(sp->linkey,16);
+             if(sp->linkey[15] == 0)
+               sp->linkey[15] = 0xA5;  // avoid devrand signature
+             
+             for(j = 0 ; j < 16 ; ++j)
+               sendltk[j+PAKHEADSIZE+10] = sp->linkey[j];
+      
+             sendhci(sendltk,devicen);  
+                     
+             for(j = 0 ; j < 6 ; ++j)
+               sendci[j+PAKHEADSIZE+12] = sp->baddr[j];  // devrand
     
-         if((sp->preq[3] & 4) == 0)
-           sendci[PAKHEADSIZE+10] = 0;  // ediv jw
-         else
-           sendci[PAKHEADSIZE+10] = 1;  // pk can auth on repair
-                       
-           
-         if((sp->preq[3] & 1) != 0)  // bond
-           {
-           if((sp->preq[3] & 4) == 0 && (rp->lepairflags & AUTHENTICATION_ON) != 0)
-             NPRINT "Must bond AUTHENTICATION_ON server with passkey\n");
+             if((sp->cryptoflag & CRY_PKEY) == 0)
+               sendci[PAKHEADSIZE+10] = 0;  // ediv jw
+             else
+               sendci[PAKHEADSIZE+10] = 1;  // pk can auth on repair
+ 
+             sendhci(sendci,devicen);
+             }
            else
-             sp->linkflag |= KEY_NEW;  // bond req saves LEkey 
+             {  // save pkeY FOR AUTH ON RECON 
+             for(j = 0 ; j < 16 ; ++j)
+               sp->divrand[j] = 0;
+             if((sp->cryptoflag & CRY_PKEY) != 0)
+               sp->divrand[0] = 1;
+             else
+               sp->divrand[0] = 0;
+             
+             sp->linkflag |= PAIR_NEW;
+             }     
+           sp->linkflag |= KEY_NEW;  // bond req saves LEkey 
            }                           
-         sendhci(sendltk,devicen);
-         sendhci(sendci,devicen);
-                   
+          
+              
          if((gpar.hidflag & 1) != 0)
-           sp->cryptoflag = 7;   // auth + delay AUTO_PAIROK to notify enable in leserver
+           sp->cryptoflag |= CRY_AUTHOK | CRY_POKNOTEN;   // auth + send AUTO_PAIROK when notify enabled in leserver 
          else
            {
-           if((sp->preq[3] & 4) != 0)  // passkey for auth
-             sp->cryptoflag = 3;
-           else
-             sp->cryptoflag = 2;
+           if((sp->cryptoflag & CRY_PKEY) != 0)  // passkey for auth
+             sp->cryptoflag |= CRY_AUTHOK;
+           else if((rp->lepairflags & AUTHENTICATION_ON) != 0)
+             NPRINT "Must bond AUTHENTICATION_ON server with passkey\n");
            }
          }
        if((gpar.hidflag & 1) == 0)
@@ -7682,7 +7980,12 @@ void immediate(long long lookflag)
      else if(insdat[n] == 0xFD || insdat[n] == 5)
        {
        if(insdat[n] == 5)
-         NPRINT "PAIR FAIL code %02X\n",insdat[n+1]);  // codes V3 pH 3.5.5 
+         {
+         j = insdat[n+1];
+         if(j > 15)
+           j = 8;
+         NPRINT "PAIR FAIL %s\n",errorcry[j]); // codes V3 pH 3.5.5
+         }
        else
          {   
          j = insdat[n+3];
@@ -7707,9 +8010,13 @@ void immediate(long long lookflag)
         ia[j] = ip->baddr[5-j];
         ra[j] = rp->baddr[5-j];
         }       
+     ia[6] = ip->leaddtype & 1;
+     ra[6] = rp->leaddtype & 1;     
+
+      
      if(insdat[n] == 2)
        {
-       VPRINT "GOT pair response - SEND I confirm\n");
+       VPRINT "GOT pair response\n");
        // save for confirm calc
        for(j = 0 ; j < 7 ; ++j)
          sp->pres[j] = insdat[n+j];  // response 
@@ -7717,22 +8024,36 @@ void immediate(long long lookflag)
        if((sp->lepairflags & BOND_NEW) != 0 && (sp->pres[3] & 3) == 0)                  
          NPRINT "Bonding refused\n");
     
-       for(j = 0 ; j < 16 ; ++j)
-         sp->irand[j] = rand() & 0xFF;
+       sp->cryptoflag = CRY_NEW;
+       j = sp->pres[3] & sp->preq[3];
+       if((j & 1) != 0)
+         sp->cryptoflag |= CRY_BOND;
+       if((j & 4) != 0 || ( (sp->preq[3] & 4) != 0 &&
+               ( (sp->preq[1] == DISPLAY_ONLY && sp->pres[1] == KEY_DISPLAY) ||
+                 (sp->preq[1] == KEY_DISPLAY && sp->pres[1] == DISPLAY_ONLY) ) ))
+         sp->cryptoflag |= CRY_PKEY;   // both mitm set or request mitm and correct agent pair
+       if((j & 8) != 0)
+         sp->cryptoflag |= CRY_SC;
+      
+       getrand(sp->irand,16);    
 
        for(j = 0 ; j < 16 ; ++j)
          key[j] = 0;   // Just Works
 
+       sp->pkround = 0;
+       gpar.dhkeydev = 0;  
+  
        if((sp->lepairflags & PASSKEY_RANDOM) != 0)
          {
-         if(sp->pres[1] == 3)
+         if(sp->pres[1] == NO_INOUT)   
            {
            NPRINT "Server wants Just Works\n");
-           sp->lepasskey = 0;  // server wants just works
+           sp->lepasskey = 0;
+           sp->cryptoflag &= ~CRY_PKEY;
            }
          else if((sp->lepairflags & PASSKEY_REMOTE) != 0)
            { // passkey displayed on server
-           if(sp->pres[1] != 0)
+           if(sp->pres[1] != DISPLAY_ONLY)
              NPRINT "WARNING - Expected server to have a DisplayOnly agent\n");
            flushprint();
            printf("Input passkey: ");
@@ -7747,11 +8068,10 @@ void immediate(long long lookflag)
            }
          else if((sp->lepairflags & PASSKEY_LOCAL) != 0)
            {
-           if(sp->pres[1] != 4)
+           if(sp->pres[1] != KEY_DISPLAY)
              NPRINT "WARNING - Expected server to have KeyboardDisplay agent\n");
-           key[0] = rand() & 0xFF;
-           key[1] = rand() & 0xFF;
-           key[2] = rand() & 0x0F;
+           getrand(key,3);
+           key[2] &= 0x0F;
            if(key[2] == 0x0F)
              key[2] = 0x0E;
            sp->lepasskey = (key[2] << 16) + (key[1] << 8) + key[0];
@@ -7760,13 +8080,66 @@ void immediate(long long lookflag)
            }
          }
        
-       j = sp->lepasskey;          
-       key[0] = j & 0xFF;
-       key[1] = (j >> 8) & 0xFF;
-       key[2] = (j >> 16) & 0xFF;    
+       if((sp->cryptoflag & CRY_SC) == 0)
+         {  // legacy
+         VPRINT "SEND I confirm\n");
+         j = sp->lepasskey;          
+         key[0] = j & 0xFF;
+         key[1] = (j >> 8) & 0xFF;
+         key[2] = (j >> 16) & 0xFF;    
     
-       calcc1(key,sp->irand,sp->preq,sp->pres,0,rp->leaddtype & 1,ia,ra,confirm+PAKHEADSIZE+10);
-       sendhci(confirm,devicen);
+         if(calcc1(key,sp->irand,sp->preq,sp->pres,ia[6],ra[6],ia,ra,confirm+PAKHEADSIZE+10) == 0)
+           {
+           NPRINT "No crypto\n");
+           confail[PAKHEADSIZE+10] = 5;
+           sendhci(confail,devicen);
+           }
+         else
+           sendhci(confirm,devicen);
+         }
+       else
+         {
+         VPRINT "SEND public keys\n");
+         for(j = 0 ; j < 32 ; ++j)
+           {
+           sendxykeys[j+PAKHEADSIZE+10] = ip->pubkeyx[j];
+           sendxykeys[j+PAKHEADSIZE+42] = ip->pubkeyy[j];
+           }      
+         sendhci(sendxykeys,devicen);
+         }       
+       }
+     else if(insdat[n] == 0x0C)
+       {
+       sp->cryptoflag |= CRY_SC; 
+       VPRINT "Got remote XY keys. Calc DHkey\n");
+       for(j = 0 ; j < 32 ; ++j)
+         {
+         sp->pubkeyx[j] = insdat[n+j+1];
+         sp->pubkeyy[j] = insdat[n+j+33];
+         dhkey[j+PAKHEADSIZE+4] = sp->pubkeyx[j];
+         dhkey[j+PAKHEADSIZE+36] = sp->pubkeyy[j];
+         sp->dhkey[j] = 0;
+         }
+       if(gpar.dhkeydev != 0)
+         NPRINT "WARNING - Two devices connecting?\n");  
+       gpar.dhkeydev = devicen;
+       sendhci(dhkey,0); 
+       usleep(200000);
+       if((sp->cryptoflag & CRY_PKEY) != 0)
+         {  // start 20 pkrounds
+         VPRINT "Send 1st I confirm\n");
+         sp->pkround = 0;
+         getrand(sp->irand,16);    
+         rby = (sp->lepasskey & 1) | 0x80;
+         if(calcf4(ip->pubkeyx,sp->pubkeyx,sp->irand,rby,confirm+PAKHEADSIZE+10) == 0)
+           {
+           NPRINT "No crypto\n");
+           confail[PAKHEADSIZE+10] = 5;
+           sendhci(confail,devicen);
+           }
+         else
+           sendhci(confirm,devicen);         
+         }       
        }
      else if(insdat[n] == 3)
        {
@@ -7787,48 +8160,162 @@ void immediate(long long lookflag)
          sp->rrand[j] = insdat[n+j+1];
          key[j] = 0;   // Just Works 
          }
+       if((sp->cryptoflag & CRY_SC) == 0)
+         {  // legacy         
+         j = sp->lepasskey;          
+         key[0] = j & 0xFF;
+         key[1] = (j >> 8) & 0xFF;
+         key[2] = (j >> 16) & 0xFF;    
          
-       j = sp->lepasskey;          
-       key[0] = j & 0xFF;
-       key[1] = (j >> 8) & 0xFF;
-       key[2] = (j >> 16) & 0xFF;    
-         
-       calcc1(key,sp->rrand,sp->preq,sp->pres,0,rp->leaddtype & 1,ia,ra,out);
-       getout = 0;
-       for(j = 0 ; j < 16 && getout == 0 ; ++j)
-         {
-         if(sp->confirm[j] != out[j])
-           getout = 1;
+         if(calcc1(key,sp->rrand,sp->preq,sp->pres,ia[6],ra[6],ia,ra,out) == 0)
+           {
+           NPRINT "No crypto\n");
+           confail[PAKHEADSIZE+10] = 5;
+           sendhci(confail,devicen);
+           }
+         else if(bincmp(sp->confirm,out,16,DIRN_FOR) != 0)
+           {
+           VPRINT "R confirm OK\n");
+           VPRINT "SEND LTK encrypt\n");
+           calcs1(key,sp->rrand,sp->irand,sp->linkey);
+           for(j = 0 ; j < 16 ; ++j)
+             ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
+           sendhci(ltkcrypt,devicen);
+           }
+         else
+           {
+           NPRINT "PAIR confirm fail\n");
+           confail[PAKHEADSIZE+10] = 4;
+           sendhci(confail,devicen);
+           buf[0] = AUTO_PAIRFAIL;
+           pushins(IN_AUTOEND,devicen,1,buf);
+           }
          }
-       if(getout == 0)
-         {
-         VPRINT "R confirm OK\n");
-         sp->cryptoflag = 1;
-         VPRINT "SEND LTK encrypt\n");
-         calcs1(key,sp->rrand,sp->irand,sp->linkey);
-         for(j = 0 ; j < 16 ; ++j)
-           ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
-         sendhci(ltkcrypt,devicen);
+       else if((sp->cryptoflag & CRY_PKEY) != 0 && sp->pkround < 19)
+         {  // loop for next round
+         // check rC sp->confirm
+         rby = ((sp->lepasskey >> sp->pkround) & 1) | 0x80;
+         calcf4(sp->pubkeyx,ip->pubkeyx,sp->rrand,rby,out);
+         if(bincmp(sp->confirm,out,16,DIRN_FOR) == 0)
+           {
+           NPRINT "R confirm round %d fail\n",sp->pkround+1);
+           confail[PAKHEADSIZE+10] = 4;
+           sendhci(confail,devicen);
+           buf[0] = AUTO_PAIRFAIL;
+           pushins(IN_AUTOEND,devicen,1,buf);          
+           }
+         else
+           {
+           ++sp->pkround;   
+           VPRINT "Send I confirm round %d\n",sp->pkround+1);
+           getrand(sp->irand,16);    
+           rby = (sp->lepasskey >> sp->pkround) & 1;
+           rby |= 0x80;
+           calcf4(ip->pubkeyx,sp->pubkeyx,sp->irand,rby,confirm+PAKHEADSIZE+10);
+           sendhci(confirm,devicen);
+           }         
          }
        else
-         {
-         NPRINT "PAIR confirm fail\n");
-         sendhci(confail,devicen);
-         buf[0] = AUTO_PAIRFAIL;
-         pushins(IN_AUTOEND,devicen,1,buf);
-         }         
+         {  // sc no PKEY or PKEY last round
+         // check rC sp->confirm
+         if((sp->cryptoflag & CRY_PKEY) == 0)
+           rby = 0;
+         else
+           {         
+           rby = (sp->lepasskey >> sp->pkround) & 1;
+           rby |= 0x80;
+           }
+         calcf4(sp->pubkeyx,ip->pubkeyx,sp->rrand,rby,out);
+         if(bincmp(sp->confirm,out,16,DIRN_FOR) == 0)
+           {
+           NPRINT "PAIR confirm fail\n");
+           confail[PAKHEADSIZE+10] = 4;
+           sendhci(confail,devicen);
+           buf[0] = AUTO_PAIRFAIL;
+           pushins(IN_AUTOEND,devicen,1,buf);          
+           }
+         for(j = 0 ; j < 16 ; ++j)
+           key[j] = 0;
+         if((sp->cryptoflag & CRY_PKEY) != 0)
+           {
+           j = sp->lepasskey;          
+           key[0] = j & 0xFF;
+           key[1] = (j >> 8) & 0xFF;
+           key[2] = (j >> 16) & 0xFF;
+           }
+         else
+           {
+           j = calcg2(ip->pubkeyx,sp->pubkeyx,sp->irand,sp->rrand);
+           NPRINT "Numeric comparison passkey = %d\n",j);
+           }
+         getout = 0;
+         for(j = 0 ; j < 32 && getout == 0 ; ++j)
+           getout |= sp->dhkey[j];
+         if(getout == 0)
+           {
+           NPRINT "No DHkey\n");
+           confail[PAKHEADSIZE+10] = 11;
+           sendhci(confail,devicen);
+           }
+         else
+           {         
+           calcf5(sp->dhkey,sp->irand,sp->rrand,ia,ra,mackey,sp->linkey);   
+           calcf6(mackey,sp->irand,sp->rrand,key,sp->preq+1,ia,ra,dhcheck+PAKHEADSIZE+10);
+           VPRINT "Send I DHchk\n");
+           sendhci(dhcheck,devicen);
+           calcf6(mackey,sp->rrand,sp->irand,key,sp->pres+1,ra,ia,sp->confirm);  
+           // expect sp->confirm = R DHchk
+           }       
+         }           
        }
-     else if(sp->cryptoflag < 2 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
+     else if(insdat[n] == 0x0D)
+       {
+       VPRINT "Got R DHchk\n");
+       for(j = 0 ; j < 16 ; ++j)
+         key[j] = 0;
+            
+       getout = 0;
+       for(j = 0 ; j < 32 && getout == 0 ; ++j)
+         getout |= sp->dhkey[j];
+       if(getout == 0)
+         {
+         NPRINT "No DHkey\n");
+         confail[PAKHEADSIZE+10] = 11;
+         sendhci(confail,devicen);
+         }
+       else
+         { 
+         if(bincmp(sp->confirm,insdat+n+1,16,DIRN_FOR) == 0)
+           {                  
+           NPRINT "DH check fail\n");
+           confail[PAKHEADSIZE+10] = 11;
+           sendhci(confail,devicen);
+           }
+         else
+           {
+           VPRINT "SEND LTK encrypt\n");
+           for(j = 0 ; j < 16 ; ++j)
+             ltkcrypt[j+PAKHEADSIZE+16] = sp->linkey[j];
+           sendhci(ltkcrypt,devicen);
+           }
+         } 
+       }
+     else if((sp->cryptoflag & CRY_DONE) == 0 && (insdat[n] == 0x07 || insdat[n] == 0xFE))
        {
        VPRINT "PAIR OK\n");
        buf[0] = AUTO_PAIROK;
        pushins(IN_AUTOEND,devicen,1,buf);
-       sp->cryptoflag = 2;
+       sp->cryptoflag |= CRY_DONE;
        }
-     else if(sp->cryptoflag < 2 && (insdat[n] == 5 || insdat[n] == 0xFD))
+     else if((sp->cryptoflag & CRY_DONE) == 0 && (insdat[n] == 5 || insdat[n] == 0xFD))
        {
        if(insdat[n] == 5)
-         NPRINT "PAIR FAIL code %02X\n",insdat[n+1]);  // codes V3 pH 3.5.5 
+         {
+         j = insdat[n+1];
+         if(j > 15)
+           j = 8;
+         NPRINT "PAIR FAIL %s\n",errorcry[j]);  // codes V3 pH 3.5.5 
+         }
        else
          {   
          j = insdat[n+3];
@@ -7838,7 +8325,7 @@ void immediate(long long lookflag)
          }
        buf[0] = AUTO_PAIRFAIL;
        pushins(IN_AUTOEND,devicen,1,buf);
-       sp->cryptoflag = 2;
+       sp->cryptoflag |= CRY_DONE;
        }
        
      if(insdat[n] == 7)
@@ -7897,7 +8384,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
   if(dat[0] == 0x52 || dat[0] == 0x12 || dat[0] == 0x0A)
     {  // read/write
     if((dev[0]->lepairflags & AUTHENTICATION_ON) != 0 &&
-            (dev[ndevice]->cryptoflag & 3) != 3) 
+            (dev[ndevice]->cryptoflag & CRY_AUTHOK) == 0) 
       {
       lefail[PAKHEADSIZE+10] = dat[0];  // operation
       lefail[PAKHEADSIZE+11] = dat[1];
@@ -8010,11 +8497,11 @@ void leserver(int ndevice,int count,unsigned char *dat)
             else
               {
               VPRINT "%s notify enable\n",cp->name);
-              if((dev[ndevice]->cryptoflag & 4) != 0 && cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
+              if((dev[ndevice]->cryptoflag & CRY_POKNOTEN) != 0 && cp->uuidtype == 2 && cp->uuid[0] == 0x2A && cp->uuid[1] == 0x4D)
                 {
                 buf[0] = AUTO_PAIROK;
                 pushins(IN_AUTOEND,ndevice,1,buf);
-                dev[ndevice]->cryptoflag &= 3;
+                dev[ndevice]->cryptoflag &= ~CRY_POKNOTEN;
                 }
               } 
             if(dat[0] == 0x12)
@@ -8412,7 +8899,7 @@ void leserver(int ndevice,int count,unsigned char *dat)
             else if(handle == cp->chandle && aflag == 0 && uuidtype == cp->uuidtype && bincmp(cp->uuid,dat+5,cp->uuidtype,DIRN_REV) != 0)  
               {   // value
               if((dev[0]->lepairflags & AUTHENTICATION_ON) != 0 &&
-                                    (dev[ndevice]->cryptoflag & 3) != 3) 
+                                    (dev[ndevice]->cryptoflag & CRY_AUTHOK) == 0) 
                 {
                 errcode = 5;  // No Authentication
                 flag = 2;
@@ -9211,7 +9698,7 @@ void printins()
     ++count;
     flushprint();
     }
-  // rwlinkey(3,0,NULL);
+  rwlinkey(3,0,NULL);
   }
 
 
@@ -12402,7 +12889,7 @@ int setkeymode(int setflag)
 
 void set_le_random_address(unsigned char *add)
   {  
-  int n,flag;
+  int n,flag,zflag;
 
   if((gpar.meshflag & MESH_W) != 0)
     {
@@ -12412,27 +12899,42 @@ void set_le_random_address(unsigned char *add)
   else
     flag = 0;
         
-  for(n = 0 ; n < 6 ; ++n)
-    gpar.randbadd[n] = add[n];  
-  gpar.randbadd[0] |= 0xC0;
-
-  for(n = 0 ; n < 6 ; ++n)
-    lerandadd[13-n] = gpar.randbadd[n];
-      
-  VPRINT "Set LE random address\n");
-  sendhci(lerandadd,0);
-
-  gpar.hidflag |= 2;
-  dev[0]->leaddtype = 1;
-  sendhci(leadparamx,0);
-
-  if((gpar.hidflag & 1) == 0)
-    {
+  zflag = 0;
+  for(n = 0 ; n < 6 && zflag == 0 ; ++n)
+    zflag |= add[n];
+  if(zflag == 0 && (gpar.hidflag & 1) == 0)
+    {  // turn off
+    VPRINT "LE random address off\n");
+    gpar.hidflag &= ~2;
+    dev[0]->leaddtype = 0; 
     addname();
-    sendhci(leadvertx,0);
+    sendhci(leadparam,0);
+    sendhci(leadvert,0);
     }
-  else
-    sendhci(hidadvert,0); 
+  else if(zflag != 0)
+    { 
+    for(n = 0 ; n < 6 ; ++n)
+      gpar.randbadd[n] = add[n];  
+    gpar.randbadd[0] |= 0xC0;
+
+    for(n = 0 ; n < 6 ; ++n)
+      lerandadd[13-n] = gpar.randbadd[n];
+      
+    VPRINT "Set LE random address\n");
+    sendhci(lerandadd,0);
+
+    gpar.hidflag |= 2;
+    dev[0]->leaddtype = 1;
+    sendhci(leadparamx,0);
+
+    if((gpar.hidflag & 1) == 0)
+      {
+      addname();
+      sendhci(leadvertx,0);
+      }
+    else
+      sendhci(hidadvert,0); 
+    }
     
   if(flag != 0)
     mesh_on();
@@ -13460,7 +13962,7 @@ int calce(unsigned char *key,unsigned char *in,unsigned char *out)
   
   if(gpar.cryptfd == 0)
     {
-    if(setupcrypt() == 0)
+    if(setupcrypt(0) == 0)
       return(0);
     }
   
@@ -13519,7 +14021,181 @@ int calce(unsigned char *key,unsigned char *in,unsigned char *out)
   return(1);    
   }  
   
-int setupcrypt()
+
+
+// u[32] v[32] key[16] res[16]
+int calcf4(unsigned char *u, unsigned char *v,
+           unsigned char *key, unsigned char z, unsigned char *res)
+  {
+  int n;
+  unsigned char msg[65];
+ 
+  msg[0] = z;
+  for(n = 0 ; n < 32 ; ++n)
+    {
+    msg[n+1] = v[n];
+    msg[n+33] = u[n];
+    }
+
+  return(aes_cmac(key,msg,65,res));
+  }
+
+int aes_cmac(unsigned char *key,unsigned char *msg,int msglen,unsigned char *res)
+  {
+  int n,len,fd;
+  unsigned char tmpkey[16],msg_msb[80],out[80];
+ 
+  if(gpar.cryptfd1 == 0)
+    {
+    if(setupcrypt(1) == 0)
+      return(0);
+    }
+    
+  if(msglen > 80)
+    return(0);
+
+  for(n = 0 ; n < 16 ; ++n)
+    tmpkey[15-n] = key[n];  
+
+  if(setsockopt(gpar.cryptfd1,279,1,tmpkey,16) < 0)
+    {   // SOL_ALG,ALG_SET_KEY
+    VPRINT "Sock opt fail\n");
+    return(0);
+    }
+  fd = accept(gpar.cryptfd1,NULL,0);
+  if(fd < 0)
+    {
+    VPRINT "Accept error\n");
+    return(0);
+    }
+  
+  for(n = 0 ; n < msglen ; ++n)
+    msg_msb[msglen-1-n] = msg[n];
+
+  len = send(fd,msg_msb,msglen,0);
+  if (len < 0)
+    {
+    close(fd);
+    return(0);
+    }
+
+  len = read(fd, out, 16);
+  if (len < 0)
+    {
+    close(fd);
+    return(0);
+    }
+
+  for(n = 0 ; n < 16 ; ++n)
+    res[15-n] = out[n];  
+  close(fd);
+  return(1);
+  }
+
+
+// w[32] n1[16] n2[16] a1[7] a2[7] mackey[16] ltk[16]
+int calcf5(unsigned char *w, unsigned char *n1,
+           unsigned char *n2, unsigned char *a1, unsigned char *a2,
+           unsigned char *mackey, unsigned char *ltk)
+  {
+  static unsigned char btle[4] = { 0x65, 0x6c, 0x74, 0x62 };
+  static unsigned char salt[16] = { 0xbe, 0x83, 0x60, 0x5a, 0xdb, 0x0b, 0x37, 0x60,
+                                    0x38, 0xa5, 0xf5, 0xaa, 0x91, 0x83, 0x88, 0x6c };
+  static unsigned char length[2] = { 0x00, 0x01 };
+  static unsigned char m[53], t[16];
+
+  if(aes_cmac(salt, w, 32, t) == 0)
+    return(0);
+
+  memcpy(&m[0], length, 2);
+  memcpy(&m[2], a2, 7);
+  memcpy(&m[9], a1, 7);
+  memcpy(&m[16], n2, 16);
+  memcpy(&m[32], n1, 16);
+  memcpy(&m[48], btle, 4);
+
+  m[52] = 0; // Counter 
+  if(aes_cmac(t, m, sizeof(m), mackey) == 0)
+    return(0);
+  m[52] = 1; // Counter 
+  return(aes_cmac(t, m, sizeof(m), ltk));
+  }
+
+
+// w[16] n1[16] n2[16] r[16] io_cap[3] a1[7] a2[7] res[16]
+int calcf6(unsigned char* w, unsigned char* n1,
+           unsigned char* n2, unsigned char* r, unsigned char* io_cap,
+           unsigned char* a1, unsigned char* a2, unsigned char* res)
+  {
+  unsigned char m[65];
+
+  memcpy(&m[0], a2, 7);
+  memcpy(&m[7], a1, 7);
+  memcpy(&m[14], io_cap, 3);
+  memcpy(&m[17], r, 16);
+  memcpy(&m[33], n2, 16);
+  memcpy(&m[49], n1, 16);
+
+  return aes_cmac(w, m, sizeof(m), res);
+  }
+
+// u[32] v[32] x[16] y[16]
+int calcg2(unsigned char* u, unsigned char* v,
+           unsigned char* x, unsigned char* y)
+  {
+  unsigned char m[80],tmp[16];
+  unsigned int retval;
+  
+  memcpy(&m[0], y, 16);
+  memcpy(&m[16], v, 32);
+  memcpy(&m[48], u, 32);
+
+  if(aes_cmac(x, m, sizeof(m), tmp) == 0)  
+    return(0);
+
+  retval= *((unsigned long *)tmp);
+  retval %= 1000000;
+
+  return((int)retval);
+  }
+
+void getrand(unsigned char *s,int len)
+  {
+  int r,k,n;
+  
+#ifdef RAND_HI
+  if(gpar.randomfd < 0)
+    {
+    gpar.randomfd = open("/dev/urandom",O_RDONLY);
+    if(gpar.randomfd < 0)
+      gpar.randomfd = 0;
+    }
+  if(gpar.randomfd > 0)
+    {
+    if(read(gpar.randomfd,s,len) == len)
+      return;
+    }    
+#endif  
+
+  n = 8;
+  k = 0;
+  r = 0;
+  while(k < len)
+    {
+    if((n & 8) != 0)
+      {
+      r = rand();
+      n = 1;
+      }
+    else
+      r >>= 8;
+    s[k] = r & 0xFF;
+    n <<= 1;
+    ++k;  
+    }  
+  }
+ 
+int setupcrypt(int flag)
   {
   //struct sockaddr_alg sa;
   int n,fd;
@@ -13535,8 +14211,17 @@ int setupcrypt()
   for(n = 0 ; n < 88 ; ++n)
     sa[n] = 0;  
   
-  strcpy((char*)(sa+2),"skcipher");
-  strcpy((char*)(sa+24),"ecb(aes)");
+  if(flag == 0)
+    {
+    strcpy((char*)(sa+2),"skcipher");
+    strcpy((char*)(sa+24),"ecb(aes)");
+    }
+  else
+    {
+    strcpy((char*)(sa+2),"hash");
+    strcpy((char*)(sa+24),"cmac(aes)");
+    }
+    
   if(bind(fd,(struct sockaddr*)sa,88) < 0)
     {
     VPRINT "Bind error\n");
@@ -13544,9 +14229,10 @@ int setupcrypt()
     return(0);
     }  
    
-  gpar.cryptfd = fd;
+  if(flag == 0)
+    gpar.cryptfd = fd;
+  else
+    gpar.cryptfd1 = fd;
   return(1);  
   }
- 
- 
  

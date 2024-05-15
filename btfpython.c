@@ -1,4 +1,4 @@
-//############ VERSION 14 #################
+//############ VERSION 15 #################
 
 #include <Python.h>
 
@@ -198,6 +198,7 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"BOND_NEW",BOND_NEW);
   PyModule_AddIntConstant(module,"BOND_REPAIR",BOND_REPAIR);
   PyModule_AddIntConstant(module,"AUTHENTICATION_ON",AUTHENTICATION_ON);
+  PyModule_AddIntConstant(module,"SECURE_CONNECT",SECURE_CONNECT);
 
   PyModule_AddIntConstant(module,"NO_CONN",NO_CONN);
   PyModule_AddIntConstant(module,"NODE_CONN",NODE_CONN);

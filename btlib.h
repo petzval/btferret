@@ -1,4 +1,4 @@
-  // for btlib.c Version 14
+  // for btlib.c Version 15
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -72,6 +72,7 @@
 #define BOND_NEW   (1 << 6)
 #define BOND_REPAIR (1 << 7)
 #define AUTHENTICATION_ON (1 << 8)
+#define SECURE_CONNECT (1 << 9)
   // connect type
 #define NO_CONN       0
 #define NODE_CONN     1 
