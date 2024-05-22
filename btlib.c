@@ -1,4 +1,4 @@
-/********* Version 15 *********/
+/********* Version 15.1 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -6305,12 +6305,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         }
       else if(buf[1] == 8 || buf[1] == 0x59)
         {
-        if((sflag & IN_ENCR) != 0)
+        if(ndevice != 0 && (dev[ndevice]->conflag & CON_HCI) != 0)
           {  // classic
-          if(buf[3] == 0 )  // status=0   
-            {
-            gotflag = IN_ENCR;
-            n0 = 4 | 0x80;   // handle not board add
+          if((sflag & IN_ENCR) != 0)
+            {  // classic
+            if(buf[3] == 0 )  // status=0   
+              {
+              gotflag = IN_ENCR;
+              n0 = 4 | 0x80;   // handle not board add
+              }
             }  
           }
         else
@@ -7286,18 +7289,17 @@ void immediate(long long lookflag)
       }
     else if(gotflag == IN_L2ASKCT)
       {
-      psm = insdat[n+4];
+      psm = insdat[n+4] + (insdat[n+5] << 8);
+      dp->id = insdat[n+1];  // ID from request
       if((dp->conflag & CON_SERVER) == 0 ||
        !( (psm == 1 && (dp->conflag & CON_PSM1) == 0) ||
-          (psm == 3 && (dp->conflag & CON_PSM3) == 0) ) )
+          ((psm == 3 || psm == 9) && (dp->conflag & CON_PSM3) == 0) ) )
         {  // only allow server psm 1/3 
         VPRINT "  GOT L2 connect request. Fob it off\n");
         sendhci(foboff,devicen);
         }
       else
-        {
-        dp->id = insdat[n+1];  // ID from request
-   
+        {   
         VPRINT "GOT L2 connect request psm %d channel %02X%02X\n",insdat[n+4],insdat[n+7],insdat[n+6]);  
   
         if(psm == 1)   // psm 1 for SDP
