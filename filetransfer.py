@@ -94,7 +94,7 @@ def send_file_by(node,filename,destdir,nblockx):
     if(len(sgs) > 1):
       dfile = destdir + sgs[len(sgs)-1]
     else:
-      dfile = filename   # no directory
+      dfile = destdir + filename   # no directory
       
   # check nblockx    
   if nblockx < 64 or nblockx > 400:
