@@ -1,4 +1,4 @@
-  // for btlib.c Version 15
+  // for btlib.c Version 16
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -81,10 +81,12 @@
   // settings
 #define FLAG_OFF    0
 #define FLAG_ON     1
+#define ENABLE_OBEX 1
+
 
 #define ANY_DEVICE 0
-
 #define READ_WAIT -1
+#define PACKET_ENDCHAR 254
 
 int btle_devtimer(int node,int tods);
 void btle_notifynode(int node);

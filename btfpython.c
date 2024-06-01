@@ -1,4 +1,4 @@
-//############ VERSION 15 #################
+//############ VERSION 16 #################
 
 #include <Python.h>
 
@@ -48,6 +48,7 @@ static PyObject* Read_notify(PyObject* self,PyObject* args);
 static PyObject* Register_serial(PyObject* self,PyObject* args);
 static PyObject* Scroll_back(PyObject* self,PyObject* args);
 static PyObject* Scroll_forward(PyObject* self,PyObject* args);
+static PyObject* Set_flags(PyObject* self,PyObject* args);
 static PyObject* Set_le_interval(PyObject* self,PyObject* args);
 static PyObject* Set_le_interval_update(PyObject* self,PyObject* args);
 static PyObject* Set_le_interval_server(PyObject* self,PyObject* args);
@@ -109,6 +110,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Register_serial",Register_serial,METH_VARARGS,"Register serial"},
   {"Scroll_back",Scroll_back,METH_VARARGS,"Scroll back"},
   {"Scroll_forward",Scroll_forward,METH_VARARGS,"Scroll forward"},
+  {"Set_flags",Set_flags,METH_VARARGS,"Set flags"},
   {"Set_le_interval",Set_le_interval,METH_VARARGS,"Set LE interval"},
   {"Set_le_interval_update",Set_le_interval_update,METH_VARARGS,"Set LE interval update"},
   {"Set_le_interval_server",Set_le_interval_server,METH_VARARGS,"Set LE interval server"},
@@ -207,7 +209,12 @@ PyMODINIT_FUNC PyInit_btfpy()
 
   PyModule_AddIntConstant(module,"ANY_DEVICE",ANY_DEVICE);
   PyModule_AddIntConstant(module,"READ_WAIT",READ_WAIT);
+  PyModule_AddIntConstant(module,"PACKET_ENDCHAR",PACKET_ENDCHAR);
 
+  PyModule_AddIntConstant(module,"FLAG_ON",FLAG_ON);
+  PyModule_AddIntConstant(module,"FLAG_OFF",FLAG_OFF);
+  PyModule_AddIntConstant(module,"ENABLE_OBEX",ENABLE_OBEX);
+  
   return(module);
   }
 
@@ -1159,6 +1166,18 @@ static PyObject* Scroll_back(PyObject* self,PyObject* args)
 static PyObject* Scroll_forward(PyObject* self,PyObject* args)
   {
   scroll_forward();
+  Py_RETURN_NONE; 
+  }
+
+//void set_flags(int flags,int onoff);
+static PyObject* Set_flags(PyObject* self,PyObject* args)
+  {
+  int flags,onoff;
+
+  if(PyObject_Size(args) != 2 || !PyArg_ParseTuple(args,"ii",&flags,&onoff))
+    printerror((PyObject*)Set_flags);
+  else
+    set_flags(flags,onoff);  
   Py_RETURN_NONE; 
   }
 

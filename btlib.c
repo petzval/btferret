@@ -1,4 +1,4 @@
-/********* Version 15.1 *********/
+/********* Version 16 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,16 +10,17 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <fcntl.h>
-#include "btlib.h"         
+#include "btlib.h"           
 
 #ifdef BTFPYTHON
-  #include "btfpython.c"  
+  #include "btfpython.c"     
 #endif
 
 /********** BLUETOOTH defines ********/
 
 // Uncomment RAND_HI for high security random numbers
 // #define RAND_HI  
+
 #define BTPROTO_HCI 1
 #define BTPROTO_RFCOMM 3
 #define BTPROTO_L2CAP 0
@@ -37,7 +38,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 15
+#define VERSION 16
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -399,6 +400,7 @@ int readkey(void);
 int devn(int node);
 int devnp(int node);
 int devnfrombadd(unsigned char *badd,int type,int dirn);
+int devnfromhandle(unsigned char *hand);
 char *baddstr(unsigned char *badd,int dirn);
 int disconnectdev(int ndevice);
 void meshreadon(void);
@@ -731,8 +733,8 @@ unsigned char psmdisreply[32] = { 17,0,S2_HAND | S2_ID,S3_SCID1 | S3_DCID2,0x02,
 0x00};
 
 unsigned char foboff[32] = { 21,0,S2_HAND | S2_ID,0,0x02,0x0C,0x00,0x10,0x00,0x0C,0x00,0x01,0x00,0x03,0x05,0x08,0x00,0x00,0x00,0x00,
-0x00,0x04,0x00,0x00,0x00};
-                    // [PAKHEADSIZE+17] = 04  no resources - connection failed   scid/dcid ignored  OK reply was S3_SCID1 | S3_DCID2
+0x00,0x02,0x00,0x00,0x00};
+                    // [PAKHEADSIZE+17] = 02  psm not supp   scid/dcid ignored  OK reply was S3_SCID1 | S3_DCID2
 
 unsigned char storekey[40] =  { 27,0,S2_BADD,0,1,0x11,0x0C,23,1,0x11,0x22,0x33,0x44,0x55,0x66,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }; 
                            // board address at PAKHEADSIZE +  [5]  key at [11-26]
@@ -1388,7 +1390,7 @@ int init_blue_ex(char *filename,int hcin)
   gpar.dhkeydev = 0;
   gpar.randomfd = -1;
   gpar.hidflag = 0;
-  gpar.settings = 0;
+  gpar.settings = ENABLE_OBEX;
   gpar.keytocb = 0;
   gpar.keyboard = 0;
   
@@ -2407,8 +2409,21 @@ int devnfrombadd(unsigned char *badd,int type,int dirn)
   return(-1);
   }
  
-
-
+int devnfromhandle(unsigned char *hand)
+  {
+  int k;
+  
+  for(k = 1 ; devok(k) != 0 ; ++k)
+    {
+    if(dev[k]->conflag != 0 && (dev[k]->type & (BTYPE_CL | BTYPE_LE | BTYPE_ME)) != 0)
+      {        // hi 4 bits of [1] = flags
+      if(dev[k]->dhandle[0] == hand[0] && dev[k]->dhandle[1] == (hand[1] & 15))
+        return(k);
+      }
+    }
+  return(0);    
+  }  
+   
  
  
 void mesh_on()
@@ -4050,7 +4065,7 @@ int classicserverx(int ndevice)
   flushprint();
   popins();  
 
-  readhci(ndevice,IN_AUTOEND,0,10000,0); 
+  readhci(ndevice,IN_AUTOEND,0,5000,0); 
   n = findhci(IN_AUTOEND,ndevice,INS_POP);
   if(n < 0 || (n >= 0 && insdatn[0] == AUTO_DIS))
     {  // probably just paired or read SDP then disconnected   
@@ -4145,6 +4160,34 @@ All three serial services are on channel 1
     aid = 0100
         My custom serial
 
+
+ **** RECORD 4 ****
+    aid = 0000
+        Handle 00 01 00 04 
+    aid = 0001
+      UUID 11 05 OBEXObjectPush
+    aid = 0004
+        UUID 01 00 L2CAP
+        UUID 00 03 RFCOMM
+        RFCOMM channel = 9
+        UUID 00 08 OBEX
+    aid = 0005
+      UUID 10 02 
+    aid = 0009
+        UUID 11 05 OBEXObjectPush
+        01 02 
+    aid = 0100
+        OBEX server
+    aid = 0303
+      01 
+      02 
+      03 
+      04 
+      05 
+      06 
+      FF 
+
+
 *****************************/
 
 void register_serial(unsigned char *uuid,char *name)
@@ -4160,7 +4203,7 @@ void replysdp(int ndevice,int in,unsigned char *uuid,char *name)
   int n,aidlen,rn,uuidflag,aidj,aidk,ln,totlen;
   struct devdata *dp;
   unsigned char *ssarep,*des;
-  unsigned char sdpreply[256];
+  unsigned char sdpreply[512];
     
   static unsigned char uuid1200[5] = { 0x35,0x03,0x19,0x12,0x00 };
   static unsigned char uuid0003[5] = { 0x35,0x03,0x19,0x00,0x03 };
@@ -4174,9 +4217,11 @@ static unsigned char ssaaidfail[32] = { 19,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,0
    // 03 reply with handle [21] = handle 
 static unsigned char ssahandle[32] = { 23,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,0x12,0x00,
 0x0E,0x00,0x41,0x00,0x03,0x00,0x00,0x00,0x09,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x01,0x00 }; 
-static unsigned char ssahandle3[40] = { 31,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,0x1A,0x00,
-0x16,0x00,0x41,0x00,0x03,0x00,0x00,0x00,0x11,0x00,0x03,0x00,
-0x03,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x02,0x00,0x01,0x00,0x03,0x00 };    
+
+static unsigned char ssahandle4[40] = { 35,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,0x1E,0x00,
+0x1A,0x00,0x41,0x00,0x03,0x00,0x00,0x00,0x15,0x00,0x04,0x00,
+0x04,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x02,0x00,0x01,0x00,0x03,0x00,0x01,0x00,0x04,0x00 };
+    
 static unsigned char ssahandlefail[32] = { 19,0,S2_HAND | S2_SDP,0,0x02,0x0B,0x20,
 0x0E,0x00,0x0A,0x00,0x41,0x00,0x03,0x00,0x00,0x00,0x05,0x00,0x00,0x00,0x00,0x00 }; 
   // handle = 00010000  1200
@@ -4196,6 +4241,13 @@ static unsigned char aid0[10] = { 8,
    // 2-byte stndard uuid 1101
 static unsigned char aid1_2[10] = { 8,
 0x09,0x00,0x01,0x35,0x03,0x19,0x11,0x01 };
+   // 2-byte uuid 1105
+static unsigned char aid1_4[10] = { 8,
+0x09,0x00,0x01,0x35,0x03,0x19,0x11,0x05 };
+   // 16-byte  uuid 1105 
+static unsigned char obex16[20] = { 
+0x35,0x11,0x1C,0x00,0x00,0x11,0x05,0x00,0x00,0x10,0x00,0x80,0x00,
+0x00,0x80,0x5F,0x9B,0x34,0xFB };
    // 16-byte standard uuid 
 static unsigned char aid1_16[24] = { 22,
 0x09,0x00,0x01,0x35,0x11,0x1C,0x00,0x00,0x11,0x01,0x00,0x00,0x10,0x00,0x80,0x00,
@@ -4208,8 +4260,14 @@ static unsigned char aid1_c[24] = { 22,
   // [17] = channel = 1 for handles 1/2/3
 static unsigned char aid4[20] = { 17,
 0x09,0x00,0x04,0x35,0x0C,0x35,0x03,0x19,0x01,0x00,0x35,0x05,0x19,0x00,0x03,0x08,0x01 };
+  // [17] = channel = 1 for handle 4 
+static unsigned char aid4_obex[24] = { 22,
+0x09,0x00,0x04,0x35,0x11,0x35,0x03,0x19,0x01,0x00,0x35,0x05,0x19,0x00,0x03,0x08,0x02,0x35,0x03,0x19,0x00,0x08 };
 static unsigned char aid5[10] = { 8,
 0x09,0x00,0x05,0x35,0x03,0x19,0x10,0x02 };
+
+static unsigned char aid9_obex[16] = { 13,
+0x09,0x00,0x09,0x35,0x08,0x35,0x06,0x19,0x11,0x05,0x09,0x01,0x02 };
   // [0]   = len+5
   // [5]   = len
   // [6..] = custom name
@@ -4221,6 +4279,12 @@ static unsigned char aid0100_s2[16] = { 12,
   // Serial16
 static unsigned char aid0100_s16[16] = { 13,
 0x09,0x01,0x00,0x25,0x08,0x53,0x65,0x72,0x69,0x61,0x6C,0x31,0x36 };
+  // Object push
+static unsigned char aid0100_obex[18] = { 16,
+0x09,0x01,0x00,0x25,0x0B,0x4F,0x42,0x45,0x58,0x20,0x73,0x65,0x72,0x76,0x65,0x72 };
+  // OBEX formats
+static unsigned char aid0303_obex[20] = { 19,
+0x09,0x03,0x03,0x35,0x0E,0x08,0x01,0x08,0x02,0x08,0x03,0x08,0x04,0x08,0x05,0x08,0x06,0x08,0xFF };
   // sdpreply
   // [0] = totlen+19 
   // PAKHEADSIZE+
@@ -4234,6 +4298,7 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
 0x02,0x0C,0x20,0x49,0x00,0x45,0x00,0x44,0x00,0x07,0x00,0x01,0x00,0x40,0x00,0x3D,0x35 }; 
 
 
+   
   if(uuid != NULL && name != NULL)
     {
     for(rn = 0 ; rn < 16 ; ++rn)
@@ -4267,10 +4332,14 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
     else if(bincmp(des,aid1_16+4,19,DIRN_FOR) != 0)
       uuidflag = 2;   // standard 16
     else if(bincmp(des,aid1_c+4,19,DIRN_FOR) != 0)
-      uuidflag = 3;  // custom
+      uuidflag = 3;  // custom  
+    else if((gpar.settings & ENABLE_OBEX) != 0 && bincmp(des,aid1_4+4,5,DIRN_FOR) != 0)
+      uuidflag = 4;  // obex 2
+    else if((gpar.settings & ENABLE_OBEX) != 0 && bincmp(des,obex16,19,DIRN_FOR) != 0)
+      uuidflag = 4;  // obex 16  
     else if(bincmp(des,uuid0003,5,DIRN_FOR) != 0 ||     
             bincmp(des,uuid0100,5,DIRN_FOR) != 0 )
-      uuidflag = 4;  // 3 records     
+      uuidflag = 5;  // 4 records     
     else if(bincmp(des,uuid1200,5,DIRN_FOR) != 0)
       uuidflag = 0;   // 1200
     }
@@ -4296,12 +4365,12 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
    
         
     if(insdat[in] == 0x04)
-      {  // handle specified  0/1/2/3
+      {  // handle specified  0/1/2/3/4
       uuidflag = insdat[in+8];
       }      
     }
-    
-                                    
+ 
+                                       
   if(insdat[in] == 0x02)
     {  // handle request
     VPRINT "SEND handle that matches UUID\n");
@@ -4310,8 +4379,8 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
       VPRINT "  No UUID match - send no data reply\n");
       ssarep = ssahandlefail;   
       }
-    else if(uuidflag == 4)
-      ssarep = ssahandle3;  // 1,2 and 3 
+    else if(uuidflag == 5)
+      ssarep = ssahandle4;  // 1,2,3,4 
     else
       {  
       ssarep = ssahandle; 
@@ -4334,10 +4403,19 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
       ssarep = sdpreply;
       rn = 16;
       totlen = 0;
-      sdpreply[PAKHEADSIZE+16] = 0x35;
-      sdpreply[PAKHEADSIZE+17] = 0;    
       if(insdat[in] == 0x06)
-        rn += 2;
+        {
+        rn += 3;
+        sdpreply[PAKHEADSIZE+16] = 0x36;
+        sdpreply[PAKHEADSIZE+17] = 0;    
+        sdpreply[PAKHEADSIZE+18] = 0;    
+        }
+      else
+        {
+        sdpreply[PAKHEADSIZE+16] = 0x35;
+        sdpreply[PAKHEADSIZE+17] = 0; 
+        }
+           
       if(uuidflag == 0)
         {  // 1200 only 
         sdpreply[PAKHEADSIZE+rn] = 0x35;
@@ -4363,7 +4441,7 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
           totlen += aidlen+2;
         }
         
-      if(uuidflag == 1 || uuidflag == 4)
+      if(uuidflag == 1 || uuidflag == 5)
         {  // standard 2-byte
         sdpreply[PAKHEADSIZE+rn] = 0x35;
         ln = rn;
@@ -4381,7 +4459,7 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
         else
           totlen += aidlen+2;
         }
-      if(uuidflag == 1 || uuidflag == 2 || uuidflag == 4)
+      if(uuidflag == 1 || uuidflag == 2 || uuidflag == 5)
         {  // standard 16-byte
         sdpreply[PAKHEADSIZE+rn] = 0x35;
         ln = rn;
@@ -4399,7 +4477,7 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
         else
           totlen += aidlen+2;
         }
-      if(uuidflag == 3 || uuidflag == 4)
+      if(uuidflag == 3 || uuidflag == 5)
         {  // custom 16-byte
         sdpreply[PAKHEADSIZE+rn] = 0x35;
         ln = rn;
@@ -4416,12 +4494,33 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
           rn = ln;
         else
           totlen += aidlen+2;
+        }  
+      if((uuidflag == 4 || uuidflag == 5) && (gpar.settings & ENABLE_OBEX) != 0)
+        {  // OBEX
+        sdpreply[PAKHEADSIZE+rn] = 0x35;
+        ln = rn;
+        rn += 2;
+        aid0[8] = 4;  // handle 4
+        aidlen = addaid(sdpreply,aid0,&rn,aidj,aidk,0);
+        aidlen += addaid(sdpreply,aid1_4,&rn,aidj,aidk,1);
+           // aid4[17] = channel
+        aidlen += addaid(sdpreply,aid4_obex,&rn,aidj,aidk,4);
+        aidlen += addaid(sdpreply,aid5,&rn,aidj,aidk,5);
+        aidlen += addaid(sdpreply,aid9_obex,&rn,aidj,aidk,9);
+        aidlen += addaid(sdpreply,aid0100_obex,&rn,aidj,aidk,0x0100);
+        aidlen += addaid(sdpreply,aid0303_obex,&rn,aidj,aidk,0x0303);
+        sdpreply[PAKHEADSIZE+ln+1] = aidlen;
+        if(aidlen == 0)
+          rn = ln;
+        else
+          totlen += aidlen+2;
         }
-  
       if(insdat[in] == 0x06)
         {
         sdpreply[PAKHEADSIZE+9] = 0x07;
-        sdpreply[PAKHEADSIZE+17] = totlen;
+        sdpreply[PAKHEADSIZE+17] = (totlen >> 8) & 0xFF;
+        sdpreply[PAKHEADSIZE+18] = totlen & 0xFF;
+        ++totlen;
         }
       else
         {
@@ -4431,11 +4530,21 @@ static unsigned char sdpreply0[24] = { 78,0,S2_HAND | S2_SDP,0,
                
       sdpreply[PAKHEADSIZE+rn] = 0;  // continue
         
-      sdpreply[PAKHEADSIZE+15] = totlen+2;
-      sdpreply[PAKHEADSIZE+13] = totlen+5;
-      sdpreply[PAKHEADSIZE+5] = totlen+10;
-      sdpreply[PAKHEADSIZE+3] = totlen+14;
-      sdpreply[0] = totlen+19;
+      ln = totlen+2;
+      sdpreply[PAKHEADSIZE+14] = (ln >> 8) & 0xFF;
+      sdpreply[PAKHEADSIZE+15] = ln & 0xFF;
+      ln = totlen + 5;
+      sdpreply[PAKHEADSIZE+12] = (ln >> 8) & 0xFF;
+      sdpreply[PAKHEADSIZE+13] = ln & 0xFF;
+      ln = totlen+10;
+      sdpreply[PAKHEADSIZE+5] = ln & 0xFF;
+      sdpreply[PAKHEADSIZE+6] = (ln >> 8) & 0xFF;
+      ln = totlen+14;
+      sdpreply[PAKHEADSIZE+3] = ln & 0xFF;
+      sdpreply[PAKHEADSIZE+4] = (ln >> 8) & 0xFF;
+      totlen += 19;
+      sdpreply[0] = totlen & 0xFF;
+      sdpreply[1] = (totlen >> 8) & 0xFF;
       }
     }
      
@@ -6305,10 +6414,11 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         }
       else if(buf[1] == 8 || buf[1] == 0x59)
         {
-        if(ndevice != 0 && (dev[ndevice]->conflag & CON_HCI) != 0)
+        k = devnfromhandle(buf + 4);
+        if(k != 0 && (dev[k]->conflag & CON_HCI) != 0)
           {  // classic
           if((sflag & IN_ENCR) != 0)
-            {  // classic
+            {  
             if(buf[3] == 0 )  // status=0   
               {
               gotflag = IN_ENCR;
@@ -6316,7 +6426,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
               }
             }  
           }
-        else
+        else if(k != 0)
           {   // LE server crypto
           if(buf[3] == 0)
             {
@@ -6444,16 +6554,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
       if((n0 & 0x80) != 0)
         {  // handle at n0
         n0 &= 0x7F;
-        for(k = 1 ; devicen == 0 && devok(k) != 0 ; ++k)
-          {
-          if( dev[k]->type && (BTYPE_CL | BTYPE_LE | BTYPE_ME) != 0 && dev[k]->conflag != 0)
-            {        // hi 4 bits of buf[2] = flags
-            if(dev[k]->dhandle[0] == buf[n0] && dev[k]->dhandle[1] == (buf[n0+1] & 15))
-              {
-              devicen = k;
-              }
-            }
-          }
+        devicen = devnfromhandle(buf + n0);
         }
       else if(n0 != 0)
         {  // board address at n0 
@@ -7293,13 +7394,13 @@ void immediate(long long lookflag)
       dp->id = insdat[n+1];  // ID from request
       if((dp->conflag & CON_SERVER) == 0 ||
        !( (psm == 1 && (dp->conflag & CON_PSM1) == 0) ||
-          ((psm == 3 || psm == 9) && (dp->conflag & CON_PSM3) == 0) ) )
-        {  // only allow server psm 1/3 
-        VPRINT "  GOT L2 connect request. Fob it off\n");
+          (psm == 3 && (dp->conflag & CON_PSM3) == 0) ) )
+        {  // only allow server psm 1/3  
+        VPRINT "  GOT L2 connect request psm %04X. Fob it off\n",psm);
         sendhci(foboff,devicen);
         }
       else
-        {   
+        {
         VPRINT "GOT L2 connect request psm %d channel %02X%02X\n",insdat[n+4],insdat[n+7],insdat[n+6]);  
   
         if(psm == 1)   // psm 1 for SDP
@@ -7310,7 +7411,7 @@ void immediate(long long lookflag)
           dp->dcid[2] = insdat[n+6];
           dp->dcid[3] = insdat[n+7];
           }
-        else  // psm 3 for RFCOMM
+        else  // psm 3 9 for RFCOMM
           {
           dp->psm = 3;
           dp->scid[0] = 0x43;
@@ -10849,6 +10950,8 @@ void printlocalchannels()
       NPRINT "-");
     } 
   NPRINT "\n");
+  NPRINT "\n    OBEX push server channel 2\n");
+  NPRINT "      OBEX server  UUID=1105\n"); 
   }
 
 int leservices(int ndevice,int flag,unsigned char *uuid)
@@ -12172,7 +12275,10 @@ int clconnect(int ndevice,int channel,int channelflag)
   else 
     dp->rfchan = channel;
   
-  NPRINT "Connecting to %s on channel %d...\n",dp->name,dp->rfchan);
+  if((dp->type & BTYPE_ME) != 0)
+    NPRINT "Connecting to %s...\n",dp->name); 
+  else
+    NPRINT "Connecting to %s on channel %d...\n",dp->name,dp->rfchan);
          
   retval = clconnect0(ndevice);
   flushprint(); 
@@ -12686,10 +12792,10 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
   {
   int n,k,len,getout,devicen,flag,gotn,ndev,meshflag;
   char lastchar;
-  unsigned char *dat;
+  unsigned char *dat,*ecp;
   unsigned int timstart;
      
-
+  ecp = (unsigned char*)&endchar;
   meshflag = 0;
   if(*ndevice == FROM_MESH)
     {
@@ -12769,7 +12875,7 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
             }
 
           if( meshflag == 0 && 
-             (  ( (flag & EXIT_CHAR) != 0 && lastchar == endchar) ||
+             (  ( (flag & EXIT_CHAR) != 0 && lastchar == endchar && *ecp != PACKET_ENDCHAR ) ||
                 ( (flag & EXIT_COUNT) != 0 && gotn == count) ) )
             {
             popins();
@@ -12780,6 +12886,7 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
 
           } 
         while(getout == 0);  // loop for next char
+
         if(meshflag != 0)
           {  // got one IN_DATA mesh packet
           popins();
@@ -12787,6 +12894,14 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
           timems(TIM_FREE);
           return(gotn);
           }
+        else if(gotn > 0 && (flag & EXIT_CHAR) != 0 && *ecp == PACKET_ENDCHAR) 
+          {
+          popins();
+          gpar.readerror = 0;  // OK
+          timems(TIM_FREE);
+          return(gotn);  // found endchar or got count or got mesh packet - normal exit - done OK
+          }
+        
         }  // end reading IN_DATA but need more         
       } 
     while(n >= 0);   // may be another IN_DATA
@@ -12945,12 +13060,10 @@ void set_le_random_address(unsigned char *add)
   
 void set_flags(int flags,int onoff)
   {
-  /****
   if(onoff == FLAG_OFF)
     gpar.settings &= ~flags;
   else
     gpar.settings |= flags;
-  ****/
   }  
   
 int set_le_wait(int waitms)
