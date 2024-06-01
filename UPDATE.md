@@ -138,3 +138,19 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    the Pi's arrow keys move the cursor. Function keys F1/2/3 execute left/middle/right button clicks.
    See mouse.c/py. An example of HID programming.
 
+### Version 16
+
+1. A new option for classic\_server() and read\_node\_endchar(). These functions require a termination
+   character (endchar) that signals the end of the packet. Setting endchar = PACKET\_ENDCHAR will read one
+   Bluetooth packet whatever the last character is. Use this to read one packet when there is no defined
+   termination character.
+   
+2. OBEX (Object Exchange) protocol support. This is the protocol used when most devices (Windows, Android..)
+   transfer files or data. When set up as a Classic server, btferret advertises serial services as before, but
+   also that it is an OBEX push server. A Windows/Android device will recognise this and transfer a file
+   using the OBEX protocol. The btferret receiver must be programmed with this protocol.
+   The files obex\_server.c/py and btferret.c/py do this and will receive files via the OBEX protocol.
+   The obex\_client.c/py files send data to a listening Windows/Android OBEX server.
+   The btferret.c/py file transfer (f) and server (s) functions now include OBEX exchange as an option.
+   
+3. An option in set\_flags to enable or disable the OBEX capability. Enabled by default.   

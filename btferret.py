@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-###### VERSION 15 ######
+###### VERSION 16 ######
+### btfpy.so must be built with btlib.c/btfpython.c version 16 or later ###
 
 import btfpy
 import os
@@ -10,6 +11,10 @@ lesecurity = 2
 crctable = []
 gdestdir = ""
 gnblock = 400
+count = 0
+connected_node = 0
+file_length = 0
+file = None
 
 def inputint(ps):
   flag = 1
@@ -380,24 +385,135 @@ def send_file_by(node,filename,destdir,nblockx):
   else:
     print("CRC=" + '{0:04X}'.format((crchi << 8)+crclo))
     # expect reply
-    reply = btfpy.Read_node_endchar(node,10,btfpy.EXIT_TIMEOUT,5000)
-  
-    #reply = b''
-    #dat = b''
-    #while len(dat) == 0:
-    #  dat = btfpy.Read_node_count(node,1,btfpy.EXIT_TIMEOUT,5000)
-
-    #  if(len(dat) == 1 and dat[0] != 10):
-    #    reply = reply + dat      
-    #    dat = b''
-    #  else:
-    #    dat = b'\n'
-        
-      # loop until endchar=10
+    reply = btfpy.Read_node_endchar(node,10,btfpy.EXIT_TIMEOUT,5000)  
     print("Reply = " + reply.decode())      
 
   return
   # end send_file
+  
+######### SEND FILE OBEX #######
+  
+def sendfileobex(node,filname):
+  connect = [0x80,0x00,0x07,0x10,0x00,0x01,0x90]
+  disconnect = [0x81,0x00,0x03]   
+
+  # convert to bytes object
+  if isinstance(filname,str) == True:
+    filename = filname.encode()
+  else:
+    filename = filname
+
+  # strip this machine directory from filename 
+  sgs = filename.split(b'/')   # linux directory
+  if(len(sgs) > 1):
+    fname = sgs[len(sgs)-1]      
+  else:
+    fname = filename
+  
+  print("Sending " + filename.decode() + " to " + fname.decode())
+
+  # open file
+  try:
+    file = open(filename,'rb')
+  except:
+    print("File open error")
+    return(0) 
+
+  # find file length
+  file.seek(0,os.SEEK_END)
+  flen = file.tell()
+  file.seek(0)
+   
+  ntogo = flen 
+  nlen = len(fname)
+
+  nblock = 400
+  connect[5] = (nblock >> 8) & 0xFF
+  connect[6] = nblock & 0xFF
+  send = [0 for n in range(nblock)] 
+
+  # OBEX connect
+  btfpy.Write_node(node,connect,0)
+  
+  # wait for Success reply 0x0A
+  inbuf = btfpy.Read_node_endchar(node,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,5000)
+  if(len(inbuf) == 0 or inbuf[0] != 0xA0):
+    print("OBEX Connect failed")
+    file.close()
+    return(0) 
+  elif((inbuf[1] << 8) + inbuf[2] >= 7):
+    n = (inbuf[5] << 8) + inbuf[6]
+    if(n < nblock):
+      nblock = n  # reduce chunk size
+    
+  send[3] = 0x01
+  n = 2*nlen + 5
+  send[4] = (n >> 8) & 0xFF
+  send[5] = n & 0xFF
+  k = 6
+  for n in range(nlen):
+    send[k] = 0
+    send[k+1] = fname[n]
+    k = k + 2
+     
+  send[k] = 0
+  send[k+1] = 0
+  k = k + 2
+
+  send[k] = 0xC3
+  send[k+1] = (flen >> 24) & 0xFF
+  send[k+2] = (flen >> 16) & 0xFF
+  send[k+3] = (flen >> 8) & 0xFF
+  send[k+4] = flen & 0xFF
+  k = k + 5
+  err = 0
+  # loop to send data chunks
+  while(ntogo > 0 and err == 0):  
+    if(ntogo <= nblock - 3 - k):
+      send[k] = 0x49
+      send[0] = 0x82
+      ndat = ntogo + 3
+    else:
+      send[k] = 0x48
+      send[0] = 0x02
+      ndat = nblock - k
+    send[k+1] = (ndat >> 8) & 0xFF
+    send[k+2] = ndat & 0xFF
+    k = k + 3
+    ndat = ndat - 3
+
+    try:
+      temps = file.read(ndat)
+    except:
+      err = 1
+
+    if err == 0:
+      for n in range(ndat):
+        send[k+n] = temps[n]
+      ntogo = ntogo - ndat
+      k = k + ndat
+      send[1] = (k >> 8) & 0xFF
+      send[2] = k & 0xFF
+      btfpy.Write_node(node,send,k)  # send k bytes
+      # wait for Success reply 0x0A
+      inbuf = btfpy.Read_node_endchar(node,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,5000)
+      if(len(inbuf) == 0 or (inbuf[0] != 0xA0 and inbuf[0] != 0x90)):
+        print("Send failed")
+        err = 1
+   
+    k = 3
+    # end chunk loop
+
+  file.close()
+  
+  btfpy.Write_node(node,disconnect,0)
+  # wait for Success reply 0x0A
+  inbuf = btfpy.Read_node_endchar(node,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,5000)
+  if(len(inbuf) == 0 or inbuf[0] != 0xA0):
+    print("OBEX Disconnect failed")
+  
+  return(1)
+  # end sendfileobex    
   
 ############ GET FILE ##################  
 
@@ -628,6 +744,140 @@ def classic_node_callback(clientnode,dat,datlen):
   # end node_classic_callback
 
 
+
+def obex_callback(node,data,plen):
+  global count
+  global connected_node
+  global file_length
+  global file
+  
+  connect_success = [0xA0,0x00,0x07,0x10,0x00,0x01,0x90]
+  fail = [0xC3,0x00,0x03]
+  success = [0xA0,0x00,0x03]
+  continue_reply = [0x90,0x00,0x03]
+  
+  datalen = 0 # no data
+  
+  # data[0] = opcode (section 3.4 in OBEX15.pdf)
+  
+  if(data[0] == 0x80):
+    # Connect 
+    if(connected_node == 0):
+      # not connected to another device
+      print("OBEX connect")
+      btfpy.Write_node(node,connect_success,0)    
+      connected_node = node
+      count = 0  # data bytes received  
+      if(file != None):
+        file.close()
+        file = None
+    else:
+      # already connected to another device - refuse
+      print("Node " + str(node) + " trying to OBEX connect - refuse")
+      btfpy.Write_node(node,fail,0)
+    return(btfpy.SERVER_CONTINUE)
+ 
+  if(node != connected_node):
+    print("Node " + str(node) + " not OBEX connected")
+    return(btfpy.SERVER_CONTINUE)
+     
+  
+  if((data[0] & 0x7F) == 0x02):
+    # 0x02 or 0x82 Put
+    length = (data[1] << 8) + data[2] # should = plen
+    n = 3  # 1st header item
+    while(n < length and n < plen):
+      hi = data[n] # header item identifier (section 2.1 in OBEX15.pdf)
+      if((hi & 0xC0) == 0x80):
+        # 1-byte value
+        if(hi == 0x97):
+          # Single Response Mode
+          print("SRM not programmed")
+          btfpy.Write_node(node,fail,0)
+          connected_node = 0
+          return(btfpy.SERVER_CONTINUE)  
+        # other header identifiers here 0x93 0x94... 
+        n = n + 2  # next item
+      elif((hi & 0xC0) == 0xC0):
+        # 4-byte value
+        if(hi == 0xC3):
+          # Count       
+          file_length = (data[n+1] << 24) + (data[n+2] << 16) + (data[n+3] << 8) + data[n+4]
+          print("File length = " + str(file_length))
+        # other header identifiers here 0xC4 0xCB... 
+        n = n + 5 # next item
+      else:
+        # 2 length bytes 
+        ilen = (data[n+1] << 8) + data[n+2] # item length 
+        j = n+3 # start data  
+        if(ilen == 0):
+          n = length  # error exit loop
+        if(hi == 0x01):
+          # unicode file name
+          j = j + 1 # skip unicode 0
+          k = 0
+          filename = ""
+          while(j < n+ilen and j < plen):
+            if(data[j] != 0): 
+              filename = filename + chr(data[j])
+            k = k + 1
+            j = j + 2
+          print("File name = " + filename)
+          
+          # open file
+          try:
+            file = open(filename,'wb')
+          except:
+            file = None
+            print("File open error")
+            return(btfpy.SERVER_CONTINUE) 
+          
+        elif(hi == 0x48 or hi == 0x49):
+          # data chunk
+          datan = j         # index 
+          datalen = ilen-3  # length
+                 
+        # Other header identifiers here
+        # 0x42 = Type
+        # 0x47 = HTTP
+        # 0x44 = Time
+        
+        n = n + ilen  # next item     
+         
+  elif(data[0] == 0x81):
+    # Disconnect
+    print("OBEX disconnect")
+    connected_node = 0
+    if(file != None):
+      file.close()
+      file = None
+     
+    btfpy.Write_node(node,success,0)  
+    return(btfpy.SERVER_CONTINUE)
+  else:
+    print("GOT opcode " + str(data[0]) + " - no action")
+ 
+  # Write data chunk to file
+  if(datalen != 0 and file != None):
+    count = count + datalen 
+    file.write(data[datan:datan+datalen]) 
+    if(data[0] == 0x82):
+      # last chunk - finished
+      if(count != file_length):
+        print("Expected " + str(file_length) + " bytes. Got " + str(count))
+      file.close()
+      file = None
+      print("File saved") 
+  
+  # Send response Continue or Success (section 3.2.1 in OBEX15.pdf)
+  if(data[0] == 0x02):  # Put - not last chunk 
+    btfpy.Write_node(node,continue_reply,0)  
+  else:      
+    btfpy.Write_node(node,success,0) 
+
+  return(btfpy.SERVER_CONTINUE)
+  # end obex_callback  
+
 def mesh_callback(clientnode,dat,datlen):
 
   print("Mesh packet from " + btfpy.Device_name(clientnode))
@@ -708,16 +958,26 @@ def settings():
     
 def sendgetfile():
 
-  flag = inputint("FILE TRANSFER\n  0 = SEND file\n  1 = GET file\nInput one of the above options")
+  
+  print("FILE TRANSFER\n  0 = SEND file\n  1 = GET file")
+  print("  2 = SEND file to OBEX server (Windows/Android...)\n  3 = RECEIVE file from OBEX client")
+  flag = inputint("Input one of the above options")
 
-  if flag == 0:
+  if flag == 0 or flag == 2:
     print("SEND",end = ' ')
   elif flag == 1:
     print("GET",end = ' ')
+  elif flag == 3:
+    print("Start an OBEX server via s. Send the file from the remote device")
+    return
   else:
     print("Invalid option")
     return
-  print("file - must be connected to a btferret transfer protocol server")
+  
+  if flag == 2:
+    print("file - must be connected to an OBEX protocol server")
+  else:
+    print("file - must be connected to a btferret transfer protocol server")
    
   servernode = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_ME | btfpy.BTYPE_CL,0)       
   if(servernode < 0):
@@ -741,38 +1001,42 @@ def sendgetfile():
   if(len(fname) == 0 or (len(fname) == 1 and fname[0] == 'x')):
     print("Cancelled")
     return(0)
-   
-  print("Input destination directory - must end with / or \\")
-  print("  e.g. /home/pi/ OR C:\\mydir\\   (/ = none  x = cancel)")
-  ddir = input("? ")
-
-  slen = len(ddir)
-  if(slen > 0):
-    ec = ddir[slen - 1]
-    if(ec != '/' and ec != '\\'):
-      print("Directory must end with / or \\")
-      return    
-
-  if(len(ddir) == 0 or (len(ddir) == 1 and ddir[0] == 'x')):
-    print("Cancelled")
-    return(0)
-  
-  if(len(ddir) == 0 or (len(ddir) == 1 and ddir[0] == '/')):
-    print("None - will save to server's btferret directory")
-    ddir = "" 
-    
-  print("BLOCK SIZE = " + str(nblock) + " bytes")
-  print("  Data is transmitted in blocks of this size")
-  print("  Enter x to keep, or enter new value 64-" + str(maxblock))
-  xblock = inputint("Block size")
-  if(xblock >= 64 and xblock < maxblock):
-    nblock = xblock         
-    print("Block size changed to " + str(nblock))
-  else:
-    print("Block size not changed")
  
+  if(flag != 2):
+    print("Input destination directory - must end with / or \\")
+    print("  e.g. /home/pi/ OR C:\\mydir\\   (/ = none  x = cancel)")
+    ddir = input("? ")
+
+    slen = len(ddir)
+    if(slen > 0):
+      ec = ddir[slen - 1]
+      if(ec != '/' and ec != '\\'):
+        print("Directory must end with / or \\")
+        return    
+
+    if(len(ddir) == 0 or (len(ddir) == 1 and ddir[0] == 'x')):
+      print("Cancelled")
+      return(0)
+  
+    if(len(ddir) == 0 or (len(ddir) == 1 and ddir[0] == '/')):
+      print("None - will save to server's btferret directory")
+      ddir = "" 
+    
+    print("BLOCK SIZE = " + str(nblock) + " bytes")
+    print("  Data is transmitted in blocks of this size")
+    print("  Enter x to keep, or enter new value 64-" + str(maxblock))
+    xblock = inputint("Block size")
+    if(xblock >= 64 and xblock < maxblock):
+      nblock = xblock         
+      print("Block size changed to " + str(nblock))
+    else:
+      print("Block size not changed")
+    # end dir/block input for non-OBEX
+    
   if flag == 0:
-    send_file(servernode,fname,ddir,nblock) 
+    send_file(servernode,fname,ddir,nblock)
+  elif flag == 2:
+    sendfileobex(servernode,fname)
   else:
     get_file(servernode,fname,ddir,nblock) 
       
@@ -1081,7 +1345,8 @@ def server():
   passkey = 0
   
   print("  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = Mesh server")
-  serverflag = inputint("Input server type 0/1/2/3")
+  print("  4 = OBEX server (receive file from Windows/Android...)")
+  serverflag = inputint("Input server type 0/1/2/3/4")
   if(serverflag < 0):
     return(0)
   if(serverflag == 3):  # Mesh
@@ -1142,7 +1407,7 @@ def server():
       print("Cancelled")
       return(0)
     btfpy.Node_server(clinode,classic_node_callback,endchar)
-  elif(serverflag == 1):  # classic
+  elif(serverflag == 1 or serverflag == 4):  # classic
     print("\nInput node of client that will connect")
     clinode = inputnode(btfpy.BTYPE_ME | btfpy.BTYPE_CL,2)        
    
@@ -1170,15 +1435,20 @@ def server():
         keyflag = btfpy.KEY_ON | btfpy.PASSKEY_OFF    
       elif(inkey == 4):
         keyflag = btfpy.KEY_ON | btfpy.PASSKEY_REMOTE # client prints passkey - enter on loca  
-                 
-    print("Server will listen on channel 1 and any of the following UUIDs")
-    print("  Standard serial 2-byte 1101")
-    print("  Standard serial 16-byte")
-    print("  Custom serial set via register serial")
+    
     if(clinode == 0):
       clinode = btfpy.ANY_DEVICE
-    btfpy.Classic_server(clinode,classic_node_callback,endchar,keyflag)
-         
+    if(serverflag == 1):             
+      print("Server will listen on channel 1 and any of the following UUIDs")
+      print("  Standard serial 2-byte 1101")
+      print("  Standard serial 16-byte")
+      print("  Custom serial set via register serial")
+      btfpy.Classic_server(clinode,classic_node_callback,endchar,keyflag)
+    else:
+      print("Server will listen on channel 2 and UUID = 1105")
+      print("You may need to pair this device first")
+      btfpy.Classic_server(clinode,obex_callback,btfpy.PACKET_ENDCHAR,keyflag) 
+           
   else:
    print("Invalid type")
   return(0)

@@ -1,7 +1,7 @@
 Python and C Bluetooth Library
 ==============================
 
-*Version 15*
+*Version 16*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -17,6 +17,8 @@ Python and C Bluetooth Library
         - [2.3.2 LE server](#2-3-2-le-server)
         - [2.3.3 Classic client](#2-3-3-classic-client)
         - [2.3.4 Classic server](#2-3-4-classic-server)
+        - [2.3.5 OBEX client](#2-3-5-obex-client)
+        - [2.3.6 OBEX server](#2-3-6-obex-server)        
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
@@ -43,6 +45,8 @@ Python and C Bluetooth Library
     - [3.11 HID Devices](#3-11-hid-devices)
     - [3.12 Blue Dot server](#3-12-blue-dot-server)
     - [3.13 File transfer](#3-13-file-transfer)
+        - [3.13.1 Custom btferret protocol](#3-13-1-custom-btferret-protocol)
+        - [3.13.2 OBEX protocol](#3-13-2-obex-protocol)
 - [4 btlib Library](#4-btlib-library) 
     - [4.1 Function list](#4-1-function-list)
         - [4.1.1 List With Descriptions](#4-1-1-list-with-descriptions)    
@@ -146,16 +150,21 @@ and also to a mesh network of other Pis running the same software.
 There is a library of functions ([btlib](#4-btlib-library)) and a sample program
 ([btferret](#3-2-btferret)) that implements most of
 the interface features such as connecting to other devices, operating as a client or server,
-exchanging data (including a file transfer routine) and display of information - it is a bit
+exchanging data (including file transfer) and display of information - it is a bit
 like bluetoothctl. Many Bluetooth operations can
 be run from the btferret command line, and this document describes how the same thing (and more) can
-then be done via your own C or Python code. Starting-point code examples for Classic and LE clients
+then be done via your own C or Python code.The different flavours of Bluetooth are described in the
+[connections](#3-1-bluetooth-connections) section. 
+Starting-point code examples for Classic and LE clients
 and servers are available for download, and described in the [Hello World](#2-3-hello-world) section. 
 
 Also included is the code for a simple [mesh network example](#3-10-sample), and
 a [Blue Dot server](#3-12-blue-dot-server) that is a way of controlling a Pi from a phone.
+OBEX [client](#2-3-5-obex-client) and [server](#2-3-6-obex-server) code exchanges
+files with Windows/Android/etc... devices.
 The [HID Devices](#3-11-hid-devices) section describes how to program a Human Input Device such as
-a Bluetooth keyboard. There is a keyboard.c/py program that turns a Pi into a Bluetooth keyboard
+a Bluetooth keyboard.
+There is a keyboard.c/py program that turns a Pi into a Bluetooth keyboard
 for a phone or tablet.
 
 In the [reference](#5-reference) section there is a detailed description
@@ -862,8 +871,261 @@ btfpy.Close_all()
 ```
 
 
+### 2-3-5 OBEX client
+
+This code connects to node 4 which must be an OBEX push server. It searches for a UUID = 1105 service.
+It sends NAME = hello.txt, and DATA = Hello. Most OBEX servers will save DATA in a file called NAME.
+Note the use of PACKET_ENDCHAR in the read response functions. The sendfileobex() functon in
+btferret.c/py is fully programmed to send a file.
+To set up the remote device as an OBEX server:
+
+```
+Windows: Settings/Devices/Send or receive files via Bluetooth/Receive files
+Android: Enabling Bluetooth will normally make the device an OBEX server
+         and will automatically accept a file when sent
+```
+
+See [OBEX protocol](#3-13-2-obex-protocol)
+
+### C code
+
+Download obex_client.c
 
 
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
+
+int main()
+  {
+  int channel,len;
+  unsigned char inbuf[64];
+  unsigned char connect[7] = {0x80,0x00,0x07,0x10,0x00,0x01,0x90};
+  unsigned char send[39] = {0x82,0x00,0x27,
+                            0x01,0x00,0x17,0,'h',0,'e',0,'l',0,'l',0,'o',0,'.',0,'t',0,'x',0,'t',0,0,
+                            0xC3,0,0,0,5,
+                            0x49,0,8,'H','e','l','l','o'};
+  unsigned char disconnect[3] = {0x81,0x00,0x03};   
+  
+  
+  if(init_blue("devices.txt") == 0)
+    return(0);
+  
+  printf("Node 4 must be TYPE=CLASSIC in devices.txt with 1105 OBEX service\n");  
+    // find OBEX push server channel
+  channel = find_channel(4,UUID_16,strtohex("00001105-0000-1000-8000-00805F9B34FB",NULL));
+  if(channel <= 0)
+    channel = find_channel(4,UUID_2,strtohex("1105",NULL));
+  if(channel <= 0)
+    {
+    printf("OBEX seervice not found\n");
+    close_all();
+    return(0);
+    }    
+    
+  connect_node(4,CHANNEL_NEW,channel);
+  
+  printf("Send hello.txt containing Hello\n");
+ 
+  write_node(4,connect,7);
+  inbuf[0] = 0;
+  // wait for Success reply 0x0A
+  len = read_node_endchar(4,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+  if(len == 0 || inbuf[0] != 0xA0)
+    printf("OBEX Connect failed\n");
+
+  write_node(4,send,39);
+  inbuf[0] = 0;
+  len = read_node_endchar(4,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+  if(len == 0 || inbuf[0] != 0xA0)
+    printf("Send failed\n");
+
+  write_node(4,disconnect,3);
+  inbuf[0] = 0;
+  len = read_node_endchar(4,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+  if(len == 0 || inbuf[0] != 0xA0)
+    printf("OBEX Disconnect failed\n");
+   
+  disconnect_node(4);
+  close_all();
+  }
+```
+
+### PYTHON code
+
+Download obex_client.py
+
+```python
+import btfpy
+
+if btfpy.Init_blue("devices.txt") == 0:
+  exit(0)
+  
+print("Node 4 must be TYPE=CLASSIC in devices.txt with UUID = 1105 service")  
+  # find OBEX channel - try 16 and 2 byte
+channel = btfpy.Find_channel(4,btfpy.UUID_16,btfpy.Strtohex("00001105-0000-1000-8000-00805F9B34FB"))
+if(channel <= 0):
+  channel = btfpy.Find_channel(4,btfpy.UUID_2,btfpy.Strtohex("1105"))
+if(channel <= 0):
+  print("OBEX seervice not found")
+  btfpy.Close_all()
+  exit(0)   
+  
+btfpy.Connect_node(4,btfpy.CHANNEL_NEW,channel)
+print("Send hello.txt conatining Hello")
+
+connect = [0x80,0x00,0x07,0x10,0x00,0x01,0x90]
+btfpy.Write_node(4,connect,0)
+  # wait for Success reply 0x0A
+inbuf = btfpy.Read_node_endchar(4,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,3000)
+if(len(inbuf) == 0 or inbuf[0] != 0xA0):
+  print("OBEX Connect failed")
+
+send = [0x82,0x00,0x27,\
+        0x01,0x00,0x17,0,104,0,101,0,108,0,108,0,111,0,46,0,116,0,120,0,116,0,0,\
+        0xC3,0,0,0,5,\
+        0x49,0,8,72,101,108,108,111]
+btfpy.Write_node(4,send,0)
+inbuf = btfpy.Read_node_endchar(4,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,3000)
+if(len(inbuf) == 0 or inbuf[0] != 0xA0):
+  print("Send failed")
+
+disconnect = [0x81,0x00,0x03]   
+btfpy.Write_node(4,disconnect,0)
+inbuf = btfpy.Read_node_endchar(4,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,3000)
+if(len(inbuf) == 0 or inbuf[0] != 0xA0):
+  print("OBEX Disconnect failed")
+   
+btfpy.Disconnect_node(4)
+btfpy.Close_all()
+```
+
+### 2-3-6 OBEX server
+
+This code starts a Classic server with a termination character = PACKET\_ENDCHAR. The device
+will be advertising an OBEX push server service with a UUID of 1105. The callback function receives
+OBEX packets, and sends replies, but takes no action. The download files obex\_server.c/py are
+more fully programmed and save the data in a file.
+
+To send a file from a remote device:
+
+```
+Windows: Settings/Devices/Send or receive files via Bluetooth/Send file
+            Turn Authentication off, or pair the server first
+Android: Enable Bluetooth. Pair the server via Settings/Bluetooth 
+            Share a file and select via Bluetooth
+```
+
+See [OBEX protocol](#3-13-2-obex-protocol)
+
+### C code
+
+Download obex_server.c (has additional code to save the data to a file)
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
+
+int obex_callback(int node,unsigned char *data,int len);
+
+int main()
+  {
+  if(init_blue("devices.txt") == 0)
+    return(0);
+
+  classic_server(ANY_DEVICE,obex_callback,PACKET_ENDCHAR,KEY_ON | PASSKEY_OFF); 
+
+  close_all();
+  }
+  
+  
+int obex_callback(int node,unsigned char *data,int len)
+  {
+  static unsigned char connect_success[7] = {0xA0,0x00,0x07,0x10,0x00,0x01,0x90};
+  static unsigned char success[3] = {0xA0,0x00,0x03};
+  static unsigned char continue_reply[3] = {0x90,0x00,0x03};
+   
+  // data[0] = opcode (section 3.4 in OBEX15.pdf)
+  
+  if(data[0] == 0x80)
+    {  // Connect 
+    printf("OBEX connect\n");
+    write_node(node,connect_success,7);    
+    return(SERVER_CONTINUE);
+    }
+  else if((data[0] & 0x7F) == 0x02)
+    { // 0x02 or 0x82 Put data chunk
+    printf("GOT data chunk\n");
+    }     
+  else if(data[0] == 0x81)
+    {  // Disconnect
+    printf("OBEX disconnect\n");
+    write_node(node,success,3);  
+    return(SERVER_EXIT);
+    } 
+  else
+    printf("GOT opcode %02X\n",data[0]);
+ 
+  // Send response Continue or Success (section 3.2.1 in OBEX15.pdf)
+  if(data[0] == 0x02)  // Put - not last chunk 
+    write_node(node,continue_reply,3);  
+  else      
+    write_node(node,success,3);  
+
+  return(SERVER_CONTINUE);
+  }
+```
+
+### PYTHON code
+
+Download obex_server.py (has additional code to save the data to a file)
+
+```python
+
+import btfpy
+
+def obex_callback(node,data,plen):
+  connect_success = [0xA0,0x00,0x07,0x10,0x00,0x01,0x90]
+  success = [0xA0,0x00,0x03]
+  continue_reply = [0x90,0x00,0x03]
+  
+  # data[0] = opcode (section 3.4 in OBEX15.pdf)
+  
+  if(data[0] == 0x80):
+    # Connect 
+    print("OBEX connect")
+    btfpy.Write_node(node,connect_success,0)
+    return(btfpy.SERVER_CONTINUE)
+  elif((data[0] & 0x7F) == 0x02):
+    # 0x02 or 0x82 Put
+    print("GOT data chunk")
+  elif(data[0] == 0x81):
+    # Disconnect
+    print("OBEX disconnect")
+    btfpy.Write_node(node,success,0)  
+    return(btfpy.SERVER_EXIT)
+  else:
+    print("GOT opcode " + str(data[0]))
+ 
+  # Send response Continue or Success (section 3.2.1 in OBEX15.pdf)
+  if(data[0] == 0x02):  # Put - not last chunk 
+    btfpy.Write_node(node,continue_reply,0)  
+  else:      
+    btfpy.Write_node(node,success,0) 
+
+  return(btfpy.SERVER_CONTINUE)
+  # end obex_callback  
+
+##### START #####
+  
+if btfpy.Init_blue("devices.txt") == 0:
+  exit(0)
+
+btfpy.Classic_server(btfpy.ANY_DEVICE,obex_callback,btfpy.PACKET_ENDCHAR,btfpy.KEY_ON | btfpy.PASSKEY_OFF)
+btfpy.Close_all()
+```
 
 
 ## 3 Interface  
@@ -879,7 +1141,9 @@ A Pi running btferret/btlib
 can act as a Classic client or server. The connecting server/client can be another Pi running
 btferret or any Bluetooth-capable
 device such as a PC or Android running a Blueooth app such as a serial terminal.
-The [Blue Dot app](#3-12-blue-dot-server) uses a classic connection to control a Pi from a phone.  
+The [Blue Dot app](#3-12-blue-dot-server) uses a classic connection to control a Pi from a phone.
+OBEX (OBject EXchange) is a standard protocol used by most devices to send data (usually files) via a Classic
+connection. OBEX [client](#2-3-5-obex-client) and [server](#2-3-6-obex-server) code examples are included. 
 
 The original idea behind LE is that the server is a measurement device such as a temperature monitor.
 An LE client connects
@@ -3152,6 +3416,8 @@ may be customised for the desired application.
 
 ## 3-13 File Transfer
 
+### 3-13-1 Custom btferret protocol
+
 Two devices running btferret can exchange files (f command). The client can send a file to the server, or get a 
 file from the server. The distribution also includes a filetransfer.py Python file that should run 
 on any Python+Bluetooth capable machine (Windows requires Python 3.9 or later). Its file transfer protocol
@@ -3164,6 +3430,61 @@ hciconfig first:
 hciconfig hci0 piscan
 python3 filetransfer.py
 ```
+
+### 3-13-2 OBEX protocol
+
+OBEX (OBject EXchange) is a protocol used by most devices to send data and files. If a file is sent from Windows
+or Android the OBEX protocol is used, and the receiving device must be an OBEX push server. A btferret classic
+server can act as an OBEX push server. When classic\_server()
+is called, it advertises that it has serial services with RFCOMM channel = 1, and that it is also an OBEX server
+with a UUID of 1105 and a RFCOMM channel = 2. A Windows or Android device will automatically connect to the OBEX
+service and transfer the file, but
+the classic callback routine must be programmed as an OBEX push server. The obex\_server.c/py files do this, and
+should be used as a starting point for OBEX coding, and the btferret.c/py server (s) has an OBEX option.
+They will receive and save a file sent from a remote device.
+Note that the server must be called with endchar = PACKET_ENDCHAR.
+
+To act as an OBEX client and send a file to a Windows/Android device, start a classic connection.
+The RFCOMM channel must be an OBEX server with a UUID of 1105 or
+the 16-byte equivalent 00001105-0000-1000-8000-00805F9B34FB.
+The obex_client.c/py files search for an OBEX RFCOMM channel and
+send the file name and the data. The btferret.c/py file transfer (f) has an OBEX option.
+The receiver should save it as a file.
+
+When acting as an OBEX server, a remote Android device requires the server to be paired first.
+Windows has an authentication option - if turned on, the server must be paired first.
+
+Pi acts as an OBEX server and receives a file. On the remote device:
+
+```
+Windows: Settings/Devices/Send or receive files via Bluetooth/Send file
+            Turn Authentication off, or pair the server first
+Android: Enable Bluetooth. Pair the server via Settings/Bluetooth 
+            Share a file and select via Bluetooth
+```
+
+Pi acts as an OBEX client and sends a file. On the remote device:
+
+```
+Windows: Settings/Devices/Send or receive files via Bluetooth/Receive files
+Android: Enabling Bluetooth will normally make the device an OBEX server
+         and will automatically accept a file when sent.
+```
+
+Advertising as an OBEX server can be an invitation for devices to connect and exchange files or
+business cards. The OBEX capability can be disabled by turning the ENABLE\_OBEX flag off
+in [set\_flags](#4-2-42-set\_flags).
+
+Most useful reference - details of packet formats
+
+[IrDA spec OBEX15.pdf](https://btprodspecificationrefs.blob.core.windows.net/ext-ref/IrDA/OBEX15.pdf)
+
+OPP (Object Push Profile) specification: OPP\_SPEC\_V12r00.pdf
+
+www.bluetooth.com/specifications/specs/object-push-profile-1-2/
+
+
+
 
 
 ## 4 btlib Library 
@@ -3178,7 +3499,6 @@ These library functions are in btlib.c/btlib.h.
 [close\_all](#4-2-3-close\_all) - Close all connections on program end<br/>
 [device\_info](#4-2-8-device\_info) - Print device information<br/>
 [classic\_scan](#4-2-1-classic\_scan) - Scan for classic devices<br/>
-[le\_pair](#4-2-18-le\_pair) - Pair a connected LE server or set server security<br/>
 [le\_scan](#4-2-19-le\_scan) - Scan for LE devices<br/>
 [localnode](#4-2-24-localnode) - Return node number of local device<br/>
 [list\_channels](#4-2-21-list\_channels) - List serial data channels of a Classic device<br/>
@@ -3186,6 +3506,7 @@ These library functions are in btlib.c/btlib.h.
 [list\_uuid](#4-2-23-list\_uuid) - List node services that contain a specified UUID<br/>
 [register\_serial](#4-2-40-register\_serial) - Register a custom UUID serial service<br/>
 [connect\_node](#4-2-4-connect\_node) - Connect to a server node as a client<br/>
+[le\_pair](#4-2-18-le\_pair) - Pair a connected LE server or set server security<br/>
 [classic\_server](#4-2-2-classic\_server) - Become a classic server. Listen for pair/connect<br/>
 [keys\_to\_callback](#4-2-17-keys\_to\_callback) - Send keys to LE server LE_KEYPRESS<br/>
 [le\_server](#4-2-20-le\_server) - Become an LE server. Listen for connection<br/>
@@ -3218,6 +3539,7 @@ These library functions are in btlib.c/btlib.h.
 [set\_le\_interval](#4-2-43-set\_le\_interval) - Set LE connection interval<br/>
 [set\_le\_random\_address](#4-2-44-set\_le\_random\_address) - Set LE address for HID device<br/>
 [set\_le\_wait](#4-2-45-set\_le\_wait) - Set LE server connection wait time<br/>
+[set\_flags](#4-2-42-set\_flags) - Set flags controlling program behaviour<br/> 
 [set\_print\_flag](#4-2-46-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
 [output\_file](#4-2-30-output\_file) - Save all recent screen output to a file<br/>
 [strtohex](#4-2-47-strtohex) - Convert ascii string to array of hex values<br/>
@@ -3234,6 +3556,7 @@ classic_server(node,classic_callback,endchar,keyflag)
     node = specified node number or ANY_DEVICE
     keyflag = KEY_ON, KEY_OFF  or'ed with
               PASSKEY_OFF, PASSKEY_LOCAL, PASSKEY_REMOTE
+    endchar = termination character OR PACKET_ENDCHAR
     classic_callback(node,data[],datlen)
 close_all()
 connect_node(node,flag,channel)
@@ -3294,12 +3617,16 @@ read_node_count(node,inbuf[],count,exitflag,timeoutms)
 read_all_endchar(&node,inbuf[],bufsize,endchar,exitflag,timeoutms)
 read_node_endchar(node,inbuf[],bufsize,endchar,exitflag,timeoutms)
     exitflag = EXIT_TIMEOUT, EXIT_KEY
+    endchar = termination character OR PACKET_ENDCHAR
 read_node_clear(node)
 read_all_clear()
 read_notify(timeoutms)
 register_serial(uuid[],"name")
 scroll_back()
 scroll_forward()
+set_flags(flags,onoff)
+     flags = ENABLE_OBEX
+     onoff = FLAG_ON, FLAG_OFF
 set_le_interval(min,max)
 set_le_interval_update(node,min,max)
 set_le_interval_server(node,min,max)
@@ -3323,6 +3650,7 @@ write_node(node,outbuf[],count)
                  node: specified node number or ANY_DEVICE
                  keyflag: KEY_ON, KEY_OFF  or'ed with
                           PASSKEY_OFF, PASSKEY_LOCAL, PASSKEY_REMOTE
+                 endchar: termination character OR PACKET_ENDCHAR                       
                  classic_callback(node,data,datlen)
        None = Close_all()
      okfail = Connect_node(node,flag,channel)
@@ -3393,12 +3721,16 @@ number_found = Find_ctics(node)
 (data,node) = Read_all_endchar(endchar,exitflag,timeoutms)       
        data = Read_node_endchar(node,endchar,exitflag,timeoutms)
                  exitflag: EXIT_TIMEOUT, EXIT_KEY
+                 endchar:  termination character OR PACKET_ENDCHAR
        None = Read_node_clear(node)
        None = Read_all_clear()
        None = Read_notify(timeoutms)
        None = Register_serial(uuid,"name")
        None = Scroll_back()
        None = Scroll_forward()
+       None = Set_flags(flags,onoff)
+                 flags: ENABLE_OBEX
+                 onoff: FLAG_ON, FLAG_OFF
      okfail = Set_le_interval(min,max)
      okfail = Set_le_interval_update(node,min,max)
      okfail = Set_le_interval_server(node,min,max)
@@ -3437,20 +3769,28 @@ a specified client (clientnode) or any device to pair or connect, then spends al
 for packets sent from that client. The client may be a Windows/Android/.. device (maybe
 running a Bluetooth terminal program), or another Mesh Pi acting as a classic client
 and connecting via [connect\_node()](#4-2-4-connect\_node). The packets must have the specified
-termination character (endchar), and are limited to a maximum size of 1000 bytes.
+termination character (endchar, usually line end 10), and are limited to a maximum size of 1000 bytes.
+If there is no  defined termination character, set endchar = PACKET_ENDCHAR
+and each separate Bluetooth packet is sent to the callback routine.
 When a packet is received, it is despatched to the callback
-function. The callback function returns a flag telling classic\_server to continue
+function. The callback function must return a flag telling classic\_server to continue
 or exit. The classic\_server function only completes when it receives this SERVER\_EXIT
 return or the x key is pressed.
 When operating as a classic\_server, there is a 1:1 connection between the client and
 this server - the other mesh devices do not participate.
 
-The server listens on channel 1, and advertises the following serial services: 
+The server advertises the following RFCOMM serial services: 
 
 ```
-UUID = 1101 channel=1 name=Serial2 
-UUID = 00001101-0000-1000-8000-00805F9B34FB  channel=1 name=Serial16
-UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB  channel=1 name=My Custom Serial
+Channel 1 Serial services
+
+  UUID = 1101 name=Serial2 
+  UUID = 00001101-0000-1000-8000-00805F9B34FB  name=Serial16
+  UUID = FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB  name=My Custom Serial
+
+Channel 2 OBEX push server
+
+  UUID = 1105  name=OBEX server
 ```
 
 The UUID and name of this last custom serial service can be changed via
@@ -3463,7 +3803,13 @@ PARAMETERS
 clientnode = Node number of the client that will connect
              or ANY_DEVICE (does not need to be in the devices file)
 callback() = Callback function that deals with the received packets
-endchar = termination character of packets sent by the client
+endchar = termination character of packets sent by the client (usually 10)
+            OR
+          PACKET_ENDCHAR  
+            The last character of each packet terminates the read, so
+            each packet is sent to the callback routine. Use this when
+            there is no defined termination character. (e.g. for an OBEX server)
+          
 keyflag = Flags to specify the security requirements of the connecting client:
 
 One of these:
@@ -3586,7 +3932,12 @@ classic_server(ANY_DEVICE,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
       // Android/Windows.. device. The remote device may pop up a box
       // asking if the passkey has appeared on the local server screen.
 classic_server(2,classic_callback,10,KEY_ON | PASSKEY_LOCAL);
-   
+
+      // No defined endchar - send each packet to the callback routine
+      // Use this for an OBEX server
+classic_server(2,classic_callback,PACKET_ENDCHAR,KEY_ON | PASSKEY_OFF);
+
+  
 int classic_callback(int clientnode,unsigned char *data,int datlen)
   {
   
@@ -3611,7 +3962,9 @@ btfpy.Classic_server(btfpy.ANY_DEVICE,classic_callback,10,btfpy.KEY_ON | btfpy.P
    # Android/Windows.. device. The remote device may pop up a box
    # asking if the passkey has appeared on the local server screen.
 btfpy.Classic_server(2,classic_callback,10,btfpy.KEY_ON | btfpy.PASSKEY_LOCAL)
-
+   # No defined endchar - send each packet to the callback routine
+   # Use this for an OBEX server
+btfpy.Classic_server(2,classic_callback,btfpy.PACKET_ENDCHAR,btfpy.KEY_ON | btfpy.PASSKEY_OFF)
 
 def classic_callback(clientnode,data,datlen):
   # data[] has datlen bytes from clientnode  
@@ -5451,6 +5804,11 @@ inbuf = Buffer to receive read bytes
 bufsize = Size of inbuf[]
 
 endchar = Terminate character (usually 10)
+            OR
+          PACKET_ENDCHAR  
+            The last character of each packet terminates the read, so
+            each packet is sent to the callback routine. Use this when
+            there is no defined termination character. (e.g. for an OBEX server)
 exitflag = Flag specifies how return is forced if the read fails
            and must be one of the following: 
               EXIT_TIMEOUT  = Exits after timeoutms ms
@@ -5921,6 +6279,8 @@ data = btfpy.Read_node_endchar(node,endchar,exitflag,timeoutms)
 
 Read node packet from a specified node (connected as CLASSIC or NODE) until a specified 
 termination character (endchar) is received (sent via [write\_node](#4-2-51-write\_node)).
+If there is no defined termination character, setting endchar = PACKET\_ENDCHAR will read one
+packet (see OBEX server for an example).
 If no such packet is received, the function terminates via a time out or x key press.
 The [read\_error](#4-2-34-read\_error) function returns
 the error state. This function is usually not needed because a node or classic server
@@ -5935,6 +6295,11 @@ node = Node number of the sending device
 inbuf = Buffer to receive read bytes - C only
 bufsize = Size of inbuf[] - C only
 endchar = Terminate character (usually 10)
+            OR
+          PACKET_ENDCHAR  
+            The last character of each packet terminates the read, so
+            each packet is sent to the callback routine. Use this when
+            there is no defined termination character. (e.g. for an OBEX server)
 exitflag = Flag specifies how return is forced if the read fails
            and must be one of the following: 
               EXIT_TIMEOUT  = Exits after timeoutms ms
@@ -5976,6 +6341,8 @@ nread = read_node_endchar(3,buff,sizeof(buff),10,EXIT_TIMEOUT,1000);
   // If not done, exit on x key press
 nread = read_node_endchar(6,buff,sizeof(buff),10,EXIT_KEY,0);
 
+  // Read one packet with no defined endchar
+nread = read_node_endchar(6,buff,sizeof(buff),PACKET_ENDCHAR,EXIT_TIMEOUT,1000);
   
   
 PYTHON
@@ -5986,6 +6353,9 @@ nread = len(data)
   # Read bytes from node 6 until termination char 10 received
   # If not done, exit on x key press
 data = btfpy.Read_node_endchar(6,10,btfpy.EXIT_KEY,0)
+nread = len(data)
+  # Read one packet with no defined endchar
+data = btfpy.Read_node_endchar(3,btfpy.PACKET_ENDCHAR,btfpy.EXIT_TIMEOUT,1000)
 nread = len(data)
 ```
 
@@ -6120,10 +6490,33 @@ btfpy.Scroll_forward()
 ## 4-2-42 set\_flags
 
 ```c
-int set_flags(int flags,int onoff)
+void set_flags(int flags,int onoff)
+btfpy.Set_flags(flags,onoff)
 ```
 
-Not implemented. Reserved for future use.
+Set flags controlling program behaviour. 
+
+PARAMETERS
+
+```
+flags = ENABLE_OBEX    Advertise via SDP database
+                       as a Classic OBEX push server
+                       On by default
+
+onoff = FLAG_ON or FLAG_OFF
+```
+
+SAMPLE CODE
+
+```
+C code
+set_flags(ENABLE_OBEX,FLAG_ON);    // enable
+set_flags(ENABLE_OBEX,FLAG_OFF);   // disable
+
+PYTHON code
+btfpy.Set_flags(btfpy.ENABLE_OBEX,btfpy.FLAG_ON)
+btfpy.Set_flags(btfpy.ENABLE_OBEX,btfpy.FLAG_OFF)
+```
 
 
 ## 4-2-43 set\_le\_interval
@@ -8858,7 +9251,10 @@ at Vol 3,Part B,Section 3 is clear enough.
 Examples of the other side of the connection (a server responding to SDP data requests) are
 included in the [Classic server simple](#5-3-6-classic-server-simple) and
 [Classic server pair and link key](#5-3-7-classic-server-pair-and-link-key) listings. The SDP
-database of a Mesh Pi set up as a Classic server is listed at the end of this section. 
+database of a Mesh Pi set up as a Classic server is listed at the end of this section.
+
+Description of SDP in [Bluetooth specification]
+(https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/host/service-discovery-protocol--sdp--specification.html) 
 
 ```
 Read SDP database of Windows PC
@@ -10237,6 +10633,8 @@ LE characteristic UUIDs in a pdf document called "16-bit UUID Numbers Document"
 [here](https://www.bluetooth.com/specifications/assigned-numbers/). 
 
 SDP database decode Vol 3,Part B,Section 3
+and [Bluetooth specification]
+(https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/host/service-discovery-protocol--sdp--specification.html)
 
 LE advertising decode Vol 4,Part E,Section 7.7.65.2 and Vol 3,Part C,Section 11. Also
 [Data type codes](https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/)

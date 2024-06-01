@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 15 
+  btlib.c/h  Version 16 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -15,8 +15,7 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"     
-
+#include "btlib.h"       
 
 void btlink(void);
 void printhelp(void);
@@ -26,6 +25,7 @@ int sendstring(int node,char *comd);
 int inputint(char *ps);
 int sendgetfile(void);
 int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,int termchar);
+int sendfileobex(int node,char *fname);
 int receivefile(char *fname,int clientnode);
 int receivefilex(char *fname,int clientnode);
 int filelength(FILE *file);
@@ -41,6 +41,7 @@ int node_classic_callback(int clientnode,unsigned char *buf,int nread);
 int le_callback(int clientnode,int operation,int cticn);
 int mesh_callback(int clientnode,unsigned char *buf,int nread);
 int notify_callback(int lenode,int cticn,unsigned char *buf,int nread);
+int obex_callback(int node,unsigned char *data,int len);
 void localdisconnect(void);
 void readnotify(void);
 void readle(void);
@@ -326,7 +327,8 @@ int server()
   passkey = 0;
      
   printf("\n  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = mesh server\n");
-  serverflag = inputint("Input server type 0/1/2/3");
+  printf("  4 = OBEX server (receive file from Windows, Android...)\n");
+  serverflag = inputint("Input server type 0/1/2/3/4");
   if(serverflag < 0)
     return(0);
   if(serverflag == 3)   // Mesh
@@ -395,7 +397,7 @@ int server()
       }
     node_server(clinode,node_classic_callback,endchar);     
     } 
-  else if(serverflag == 1)
+  else if(serverflag == 1 || serverflag == 4)
     {  // classic
     printf("\nInput node of client that will connect\n");
    
@@ -434,13 +436,21 @@ int server()
         keyflag = KEY_ON | PASSKEY_REMOTE;  // client prints passkey - enter on local
       }
                  
-    printf("\nServer will listen on channel 1 and any of the following UUIDs\n");
-    printf("  Standard serial 2-byte 1101\n");
-    printf("  Standard serial 16-byte\n");
-    printf("  Custom serial set via register serial\n");
     if(clinode == 0)
       clinode = ANY_DEVICE;
-    classic_server(clinode,node_classic_callback,endchar,keyflag);
+    if(serverflag == 1)
+      {
+      printf("\nServer will listen on channel 1 and any of the following UUIDs\n");
+      printf("  Standard serial 2-byte 1101\n");
+      printf("  Standard serial 16-byte\n");
+      printf("  Custom serial set via register serial\n");
+      classic_server(clinode,node_classic_callback,endchar,keyflag);
+      }
+    else
+      {
+      printf("\nServer will listen on channel 2 and UUID = 1105\n");
+      classic_server(clinode,obex_callback,PACKET_ENDCHAR,keyflag);
+      }
     }   
   else
     printf("Invalid type\n");
@@ -1073,8 +1083,15 @@ int sendgetfile()
   static char ddirsav[256] = {""};
   static int nblock = 0;
  
-  printf("File transfer\n  0 = SEND file\n  1 = GET file\n  2 = SEND multiple files\n"); 
-  sorg = inputint("Input 0/1/2");
+  printf("File transfer\n  0 = SEND file\n  1 = GET file\n  2 = SEND multiple files\n");
+  printf("  3 = SEND file to OBEX server (Windows, Android..)\n  4 = RECEIVE file from OBEX client\n"); 
+  sorg = inputint("Input 0/1/2/3/4");
+       
+  if(sorg == 4)
+    {
+    printf("Start an OBEX server via s. Send the file from the remote device\n");
+    return(0);
+    }     
        
   if(sorg == 0)
     printf("\nSEND file\n");
@@ -1082,6 +1099,8 @@ int sendgetfile()
     printf("\nGET file\n");
   else if(sorg == 2)
     printf("\nSEND multiple\n");
+  else if(sorg == 3)
+    printf("\nSEND to OBEX\n");
   else
     {
     printf("Cancelled\n");
@@ -1101,6 +1120,8 @@ int sendgetfile()
     printf("Not connected\n");
     return(0);
     }
+  else if(sorg == 3)
+    printf("*** NOTE *** Must be connected to an OBEX server RFCOMM channel\n");
   else if(device_type(servernode) == BTYPE_CL)
     printf("*** NOTE *** Server must understand btferret transfer protocol\n");
   else if(device_connected(servernode) == NODE_CONN)
@@ -1129,58 +1150,62 @@ int sendgetfile()
       return(0);
       }
     }
-
-  if(ddirsav[0] != 0)
-    {
-    printf("Existing destination directory = %s\n",ddirsav);    
-    printf("Enter destination directory  e.g.  /home/pi/  ( /=none, r=retain, x=cancel)\n");
-    }
-  else
-    printf("Enter destination directory  e.g.  /home/pi/  ( /=none, x=cancel)\n");
-    
-  getstring("? ",ddir,256);
-
-  if(ddir[0] == 'x' && ddir[1] == 0)
-    {
-    printf("Cancelled\n");
-    return(0);
-    } 
-
-  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
-    strcpy(ddir,ddirsav);
-  else  
-    strcpy(ddirsav,ddir);
-
-  ec = ddir[strlen(ddir) - 1];
-  if(ec != '/' && ec != '\\')
-    {
-    printf("Directory must end with / or \\\n");
-    return(0);
-    }
   
-  if(ddir[0] == '/' && (ddir[1] == 0 || ddir[1] == ' '))
+  if(sorg != 3)
     {
-    printf("None - will save to server's btferret directory\n");
-    ddir[0] = 0;
-    }
-
-  if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
-    strcpy(ddir,ddirsav);
-  else  
-    strcpy(ddirsav,ddir);
+    if(ddirsav[0] != 0)
+      {
+      printf("Existing destination directory = %s\n",ddirsav);    
+      printf("Enter destination directory  e.g.  /home/pi/  ( /=none, r=retain, x=cancel)\n");
+      }
+    else
+      printf("Enter destination directory  e.g.  /home/pi/  ( /=none, x=cancel)\n");
     
-  printf("BLOCK SIZE = %d bytes\n",nblock);
-  printf("  Data is transmitted in blocks of this size\n");
-  printf("  Enter x to keep, or enter new value 64-%d\n",maxblock);
-  xblock = inputint("Block size");
-  if(xblock >= 64 && xblock < maxblock)
-    {
-    nblock = xblock;         
-    printf("Block size changed to %d\n",nblock);
+    getstring("? ",ddir,256);
+
+    if(ddir[0] == 'x' && ddir[1] == 0)
+      {
+      printf("Cancelled\n");
+      return(0);
+      } 
+
+    if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
+      strcpy(ddir,ddirsav);
+    else  
+      strcpy(ddirsav,ddir);
+
+    ec = ddir[strlen(ddir) - 1];
+    if(ec != '/' && ec != '\\')
+      {
+      printf("Directory must end with / or \\\n");
+      return(0);
+      }
+  
+    if(ddir[0] == '/' && (ddir[1] == 0 || ddir[1] == ' '))
+      {
+      printf("None - will save to server's btferret directory\n");
+      ddir[0] = 0;
+      }
+
+    if(ddirsav[0] != 0 && ddir[0] == 'r' && ddir[1] == 0)
+      strcpy(ddir,ddirsav);
+    else  
+      strcpy(ddirsav,ddir);
+    
+    
+    printf("BLOCK SIZE = %d bytes\n",nblock);
+    printf("  Data is transmitted in blocks of this size\n");
+    printf("  Enter x to keep, or enter new value 64-%d\n",maxblock);
+    xblock = inputint("Block size");
+    if(xblock >= 64 && xblock < maxblock)
+      {
+      nblock = xblock;         
+      printf("Block size changed to %d\n",nblock);
+      }
+    else
+      printf("Block size not changed\n");
     }
-  else
-    printf("Block size not changed\n");
- 
+    
   // server must use the same opcode (F)
   if(sorg == 2)
     {
@@ -1197,6 +1222,8 @@ int sendgetfile()
     }
   else if(sorg == 0) 
     retval = sendfilex(servernode,"F",fname,ddir,nblock,endchar);
+  else if(sorg == 3)
+    retval = sendfileobex(servernode,fname);
   else
     {  
     // get file - send destination directory
@@ -1506,7 +1533,134 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
   return(1);
   }
 
+int sendfileobex(int node,char *filename)
+  {
+  int n,k,fn,flen,nlen,ndat,ntogo,nblock,len,err;
+  unsigned char inbuf[64],send[512];
+  static unsigned char connect[7] = {0x80,0x00,0x07,0x10,0x00,0x01,0x90};
+  static unsigned char disconnect[3] = {0x81,0x00,0x03};   
+  char *fname;
+  FILE *stream;
 
+  fn = 0;  // after last / start of file name 
+  n = 0;
+  while(filename[n] > 32 && n < 1022)
+    {   // strip non alpha
+    if(filename[n] == '/')
+      fn = n+1;  // start of file name
+    ++n;
+    }
+    
+  fname = filename+fn;
+  
+  printf("Sending file %s\n",filename);
+
+  stream = fopen(filename,"r");
+  if(stream == NULL)
+    {
+    printf("File open error\n");
+    return(0);
+    }
+  flen = filelength(stream);
+  ntogo = flen; 
+  nlen = strlen(fname);
+
+  nblock = 400;
+  connect[5] = (nblock >> 8) & 0xFF;
+  connect[6] = nblock & 0xFF;
+
+  // OBEX connect
+  write_node(node,connect,7);
+  inbuf[0] = 0;
+  // wait for Success reply 0x0A
+  len = read_node_endchar(node,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+  if(len == 0 || inbuf[0] != 0xA0)
+    {
+    printf("OBEX Connect failed\n");
+    fclose(stream);
+    return(0);
+    }
+  else if((inbuf[1] << 8) + inbuf[2] >= 7)
+    {
+    n = (inbuf[5] << 8) + inbuf[6];
+    if(n < nblock)
+      nblock = n;
+    }
+ 
+  send[3] = 0x01;
+  n = 2*nlen + 5;
+  send[4] = (n >> 8) & 0xFF;
+  send[5] = n & 0xFF;
+  k = 6;
+  for(n = 0 ; n < nlen ; ++n)
+    {
+    send[k] = 0;
+    send[k+1] = fname[n];
+    k += 2;
+    } 
+  send[k] = 0;
+  send[k+1] = 0;
+  k += 2;
+
+  send[k] = 0xC3;
+  send[k+1] = (flen >> 24) & 0xFF;
+  send[k+2] = (flen >> 16) & 0xFF;
+  send[k+3] = (flen >> 8) & 0xFF;
+  send[k+4] = flen & 0xFF;
+  k += 5;
+  err = 0;
+  do
+    { 
+    if(ntogo <= nblock - 3 - k)
+      {
+      send[k] = 0x49;
+      send[0] = 0x82;
+      ndat = ntogo + 3;
+      }
+    else
+      {
+      send[k] = 0x48;
+      send[0] = 0x02;
+      ndat = nblock - k;
+      } 
+    send[k+1] = (ndat >> 8) & 0xFF;
+    send[k+2] = ndat & 0xFF;
+    k += 3;
+    ndat -= 3;
+    if(fread(send+k,1,ndat,stream) != ndat)
+      {
+      printf("File read error\n");
+      err = 1;
+      }
+    else
+      {
+      ntogo -= ndat;
+      k += ndat;
+      send[1] = (k >> 8) & 0xFF;
+      send[2] = k & 0xFF;
+      write_node(node,send,k);
+      inbuf[0] = 0;
+      len = read_node_endchar(node,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+      if(len == 0 || (inbuf[0] != 0xA0 && inbuf[0] != 0x90))
+        {
+        printf("Send failed\n");
+        err = 1;
+        }
+      }  
+    k = 3;
+    }
+  while(ntogo > 0 && err == 0);  
+
+  fclose(stream);
+  
+  write_node(node,disconnect,3);
+  inbuf[0] = 0;
+  len = read_node_endchar(node,inbuf,64,PACKET_ENDCHAR,EXIT_TIMEOUT,5000);
+  if(len == 0 || inbuf[0] != 0xA0)
+    printf("OBEX Disconnect failed\n");
+
+  return(1);
+  }
 
 
 /******* FILE LENGTH ********/
@@ -1678,6 +1832,159 @@ int receivefilex(char *fname,int clientnode)
   printf("Received OK. CRC=%04X\n",(crchi << 8) + crclo);
   return(1);    
   }  
+
+
+int obex_callback(int node,unsigned char *data,int len)
+  {
+  int n,j,k,ilen,length,hi,datan,datalen;
+  char filename[256]; 
+  static int count = 0;
+  static int connected_node = 0;
+  static int file_length;
+  static FILE *stream = NULL;
+  static unsigned char connect_success[7] = {0xA0,0x00,0x07,0x10,0x00,0x01,0x90};
+  static unsigned char connect_fail[7] = {0xC3,0x00,0x03};
+  static unsigned char success[3] = {0xA0,0x00,0x03};
+  static unsigned char continue_reply[3] = {0x90,0x00,0x03};
+   
+  datalen = 0;  // no data
+  
+  // data[0] = opcode (section 3.4 in OBEX15.pdf)
+  
+  if(data[0] == 0x80)
+    {  // Connect 
+    if(connected_node == 0)
+      {  // not connected to another device
+      printf("OBEX connect\n");
+      write_node(node,connect_success,7);    
+      connected_node = node;
+      count = 0;  // data bytes received
+      if(stream != NULL)
+        fclose(stream);
+      stream = NULL;
+      }
+    else
+      { // already connected to another device - refuse
+      printf("Node %d trying to OBEX connect - refuse\n",node);
+      write_node(node,connect_fail,3);
+      }
+    return(SERVER_CONTINUE);
+    }
+      
+  if(node != connected_node)
+    {
+    printf("Node %d not OBEX connected\n",node);
+    return(SERVER_CONTINUE);
+    }  
+  
+  if((data[0] & 0x7F) == 0x02)
+    { // 0x02 or 0x82 Put
+    length = (data[1] << 8) + data[2];  // should = len
+    n = 3;  // 1st header item
+    while(n < length && n < len)
+      {
+      hi = data[n];  // header item identifier (section 2.1 in OBEX15.pdf)
+      if((hi & 0xC0) == 0x80)
+        {  // 1-byte value
+        if(hi == 0x97)
+          {  // Single Response Mode
+          printf("SRM not programmed\n");
+          write_node(node,connect_fail,3);
+          connected_node = 0;
+          return(SERVER_CONTINUE);
+          }
+        /*** other header identifiers here 0x93 0x94... ***/
+        n += 2;  // next item
+        }
+      else if((hi & 0xC0) == 0xC0)
+        {  // 4-byte value
+        if(hi == 0xC3)
+          {  // Count       
+          file_length = (data[n+1] << 24) + (data[n+2] << 16) + (data[n+3] << 8) + data[n+4];
+          printf("File length = %d\n",file_length);
+          }
+        /**** other header identifiers here 0xC4 0xCB... ****/
+        n += 5;  // next item
+        }
+      else
+        {  // 2 length bytes 
+        ilen = (data[n+1] << 8) + data[n+2];  // item length 
+        j = n+3;    // start data  
+        if(ilen == 0)
+          n = length;  // error exit loop
+        if(hi == 0x01)
+          {  // unicode file name
+          ++j; // skip unicode 0
+          k = 0;
+          while(j < n+ilen && j < len)
+            {
+            filename[k] = data[j];
+            ++k;
+            j += 2;
+            }
+          filename[k] = 0;
+          printf("File name = %s\n",filename);
+          stream = fopen(filename,"wb");
+          if(stream == NULL)
+            printf("File open error\n"); 
+          }
+        else if(hi == 0x48 || hi == 0x49)
+          { // data chunk
+          datan = j;           // index 
+          datalen = ilen-3;    // length
+          }
+        /*********         
+        Other header identifiers here
+        0x42 = Type
+        0x47 = HTTP
+        0x44 = Time
+        ...
+        *********/
+        
+        n += ilen;  // next item  
+        }
+      }     
+    }     
+  else if(data[0] == 0x81)
+    {  // Disconnect
+    printf("OBEX disconnect\n");
+    connected_node = 0;
+    if(stream != NULL)
+      { 
+      fclose(stream);
+      stream = NULL;
+      }
+    write_node(node,success,3);  
+    return(SERVER_CONTINUE);
+    } 
+  else
+    printf("GOT opcode %02X - no action\n",data[0]);
+ 
+  // Write data chunk to file
+  if(datalen != 0 && stream != NULL)
+    {   
+    count += datalen;  
+    for(n = 0 ; n < datalen ; ++n)
+      fputc(data[n+datan],stream); 
+    if(data[0] == 0x82)
+      {  // last chunk - finished
+      if(count != file_length)
+        printf("Expected %d bytes. Got %d\n",file_length,count);
+      fclose(stream);
+      stream = NULL;
+      printf("File saved\n");
+      }     
+    }
+  
+  // Send response Continue or Success (section 3.2.1 in OBEX15.pdf)
+  if(data[0] == 0x02)  // Put - not last chunk 
+    write_node(node,continue_reply,3);  
+  else      
+    write_node(node,success,3);  
+
+  return(SERVER_CONTINUE);
+  }
+
   
  
 /************** SEND ASCII STRING **************************
