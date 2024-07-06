@@ -153,4 +153,10 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    The obex\_client.c/py files send data to a listening Windows/Android OBEX server.
    The btferret.c/py file transfer (f) and server (s) functions now include OBEX exchange as an option.
    
-3. An option in set\_flags to enable or disable the OBEX capability. Enabled by default.   
+3. An option in set\_flags to enable or disable the OBEX capability. Enabled by default.
+
+### Version 16.1
+
+1. Bug fix. Notify enable did not work with some LE devices.
+
+2. Btferret LE read/write (r,w commands) for the local device now display all the characteristics as options.   

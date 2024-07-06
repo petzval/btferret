@@ -1,4 +1,4 @@
-/********* Version 16 *********/
+/********* Version 16.1 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -5392,10 +5392,10 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
   lewrite[0] = (unsigned char)((12+locsize) & 0xFF);  // 13 for 1 byte
   lewrite[1] = (unsigned char)(((12+locsize) >> 8) & 0xFF); 
   
-  if((cp->perm & 8) == 0 || notflag != 0)   // no acknowledge 
-    cmd[9] = 0x52;  // write command opcode
-  else                      // acknowledge
+  if((cp->perm & 8) != 0 || notflag != 0)   // acknowledge 
     cmd[9] = 0x12;  // write request opcode
+  else
+    cmd[9] = 0x52;  // write command opcode
 
   if(gpar.printflag == PRINT_VERBOSE)
     {
@@ -5415,7 +5415,7 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
   if(sendhci(lewrite,ndevice) == 0)  
     return(0);
     
-  if((cp->perm & 8) == 0 || notflag != 0)
+  if(cmd[9] == 0x52)
     {   // no response or error reply
     readhci(0,0,0,0,0);  // peek to clear event 13 or notify maybe
     popins();
@@ -11366,7 +11366,8 @@ int printctics0(int devicen,int flags)
   for(n = 0 ; ctic(devicen,n)->type == CTIC_ACTIVE ; ++n)
     {
     perm = ctic(devicen,n)->perm;      
-    if(  (flags & (CTIC_R | CTIC_W | CTIC_NOTIFY)) == 0 || (perm == 0 && (flags & CTIC_NOTIFY) == 0) ||
+    if(  (devicen == 0) ||
+         (flags & (CTIC_R | CTIC_W | CTIC_NOTIFY)) == 0 || (perm == 0 && (flags & CTIC_NOTIFY) == 0) ||
          ( (flags & CTIC_NOTIFY) != 0 && (perm & 0x30) != 0) ||
          ( (flags & CTIC_R)   != 0 && (perm & 0x02) != 0) ||
          ( (flags & CTIC_W)   != 0 && (perm & 0x4C) != 0)  ) 
