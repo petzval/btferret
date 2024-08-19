@@ -1,7 +1,7 @@
 Python and C Bluetooth Library
 ==============================
 
-*Version 16*
+*Version 17*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -93,17 +93,19 @@ Python and C Bluetooth Library
         - [4.2.38 read\_node-all\_clear](#4-2-38-read\_node-all\_clear)
         - [4.2.39 read\_notify](#4-2-39-read\_notify)
         - [4.2.40 register\_serial](#4-2-40-register\_serial)
-        - [4.2.41 scroll\_back-forward](#4-2-41-scroll\_back-forward)
-        - [4.2.42 set\_flags](#4-2-42-set\_flags)     
-        - [4.2.43 set\_le\_interval](#4-2-43-set\_le\_interval)  
-        - [4.2.44 set\_le\_random\_address](#4-2-44-set\_le\_random\_address)      
-        - [4.2.45 set\_le\_wait](#4-2-45-set\_le\_wait)
-        - [4.2.46 set\_print\_flag](#4-2-46-set\_print\_flag)
-        - [4.2.47 strtohex](#4-2-47-strtohex)
-        - [4.2.48 wait\_for\_disconnect](#4-2-48-wait\_for\_disconnect)
-        - [4.2.49 write\_ctic](#4-2-49-write\_ctic)
-        - [4.2.50 write\_mesh](#4-2-50-write\_mesh)
-        - [4.2.51 write\_node](#4-2-51-write\_node) 
+        - [4.2.41 save\_pair\_info](#4-2-41-save\_pair\_info)        
+        - [4.2.42 scroll\_back-forward](#4-2-42-scroll\_back-forward)
+        - [4.2.43 set\_flags](#4-2-43-set\_flags)     
+        - [4.2.44 set\_le\_interval](#4-2-44-set\_le\_interval)  
+        - [4.2.45 set\_le\_random\_address](#4-2-45-set\_le\_random\_address)      
+        - [4.2.46 set\_le\_wait](#4-2-46-set\_le\_wait)
+        - [4.2.47 set\_print\_flag](#4-2-47-set\_print\_flag)
+        - [4.2.48 strtohex](#4-2-48-strtohex)
+        - [4.2.49 user\_function](#4-2-49-user\_function)        
+        - [4.2.50 wait\_for\_disconnect](#4-2-50-wait\_for\_disconnect)
+        - [4.2.51 write\_ctic](#4-2-51-write\_ctic)
+        - [4.2.52 write\_mesh](#4-2-52-write\_mesh)
+        - [4.2.53 write\_node](#4-2-53-write\_node) 
 - [5 Reference](#5-reference)
     - [5.1 What gives with UUIDs?](#5-1-what-gives-with-uuids)
         - [5.1.1 Classic SDP Database](#5-1-1-classic-sdp-database)
@@ -1210,15 +1212,18 @@ t - Transmit ascii string to a connected node
 T - Transmit (broadcast) ascii string to mesh
 r - Read characteristic from LE device
 w - Write characteristic to LE device
+f - Send a file to an OBEX server (Windows, Android...)
 j - Enable/disable LE characteristic notifications
 R - Read LE characteristic notifications
 k - Settings (inc. verbose print option to print HCI traffic)
 [] - Scroll screen output back/forward
 o - Save all recent screen output to a text file
 s - Become a mesh/node/classic/LE server and listen for remote client
+u - Clear input buffer
 y - Find services that contain a specified UUID
 g - Register a custom UUID serial service
 h - Print help
+q - Quit
 
 ```
 
@@ -1227,7 +1232,7 @@ btferret set up as a node or classic server (via s).
 
 ```
 p - Ping a server for OK reply
-f - Send a file to a server, or get a file from a server
+f - Send or get a file using btferret protocol
 D - Tell a server (or all mesh servers) to disconnect
 ```
 
@@ -1830,7 +1835,7 @@ Most LE servers will have a fixed
 Bluetooth address which can be specified in the devices file, but some have a
 [random address](#3-6-2-random-address). Some LE servers need to be given time to complete the
 connection, or they will disconnect soon after connection. When using the btferret connect command, you will
-be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-45-set\_le\_wait) function
+be prompted for this completion time. When writing code, the [set\_le\_wait](#4-2-46-set\_le\_wait) function
 sets this time. Zero may work, otherwise find the shortest time that prevents disconnection. See the
 supplied sample files le\_client.c/py.
 
@@ -2448,7 +2453,7 @@ by the multiple identities of a Pi running btferret. They store information abou
 seen the Pi with its bluez identity, or as a btferret Classic device, or LE device. One solution is to clear
 all the stored information from the connecting client - especially unpairing if previously paired. A more certain
 solution is to set up a new identity with a different address when starting an LE server. This is done by calling 
-[set\_le\_random\_address](#4-2-44-set\_le\_random\_address) which changes the Bluetooth address of the server
+[set\_le\_random\_address](#4-2-45-set\_le\_random\_address) which changes the Bluetooth address of the server
 to something that you choose, and then advertises as a pure LE device.
 
 Just add a few instructions before calling le\_server. Setting a wait time and a Just Works request
@@ -3319,7 +3324,7 @@ attempt a Classic connection, and generate an "Attempting Classic Connection" or
 The solution would be to clear the connecting device's cache, but this is problematic or impossible.
 To fix this, the HID device uses a random address (rather than the normal fixed address) by default.
 To ensure that the address is always the same, set it via
-[set\_le\_random\_address](#4-2-44-set\_le\_random\_address). It may be necessary to let
+[set\_le\_random\_address](#4-2-45-set\_le\_random\_address). It may be necessary to let
 the connecting device attempt connection to one
 of the old identities and trigger a failure before it will see the HID identity when scanning. If repeated
 "Attempting Classic Connection" errors start showing up, change the chosen random address to
@@ -3473,7 +3478,7 @@ Android: Enabling Bluetooth will normally make the device an OBEX server
 
 Advertising as an OBEX server can be an invitation for devices to connect and exchange files or
 business cards. The OBEX capability can be disabled by turning the ENABLE\_OBEX flag off
-in [set\_flags](#4-2-42-set\_flags).
+in [set\_flags](#4-2-43-set\_flags).
 
 Most useful reference - details of packet formats
 
@@ -3515,11 +3520,11 @@ These library functions are in btlib.c/btlib.h.
 [find\_channel](#4-2-12-find\_channel) - Find RFCOMM serial channel of Classic device<br/>
 [find\_ctics](#4-2-13-find\_ctics) - Read all characteristic info from LE device<br/>
 [find\_ctic\_index](#4-2-14-find\_ctic\_index) - Find characteristic index of UUID<br/>
-[write\_ctic](#4-2-49-write\_ctic) - Write characteristic to an LE device<br/>
+[write\_ctic](#4-2-51-write\_ctic) - Write characteristic to an LE device<br/>
 [read\_ctic](#4-2-33-read\_ctic) - Read characteristic from an LE device<br/>
 [notify\_ctic](#4-2-29-notify\_ctic) - Enable/disable LE characteristic notify/indicate<br/>
-[write\_node](#4-2-51-write\_node) - Write serial data to connected node device<br/>
-[write\_mesh](#4-2-50-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
+[write\_node](#4-2-53-write\_node) - Write serial data to connected node device<br/>
+[write\_mesh](#4-2-52-write\_mesh) - Start broadcasting a packet to all mesh devices<br/>
 [read\_mesh](#4-2-35-read\_mesh) - Read next packet from all broadcasting mesh devices<br/> 
 [read\_node\_count](#4-2-36-read\_node\_count) - Read a specified byte count from specified node<br/>
 [read\_node\_endchar](#4-2-37-read\_node\_endchar) - Read from specified node until end char received<br/>
@@ -3534,18 +3539,20 @@ These library functions are in btlib.c/btlib.h.
 [ctic\_ok](#4-2-6-ctic\_ok) - Return LE characteristic valid flag<br/>
 [ctic\_name](#4-2-5-ctic\_name) - Return LE characteristic name string<br/>
 [disconnect\_node](#4-2-11-disconnect\_node) - Disconnect initiated by client<br/>
-[wait\_for\_disconnect](#4-2-48-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
-[scroll\_back/forward](#4-2-41-scroll\_back-forward) - Scroll screen back/forward<br/>
-[set\_le\_interval](#4-2-43-set\_le\_interval) - Set LE connection interval<br/>
-[set\_le\_random\_address](#4-2-44-set\_le\_random\_address) - Set LE address for HID device<br/>
-[set\_le\_wait](#4-2-45-set\_le\_wait) - Set LE server connection wait time<br/>
-[set\_flags](#4-2-42-set\_flags) - Set flags controlling program behaviour<br/> 
-[set\_print\_flag](#4-2-46-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
+[wait\_for\_disconnect](#4-2-50-wait\_for\_disconnect) - Wait for disconnect initiated by server<br/>
+[scroll\_back/forward](#4-2-42-scroll\_back-forward) - Scroll screen back/forward<br/>
+[set\_le\_interval](#4-2-44-set\_le\_interval) - Set LE connection interval<br/>
+[set\_le\_random\_address](#4-2-45-set\_le\_random\_address) - Set LE address for HID device<br/>
+[set\_le\_wait](#4-2-46-set\_le\_wait) - Set LE server connection wait time<br/>
+[set\_flags](#4-2-43-set\_flags) - Set flags controlling program behaviour<br/> 
+[set\_print\_flag](#4-2-47-set\_print\_flag) - Set screen print mode (none/normal/verbose)<br/>
 [output\_file](#4-2-30-output\_file) - Save all recent screen output to a file<br/>
-[strtohex](#4-2-47-strtohex) - Convert ascii string to array of hex values<br/>
+[strtohex](#4-2-48-strtohex) - Convert ascii string to array of hex values<br/>
 [mesh\_on](#4-2-25-mesh\_on) - Turn mesh transmission on<br/>
 [mesh\_off](#4-2-26-mesh\_off) - Turn mesh transmission off<br/>
 [hid\_key\_code](#4-2-15-hid\_key\_code) - Convert btferret key code to HID key code<br/>
+[save\_pair\_info](#4-2-41-save\_pair\_info) - Save pairing info ahead of program end<br/>
+[user\_function](#4-2-49-user\_function) - Write your own code inside btlib.c<br/>
 [Print\_data](#4-2-31-print\_data) - Python only: print data object as a hex dump<br/>
 
 ## 4-1-2 C Quick Reference
@@ -3622,6 +3629,7 @@ read_node_clear(node)
 read_all_clear()
 read_notify(timeoutms)
 register_serial(uuid[],"name")
+save_pair_info()
 scroll_back()
 scroll_forward()
 set_flags(flags,onoff)
@@ -3635,6 +3643,7 @@ set_le_wait(waitms)
 set_print_flag(flag)
      flag = PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
 *strtohex("2A00",&nbytes)
+user_function(n0,n1,n2,n3,dat0[],dat1[])
 wait_for_disconnect(node,timeoutms)
 write_ctic(node,cticn,outbuf[],count)
 write_mesh(outbuf[],count)
@@ -3711,7 +3720,8 @@ number_found = Find_ctics(node)
                 notifyflag = NOTIFY_ENABLE, NOTIFY_DISABLE  
                 notify_callback(lenode,cticn,data,datlen)  
      okfail = Output_file("filename")
- byte_array = Print_data(data)     
+ byte_array = Print_data(data) 
+       None = Save_pair_info()    
        data = Read_ctic(node,cticn)
       error = Read_error()
                 return: 0, ERROR_TIMEOUT, ERROR_KEY,
@@ -3739,6 +3749,7 @@ number_found = Find_ctics(node)
    old_flag = Set_print_flag(flag)
                 flag: PRINT_NONE, PRINT_NORMAL, PRINT_VERBOSE   
        data = Strtohex("2A00")
+        int = User_function(n0,n1,n2,n3,data0,data1)
      okfail = Wait_for_disconnect(node,timeoutms)
   num_bytes = Write_ctic(node,cticn,data,count)  # count=0 sends all data   
   num_bytes = Write_mesh(data,count)             # count=0 sends all data 
@@ -3770,7 +3781,7 @@ for packets sent from that client. The client may be a Windows/Android/.. device
 running a Bluetooth terminal program), or another Mesh Pi acting as a classic client
 and connecting via [connect\_node()](#4-2-4-connect\_node). The packets must have the specified
 termination character (endchar, usually line end 10), and are limited to a maximum size of 1000 bytes.
-If there is no  defined termination character, set endchar = PACKET_ENDCHAR
+If there is no  defined termination character, set endchar = PACKET\_ENDCHAR
 and each separate Bluetooth packet is sent to the callback routine.
 When a packet is received, it is despatched to the callback
 function. The callback function must return a flag telling classic\_server to continue
@@ -4033,7 +4044,7 @@ Some devices have fixed RFCOMM channels which are permanent and known, while oth
 them as needed and can only be found by reading the remote device services at connection time.
 
 When connecting to an LE server (CHANNEL_LE) a waiting delay is sometimes required as explained
-in [set\_le\_wait](#4-2-45-set\_le\_wait).
+in [set\_le\_wait](#4-2-46-set\_le\_wait).
 
 RETURN
 
@@ -4365,7 +4376,7 @@ disconnected.
 The solution is to send the server a message that it interprets as an instruction
 to disconnect. The server then initiates
 the disconnection and the client must wait for a disconnection sequence from the server to 
-complete the process gracefully - and [wait\_for\_disconnect](#4-2-48-wait\_for\_disconnect)
+complete the process gracefully - and [wait\_for\_disconnect](#4-2-50-wait\_for\_disconnect)
 does this. In this way both devices agree
 to disconnect. For an example, see the node_callback() code in btferret.c or
 [node client/server connection](#3-8-pi-pi-client-server-connection).
@@ -4524,7 +4535,7 @@ call [find\_ctics](#4-2-13-find\_ctics) which reads all
 available characteristics from the LE device into the device information.
 This function will then succeed.
 Use the characteristic index in [read\_ctic](#4-2-33-read\_ctic)
-and [write\_ctic](#4-2-49-write\_ctic).
+and [write\_ctic](#4-2-51-write\_ctic).
 
 
 PARAMETERS
@@ -5109,7 +5120,7 @@ an LE client app or other Pis running btferret/btlib.
 
 The local device's characteristics are
 defined in the [devices file](#3-3-devices-file). The local device reads and writes them
-by using [read\_ctic](#4-2-33-read\_ctic) and [write\_ctic](#4-2-49-write\_ctic) with
+by using [read\_ctic](#4-2-33-read\_ctic) and [write\_ctic](#4-2-51-write\_ctic) with
 [localnode()](#4-2-24-localnode) as follows:
 
 ```
@@ -5420,7 +5431,7 @@ btfpy.Mesh_on()
 
 Turn on mesh transmission. The local device will continuously send the last
 mesh packet set via write\_mesh. Mesh transmission is automatically enabled
-by calling [write\_mesh](#4-2-50-write\_mesh), or [read\_mesh](#4-2-35-read\_mesh),
+by calling [write\_mesh](#4-2-52-write\_mesh), or [read\_mesh](#4-2-35-read\_mesh),
 or [mesh\_server](#4-2-27-mesh\_server), or [node\_server](#4-2-28-node\_server),
 so it is usually not necessary to call mesh\_on explicitly. Mesh must be on for
 another mesh device to connect.
@@ -5445,7 +5456,7 @@ btfpy.Mesh_server(callback)
 ```
 
 Sets up the local device as a mesh server which spends all its time listening
-for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-50-write\_mesh).
+for mesh packets from all other mesh devices, sent via [write\_mesh](#4-2-52-write\_mesh).
 The packets are limited to a maximum size of
 25 bytes. When a packet is received, it is despatched to the callback
 function. The callback function returns a flag telling mesh\_server to continue
@@ -5511,7 +5522,7 @@ btfpy.Node_server(clientnode,callback,endchar)
 
 Sets up the local device as a node server that waits for 
 a specified client (clientnode) to connect, then spends all its time listening
-for node packets sent from that client via [write\_node](#4-2-51-write\_node).
+for node packets sent from that client via [write\_node](#4-2-53-write\_node).
 The packets must have the specified
 termination character (endchar), and are limited to a maximum size of 400 bytes.
 When a packet is received,
@@ -5785,7 +5796,7 @@ int read_all_endchar(int *node,unsigned char *inbuf,int bufsize,char endchar,int
 ```
 
 Read node packet from all connected (CLASSIC or NODE) nodes until a specified 
-termination character (endchar) is received (sent via [write\_node](#4-2-51-write\_node)).
+termination character (endchar) is received (sent via [write\_node](#4-2-53-write\_node)).
 If no such packet is received, the function terminates via a time out or x key press.
 The [read\_error](#4-2-34-read\_error) function returns
 the error state. The function returns the data and the node that sent it.
@@ -6066,7 +6077,7 @@ data = btfpy.Read_node_count(node,count,exitflag,timeoutms)
 ```
 
 Read node packet from a specified node connected as CLASSIC or NODE until a specified 
-number of bytes (count) is received (sent via [write\_node](#4-2-51-write\_node)).
+number of bytes (count) is received (sent via [write\_node](#4-2-53-write\_node)).
 If no such packet is received, the
 function terminates via a time out or x key press. The [read\_error](#4-2-34-read\_error)
 function returns
@@ -6278,7 +6289,7 @@ data = btfpy.Read_node_endchar(node,endchar,exitflag,timeoutms)
 ```
 
 Read node packet from a specified node (connected as CLASSIC or NODE) until a specified 
-termination character (endchar) is received (sent via [write\_node](#4-2-51-write\_node)).
+termination character (endchar) is received (sent via [write\_node](#4-2-53-write\_node)).
 If there is no defined termination character, setting endchar = PACKET\_ENDCHAR will read one
 packet (see OBEX server for an example).
 If no such packet is received, the function terminates via a time out or x key press.
@@ -6462,7 +6473,26 @@ PYTHON
 btfpy.Register_serial(btfpy.Strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB"),"My custom serial") 
 ```
 
-## 4-2-41 scroll\_back-forward
+## 4-2-41 save\_pair\_info
+
+```c
+void save_pair_info(void)
+btfpy.Save_pair_info()
+```
+
+Normally, pairing info is saved automatically on program termination and this function is not needed.
+Calling this at other times ensures that the data is not lost by program failure.
+
+
+SAMPLE CODE
+
+```c
+save_pair_info()
+
+btfpy.Save_pair_info()
+```
+
+## 4-2-42 scroll\_back-forward
 
 ```c
 void scroll_back(void)
@@ -6473,7 +6503,7 @@ btfpy.Scroll_forward()
 
 Screen prints performed by btlib.c funtions are saved in a buffer. These functions
 scroll the screen backwards and forwards through this buffer. Screen prints can
-be controlled via [set\_print\_flag](#4-2-46-set\_print\_flag).
+be controlled via [set\_print\_flag](#4-2-47-set\_print\_flag).
 The buffer can be saved to a file via [output\_file](#4-2-30-output\_file).
 
 SAMPLE CODE
@@ -6487,7 +6517,7 @@ btfpy.Scroll_back()
 btfpy.Scroll_forward()
 ```
 
-## 4-2-42 set\_flags
+## 4-2-43 set\_flags
 
 ```c
 void set_flags(int flags,int onoff)
@@ -6519,7 +6549,7 @@ btfpy.Set_flags(btfpy.ENABLE_OBEX,btfpy.FLAG_OFF)
 ```
 
 
-## 4-2-43 set\_le\_interval
+## 4-2-44 set\_le\_interval
 
 ```c
 int set_le_interval(int min,int max)
@@ -6605,7 +6635,7 @@ btfpy.Set_le_interval_update(3,24,40)
 
 ```
 
-## 4-2-44 set\_le\_random\_address
+## 4-2-45 set\_le\_random\_address
 
 ```c
 void set_le_random_address(unsigned char *address)
@@ -6652,7 +6682,7 @@ btfpy.Set_le_random_address([0xD3,0x56,0xDB,0x04,0x32,0xA6])
 btfpy.Le_server(lecallback,0)
 ```
 
-## 4-2-45 set\_le\_wait
+## 4-2-46 set\_le\_wait
 
 ```c
 int set_le_wait(int waitms)
@@ -6706,7 +6736,7 @@ btfpy.Connect_node(3,btfpy.CHANNEL_LE,0)
 ```
 
 
-## 4-2-46 set\_print\_flag
+## 4-2-47 set\_print\_flag
 
 ```c
 int set_print_flag(int flag)
@@ -6717,7 +6747,7 @@ The print flag controls how btlib.c functions print to the screen. The verbose
 mode prints all Bluetooth HCI traffic with details of how the packets are
 constructed, the replies expected and explanations of what is going on. This will often
 scroll off the top of the screen, but can be seen via
-[scroll\_back/forward](#4-2-41-scroll\_back-forward), or the
+[scroll\_back/forward](#4-2-42-scroll\_back-forward), or the
 square bracket keys in btferret, or saved to a file via [output\_file](#4-2-30-output\_file).
 
 PARAMETERS
@@ -6753,7 +6783,7 @@ btfpy.Set_print_flag(btfpy.PRINT_VERBOSE)
 
 ```
 
-## 4-2-47 strtohex
+## 4-2-48 strtohex
 
 ```c
 unsigned char *strtohex(char *s,int *nbytes)
@@ -6814,7 +6844,56 @@ datlen = len(dat)  # number of bytes = 5
 
 ```
 
-## 4-2-48 wait\_for\_disconnect
+
+## 4-2-49 user\_function
+
+```c
+int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1)
+btfpy.User_function(n0,n1,n2,n3,dat0,dat1)
+```
+
+This is an empty function inside btlib.c that can be used for any purpose. You have to
+write your own code as in the example below. You can pass four integer parameters and two data arrays, and
+return one integer. For Python it is a general purpose C subroutine. One use might be to speed
+up procedures that are as slow as dogs under Python, but
+very much faster with C. For Python, recompile the btfpy module whenever btlib.c is changed via:
+
+```
+python3 btfpy.py build
+```
+
+SAMPLE CODE
+
+```c
+
+In your code
+
+C CODE
+  user_function(1,2,3,4,"Hello","Goodbye");
+
+PYTHON CODE
+  btfpy.User_function(1,2,3,4,"Hello","Goodbye")
+  btfpy.User_function(1,2,3,4,[65,66,67,68,0],[69,70,71,72,0])
+
+
+INSIDE btlib.c (at the very end of the file)
+For Python, the module must be re-compiled via "python3 btfpy.py build"
+
+void user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1)
+  {
+  
+  // your code here
+ 
+  // FOR EXAMPLE - print the parameters
+  printf("%d %d %d %d %s %s\n",n0,n1,n2,n3,dat0,dat1);
+ 
+  return(0);
+  }
+
+```
+
+
+## 4-2-50 wait\_for\_disconnect
 
 ```c
 int wait_for_disconnect(int node,int timout)
@@ -6854,7 +6933,7 @@ btfpy.Write_node(4,"D\n",0)   # count=0 sends all data (2 bytes)
 btfpy.Wait_for_disconnect(4,3000)
 ```
 
-## 4-2-49 write\_ctic
+## 4-2-51 write\_ctic
 
 ```c
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count)
@@ -6951,7 +7030,7 @@ btfpy.Disconnect_node(4)
 
 
 
-## 4-2-50 write\_mesh
+## 4-2-52 write\_mesh
 
 ```c
 int write_mesh(unsigned char *outbuf,int count)
@@ -7025,7 +7104,7 @@ time.sleep(1)
 ```
 
 
-## 4-2-51 write\_node
+## 4-2-53 write\_node
 
 ```c
 int write_node(int node,unsigned char *outbuf,int count)
@@ -7190,7 +7269,7 @@ to find the characteristic
 index of a specified UUID in the device information. Functions to
 read and write characteristics
 [read\_ctic](#4-2-33-read\_ctic),
-[write\_ctic](#4-2-49-write\_ctic)
+[write\_ctic](#4-2-51-write\_ctic)
 need this index. 
 
 
@@ -7370,7 +7449,7 @@ The relevant opcodes for LE commands are
 ```
 
 This packet format is also used for data packets sent via
-[write\_node](#4-2-51-write\_node) to a connected mesh device acting as a node
+[write\_node](#4-2-53-write\_node) to a connected mesh device acting as a node
 server (it is an LE connection and the data is sent as LE packets). 
 In this case there is no opcode - just data as shown in
 the multiple packets example next.

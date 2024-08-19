@@ -159,4 +159,16 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
 
 1. Bug fix. Notify enable did not work with some LE devices.
 
-2. Btferret LE read/write (r,w commands) for the local device now display all the characteristics as options.   
+2. Btferret LE read/write (r,w commands) for the local device now display all the characteristics as options.  
+
+
+### Version 17
+
+1. New option in btferret: u - Clear input buffer. Use if a Classic or Node connection is out of sync with
+   the server (e.g. if a file transfer fails mid-procedure). 
+
+2. New function save\_pair\_info(). Normally, pairing info is saved automatically on program exit. This function
+   saves it at any time.
+  
+3. New function user\_function(). A user-defined function inside btlib.c. For hackers - write your own code
+   inside the library. For Python - a general purpose C subroutine. 

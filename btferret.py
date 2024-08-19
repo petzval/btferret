@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-###### VERSION 16 ######
-### btfpy.so must be built with btlib.c/btfpython.c version 16 or later ###
+###### VERSION 17 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 17 or later ###
 
 import btfpy
 import os
@@ -935,7 +935,8 @@ def printhelp():
   print("  o Save screen output to file  g Register custom serial UUID")  
   print("  j LE notify/indicate on/off   R Read LE notifications")                     
   print("  m Mesh transmit on            n Mesh transmit off")
-  print("  q Quit                        [] Scroll screen back/forward") 
+  print("  u Clear input buffer         [] Scroll screen back/forward") 
+  print("  q Quit") 
   return
    
 def settings():
@@ -1711,6 +1712,9 @@ while s[0] != 'q':
     regserial()
   elif s[0] == 'R':    
     readnotify() 
+  elif s[0] == 'u':
+    print("Clear input buffer")
+    btfpy.Read_all_clear()
   elif s[0] == 'm':    
     btfpy.Mesh_on()
     print("Mesh on")       

@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 16 
+  btlib.c/h  Version 17 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -186,6 +186,11 @@ void btlink()
         printf("Mesh off\n");
         break;
 
+      case 'u':
+        printf("Clear input buffer\n");
+        read_all_clear();
+        break;
+
       case 'q':
         return;
         break;
@@ -213,7 +218,8 @@ void printhelp()
   printf("  o Save screen output to file  g Register custom serial UUID\n");  
   printf("  j LE notify/indicate on/off   R Read LE notifications\n");                     
   printf("  m Mesh transmit on            n Mesh transmit off\n");                     
-  printf("  q Quit                        [] Scroll screen back/forward\n"); 
+  printf("  u Clear input buffer         [] Scroll screen back/forward\n"); 
+  printf("  q Quit\n"); 
   }
 
 

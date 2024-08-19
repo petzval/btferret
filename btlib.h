@@ -1,4 +1,4 @@
-  // for btlib.c Version 16
+  // for btlib.c Version 17
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -156,6 +156,8 @@ void read_notify(int timeoutms);
 
 void register_serial(unsigned char *uuid,char *name);
 
+void save_pair_info(void);
+
 void scroll_back(void);
 void scroll_forward(void);
 void set_flags(int flags,int onoff);
@@ -168,6 +170,7 @@ int set_print_flag(int flag);
 
 unsigned char *strtohex(char *s,int *num);
 
+int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1);
 
 int wait_for_disconnect(int node,int timout);
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count);

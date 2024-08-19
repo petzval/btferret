@@ -1,4 +1,4 @@
-/********* Version 16.1 *********/
+/********* Version 17 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <fcntl.h>
-#include "btlib.h"           
+#include "btlib.h"             
 
 #ifdef BTFPYTHON
   #include "btfpython.c"     
@@ -38,7 +38,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 16
+#define VERSION 17
    // max possible NUMDEVS = 256 
 #define NUMDEVS 256
 #define NAMELEN 34
@@ -384,7 +384,7 @@ int setkeymode(int setflag);
 int leconnect(int ndevice);
 int openremotesdpx(int ndevice);
 int sconnectx(int ndevice);
-unsigned int timems(int flag);
+unsigned long long timems(int flag);
 unsigned int strinstr(char *s,char *t);
 int hexchar(char c);
 int entrylen(unsigned int *ind,int in);
@@ -1345,13 +1345,14 @@ int init_blue_ex(char *filename,int hcin)
   char s[256],buf[128],*es;
   unsigned char *data;
   FILE *stream;
-  struct timespec ts;
   static char errs[16] = {"   ERROR **** "};
   static int initflag = 0;
     
      // global parameters 
 
   printf("Initialising...\n");
+
+  timems(TIM_RUN);
 
   if(strcmp(filename,"__BTLE__") == 0)
     gpar.btleflag = 1;
@@ -1394,6 +1395,7 @@ int init_blue_ex(char *filename,int hcin)
   gpar.keytocb = 0;
   gpar.keyboard = 0;
   
+
   if(initflag == 0)
     {   
     gpar.s = (char*)calloc(PRBUFSZ,1);
@@ -1566,10 +1568,7 @@ int init_blue_ex(char *filename,int hcin)
     pserv[0].uuid[i] = baseuuid[i];
   psnx = -1;    
   reportflag = 0;
-
-  clock_gettime(CLOCK_MONOTONIC_RAW,&ts);
-  srand((unsigned int)ts.tv_nsec);
-      
+     
   while(readret > 0 && errcount == 0)
     {
     errflag = 0;
@@ -4777,6 +4776,7 @@ int le_pair(int node,int flags,int passkey)
     {
     NPRINT "PAIR OK\n");
     flushprint();
+    readhci(0,0,0,100,0);  // read codes 6/7
     return(1);
     }
   else if(n < 0)
@@ -4916,7 +4916,7 @@ If times out - forces disconnect from local device
 int wait_for_disconnect(int node,int timout)
   {
   int ndevice;
-  unsigned int timstart;
+  unsigned long long timstart;
  
   flushprint();
     
@@ -4926,7 +4926,7 @@ int wait_for_disconnect(int node,int timout)
 
   timstart = timems(TIM_LOCK);
   
-  while(dev[ndevice]->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned int)timout)
+  while(dev[ndevice]->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned long long)timout)
     {
     readhci(0,0,0,25,0);  
     flushprint();
@@ -5072,7 +5072,7 @@ int closehci()
 
 void waitdis(int ndevice,unsigned int timout)
   {
-  unsigned int timstart;
+  unsigned long long timstart;
   struct devdata *dp;
  
   // wait for dp->conflag=0 set by readhci
@@ -5080,7 +5080,7 @@ void waitdis(int ndevice,unsigned int timout)
   dp = dev[ndevice];
   timstart = timems(TIM_LOCK);
   
-  while(dp->conflag != 0 && timems(TIM_RUN) - timstart < timout)
+  while(dp->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned long long)timout)
       readhci(0,0,0,20,0);   // sets conflag=0 on event 05
       
   timems(TIM_FREE);
@@ -5112,7 +5112,7 @@ void close_all()
     disconnectdev(n);  
     
   closehci();
-  rwlinkey(1,0,NULL);
+  rwlinkey(4,0,NULL);
   
   flushprint();
   flag = 1;  // disable atexit call
@@ -5672,7 +5672,7 @@ int read_ctic(int node,int cticn,unsigned char *data,int datlen)
 int sendhci(unsigned char *s,int ndevice)
   {
   int n,n0,nwrit,ntogo,len,chan,cmdflag;
-  unsigned int timstart;
+  unsigned long long timstart;
   unsigned char *cmd;
   struct devdata *dp;
 
@@ -5898,7 +5898,7 @@ int sendhci(unsigned char *s,int ndevice)
     else
       usleep(500);
         
-    if(timems(TIM_RUN) - timstart > 5000)   // 5 sec timeout
+    if(timems(TIM_RUN) - timstart > (unsigned long long)5000)   // 5 sec timeout
       {
       NPRINT "Send CMD timeout - may need to reboot\n");
       timems(TIM_FREE);
@@ -5980,7 +5980,7 @@ int splitcmd(unsigned char *s,int plen)
 int splitwrite(unsigned char *cmd,int len)
   {
   int ntogo,nwrit;
-  unsigned int timstart;
+  unsigned long long timstart;
   unsigned char *cmdx;
    
   ntogo = len;
@@ -5995,7 +5995,7 @@ int splitwrite(unsigned char *cmd,int len)
       ntogo -= nwrit;
       cmdx += nwrit;
       }   
-    if(timems(TIM_RUN) - timstart > 2000)   // 2 sec timeout
+    if(timems(TIM_RUN) - timstart > (unsigned long long)2000)   // 2 sec timeout
       {
       NPRINT "Send CMD timeout\n");
       timems(TIM_FREE);
@@ -6141,9 +6141,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
   unsigned char b0,*datp,*rsp,ledat[2];   
   int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
   int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb,buf3sav;
-  int retval,savtimendms,datlen,ascflag,clsflag,multiflag,seqflag;
+  int retval,datlen,ascflag,clsflag,multiflag,seqflag;
   long long int locmustflag,gotflag;
-  unsigned int timstart,timx,timendms;
+  unsigned long long timstart,timx,timendms,savtimendms;
   struct devdata *dp,*condp;
   static long long int sflag;
   static int level = 0;   
@@ -9187,9 +9187,18 @@ int stuuid(unsigned char *s)
   return(1);
   }
   
+  
+void save_pair_info()
+  {
+  readhci(0,0,0,250,0);  // codes 6/7
+  rwlinkey(1,0,NULL);
+  NPRINT "Pair info saved\n");
+  flushprint();
+  }   
+  
 void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   {
-  int n,k,i,j,addcount,flag;
+  int n,k,i,j,ntn,addcount,flag,eflag;
   unsigned char *badd,*key;
   struct devdata *dp;
   FILE *stream;
@@ -9197,6 +9206,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   static int count = -1;
   static int delflag = 0;
   static int writeflag = 0;
+  unsigned char *newtable;
   static unsigned char zero[6] = {0,0,0,0,0,0};
   static unsigned char *table = NULL; 
   
@@ -9234,7 +9244,8 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         return;
         }
       }
-     
+    
+    eflag = 0; 
     for(k = 0 ; k < count && table != NULL ; ++k)
       {
       badd = table + k*22;
@@ -9254,27 +9265,36 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
           {
           for(n = 0 ; n < 10 ; ++n)
             dp->divrand[n] = key[n];
+          if((dp->linkflag & PAIR_FILE) != 0)
+            eflag = 1;
           dp->linkflag |= PAIR_FILE;
           }
         else
           {          
           for(n = 0 ; n < 16 ; ++n)
             dp->linkey[n] = key[n];
+          if((dp->linkflag & KEY_FILE) != 0)
+            eflag = 1;
           dp->linkflag |= KEY_FILE;
           }     
         }
       }
-  
+    if(ndevice == 0 && eflag != 0)
+      {
+      NPRINT "***** ERROR *****\n");
+      NPRINT "  Corrupted /etc/btferret.dat file. Delete it and re-pair devices\n");
+      }
     }
-  else if(rwflag == 1)
-    {  // write   
+  else if(rwflag == 1 || rwflag == 4)
+    {  // write  4=close    
     // update table
     if(writeflag != 0)
       {
       NPRINT "WARNING 2nd close\n");
       return;
       }
-    writeflag = 1;
+    if(rwflag == 4)
+      writeflag = 1;
     flag = 0;  // no changes to table
     if(count > 0 && table != NULL && delflag == 0) 
       {
@@ -9293,6 +9313,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
               for(n = 0 ; n < 16 ; ++n)
                 key[n] = dp->divrand[n];
               dp->linkflag &= ~PAIR_NEW;
+              dp->linkflag |= PAIR_FILE;
               }
             flag = 1;
             }
@@ -9301,6 +9322,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
             for(n = 0 ; n < 16 ; ++n)
               key[n] = dp->linkey[n];
             dp->linkflag &= ~KEY_NEW;
+            dp->linkflag |= KEY_FILE;
             flag = 1;
             }
           }
@@ -9319,7 +9341,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
  
     if(flag == 0 && delflag == 0 && addcount == 0)   
       return;   // no changes
-      
+        
     if(count + addcount > 100)
       {
       NPRINT "/etc/btferret.dat file of paired devices is large\n");  
@@ -9332,34 +9354,74 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       NPRINT "file to reset and then re-pair devices\n");
       return;
       }
-
-    stream = fopen(fname,"wb");  
-    if(stream == NULL)
+     
+    newtable = (unsigned char *)malloc((count+addcount)*22);
+    if(newtable == NULL)
       return;
-    
-    fputc(count+addcount,stream);
-    if(count > 0)
-      fwrite(table,1,count*22,stream);
+      
+    if(count > 0 && table != NULL)
+      {  
+      ntn = count*22;
+      for(n = 0 ; n < ntn ; ++n)
+        newtable[n] = table[n];
+      }
+    else
+      ntn = 0;
+        
     k = 0;
     for(n = 1 ; k < addcount && devok(n) != 0 ; ++n)
       {
       dp = dev[n];
       if((dp->linkflag & KEY_NEW) != 0)  
         {
-        fwrite(dp->baddr,1,6,stream);
-        fwrite(dp->linkey,1,16,stream);
+        //fwrite(dp->baddr,1,6,stream);
+        for(j = 0 ; j < 6 ; ++j)
+          {
+          newtable[ntn] = dp->baddr[j];
+          ++ntn;
+          }  
+        //fwrite(dp->linkey,1,16,stream);
+        for(j = 0 ; j < 16 ; ++j)
+          {
+          newtable[ntn] = dp->linkey[j];
+          ++ntn;
+          }  
         dp->linkflag &= ~KEY_NEW;
+        dp->linkflag |= KEY_FILE;
         ++k;
         }
       if((dp->linkflag & PAIR_NEW) != 0) 
         {
-        fwrite(dp->baddr,1,6,stream);
-        fwrite(dp->divrand,1,16,stream);
+        //fwrite(dp->baddr,1,6,stream);
+        for(j = 0 ; j < 6 ; ++j)
+          {
+          newtable[ntn] = dp->baddr[j];
+          ++ntn;
+          }  
+        //fwrite(dp->divrand,1,16,stream);
+        for(j = 0 ; j < 16 ; ++j)
+          {
+          newtable[ntn] = dp->divrand[j];
+          ++ntn;
+          }  
         dp->linkflag &= ~PAIR_NEW;
+        dp->linkflag |= PAIR_FILE;
         ++k;
         }
       }
+    
+    if(table != NULL)
+      free(table);
+    table = newtable;
+    count += addcount;      
+    stream = fopen(fname,"wb");  
+    if(stream == NULL)
+      return;
+      
+    fputc(count,stream);
+    fwrite(table,1,count*22,stream);  
     fclose(stream);
+    delflag = 0;
     }
   else if(rwflag == 2 && count > 0 && table != NULL && ndevice > 0)
     {  // delete
@@ -9372,7 +9434,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         {    // found - remove
         flag = 1;
         delflag = 1;
-        dev[n]->linkflag &= ~KEY_FILE;
+        dev[n]->linkflag &= ~(KEY_FILE | PAIR_FILE);
         for(j = k ; j < count ; ++j)
           {
           badd = table + k*22;
@@ -9390,9 +9452,9 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       badd = table + k*22;
       n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);
       if(n >= 0)
-        NPRINT "%s =",dev[n]->name);
+        NPRINT "%d %s (%02X) =",k,dev[n]->name,dev[n]->linkflag >> 10);
       else
-        NPRINT "Unknown ="); 
+        NPRINT "%d Unknown =",k); 
       
       for(j = 0 ; j < 22 ; ++j)
         {
@@ -9790,7 +9852,7 @@ void printins()
   
   count= 1;
   n = 0;
-  NPRINT "**INSTACK** CSP=%d TIM=%d DBG=%d\n",cmd_stack_ptr(),timems(TIM_COUNT),gpar.debug);
+  NPRINT "**INSTACK** CSP=%d DBG=%d\n",cmd_stack_ptr(),gpar.debug);
   flushprint();
   while(instack[n] != INS_FREE)
     {
@@ -12658,8 +12720,9 @@ void read_all_clear()
 
 void read_notify(int timeoutms)
   {  
-  int to,tox,tim0,kmsav,key;
-  
+  unsigned long long to,tox,tim0;
+  int kmsav,key;
+ 
   if(timeoutms < 0)
     to = 0;
   else
@@ -12681,7 +12744,7 @@ void read_notify(int timeoutms)
     readhci(0,0,0,tox,0);
     key = readkey();
     }
-  while(timems(TIM_RUN) - tim0 < (unsigned int)to && key != 'x');
+  while(timems(TIM_RUN) - tim0 < to && key != 'x');
   timems(TIM_FREE);
   setkeymode(kmsav);
   return;
@@ -12794,7 +12857,7 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
   int n,k,len,getout,devicen,flag,gotn,ndev,meshflag;
   char lastchar;
   unsigned char *dat,*ecp;
-  unsigned int timstart;
+  unsigned long long timstart;
      
   ecp = (unsigned char*)&endchar;
   meshflag = 0;
@@ -12922,7 +12985,7 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
 
     if( (flag & EXIT_TIMEOUT) != 0)
       {
-      if(timems(TIM_RUN) - timstart > (unsigned int)timeoutms)
+      if(timems(TIM_RUN) - timstart > (unsigned long long)timeoutms)
         {
         VPRINT "Serial read time out\n");
         gpar.readerror = ERROR_TIMEOUT;
@@ -13322,12 +13385,10 @@ void scroll_forward()
 return time in milliseconds since first call reset
 ****************************************************/       
 
-unsigned int timems(int flag)
+unsigned long long timems(int flag)
   {
-  unsigned int dt;
-  int dtn;
+  unsigned long long dt;
   struct timespec ts;
-  static unsigned int ntim0;
   static time_t tim0;
   static int xflag = 0;  // force reset on first call
   static int count = 0;
@@ -13347,28 +13408,15 @@ unsigned int timems(int flag)
 
   if(xflag == 0)
     {
+    srand((unsigned int)ts.tv_nsec);
     tim0 = ts.tv_sec;
-    ntim0 = ts.tv_nsec; 
     xflag = 1;
     return(0);  // zero time on first call
     }   
     
-  dt = ts.tv_sec - tim0;  // whole seconds
-  if((dt & 0xFFE00000) != 0 && flag == TIM_LOCK && count == 0)
-    {   // overflow 
-    tim0 = ts.tv_sec;
-    ntim0 = ts.tv_nsec; 
-    return(0);
-    }
+  dt = ts.tv_sec - tim0;   
     
-  dtn = ts.tv_nsec - ntim0; // fractional ns  
-  if(dtn < 0)
-    { 
-    dtn += 1e9;
-    --dt;
-    }
-    
-  return((dt*(unsigned int)1000) + (unsigned int)(dtn/1e6));   
+  return((dt*(unsigned long long)1000) + (unsigned long long)(ts.tv_nsec/1e6));   
   }
 
 
@@ -14352,3 +14400,13 @@ int setupcrypt(int flag)
   return(1);  
   }
  
+
+int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1)
+  {
+  
+  // your code here
+  // For Python - recompile the module via 
+  //     python3 btfpy.py build   
+
+  return(0);
+  }

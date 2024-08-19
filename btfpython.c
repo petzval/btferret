@@ -1,4 +1,4 @@
-//############ VERSION 16 #################
+//############ VERSION 17 #################
 
 #include <Python.h>
 
@@ -46,6 +46,7 @@ static PyObject* Read_all_clear(PyObject* self,PyObject* args);
 static PyObject* Read_node_clear(PyObject* self,PyObject* args);
 static PyObject* Read_notify(PyObject* self,PyObject* args);
 static PyObject* Register_serial(PyObject* self,PyObject* args);
+static PyObject* Save_pair_info(PyObject* self,PyObject* args);
 static PyObject* Scroll_back(PyObject* self,PyObject* args);
 static PyObject* Scroll_forward(PyObject* self,PyObject* args);
 static PyObject* Set_flags(PyObject* self,PyObject* args);
@@ -56,6 +57,7 @@ static PyObject* Set_le_random_address(PyObject* self,PyObject* args);
 static PyObject* Set_le_wait(PyObject* self,PyObject* args);
 static PyObject* Set_print_flag(PyObject* self,PyObject* args);
 static PyObject* Strtohex(PyObject* self,PyObject* args);
+static PyObject* User_function(PyObject* self,PyObject* args);
 static PyObject* Wait_for_disconnect(PyObject* self,PyObject* args);
 static PyObject* Write_ctic(PyObject* self,PyObject* args);
 static PyObject* Write_mesh(PyObject* self,PyObject* args);
@@ -108,6 +110,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Read_mesh",Read_mesh,METH_VARARGS,"Read mesh"},
   {"Read_notify",Read_notify,METH_VARARGS,"Read notify"},
   {"Register_serial",Register_serial,METH_VARARGS,"Register serial"},
+  {"Save_pair_info",Save_pair_info,METH_VARARGS,"Save pair info"},
   {"Scroll_back",Scroll_back,METH_VARARGS,"Scroll back"},
   {"Scroll_forward",Scroll_forward,METH_VARARGS,"Scroll forward"},
   {"Set_flags",Set_flags,METH_VARARGS,"Set flags"},
@@ -118,6 +121,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Set_le_wait",Set_le_wait,METH_VARARGS,"Set LE wait"},
   {"Set_print_flag",Set_print_flag,METH_VARARGS,"Set print flag"},
   {"Strtohex",Strtohex,METH_VARARGS,"Str to hex"},
+  {"User_function",User_function,METH_VARARGS,"User function"},
   {"Wait_for_disconnect",Wait_for_disconnect,METH_VARARGS,"Wait for disconnect"},
   {"Write_ctic",Write_ctic,METH_VARARGS,"Write ctic"},
   {"Write_mesh",Write_mesh,METH_VARARGS,"Write mesh"},
@@ -1155,6 +1159,13 @@ static PyObject* Register_serial(PyObject* self,PyObject* args)
   Py_RETURN_NONE; 
   }
 
+//void save_pair_info(void);
+static PyObject* Save_pair_info(PyObject* self,PyObject* args)
+  {
+  save_pair_info();
+  Py_RETURN_NONE; 
+  }
+
 //void scroll_back(void);
 static PyObject* Scroll_back(PyObject* self,PyObject* args)
   {
@@ -1304,6 +1315,27 @@ static PyObject* Strtohex(PyObject* self,PyObject* args)
     printf("Strtohex fail\n");   
   return(xobj);
   }
+
+
+//int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1);
+static PyObject* User_function(PyObject* self,PyObject* args)
+  {
+  int n,n0,n1,n2,n3;
+  PyObject *obj0,*obj1;
+  unsigned char buf0[1024],buf1[1024];
+  
+  n = 0;
+  if(PyObject_Size(args) != 6 || !PyArg_ParseTuple(args,"iiiiOO",&n0,&n1,&n2,&n3,&obj0,&obj1))
+    printerror((PyObject*)Write_ctic);
+  else
+    {
+    objtobuf(obj0,buf0,1024);
+    objtobuf(obj1,buf1,1024);
+    n = user_function(n0,n1,n2,n3,buf0,buf1);
+    }  
+  return Py_BuildValue("i",n); 
+  }
+
 
 //int wait_for_disconnect(int node,int timout);
 static PyObject* Wait_for_disconnect(PyObject* self,PyObject* args)
