@@ -1143,7 +1143,7 @@ Change the address in the MIT ConnectWithUUID block to the address of the Pi.
 Then run the MIT code. It connects and sends "Hello" which will appear on the Pi. The Pi replies
 "Hello World" which appears in the MIT text box. The devices then disconnect.
 It may be necessary to experiment with the security setting
-to find what works with the client. It is set to security=1 (No link key, passkey here).
+to find what works with the client. It is set to security=0 (Link key, local passkey).
 
 ### C code
 
