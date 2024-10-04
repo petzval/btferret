@@ -19,7 +19,7 @@ Python and C Bluetooth Library
         - [2.3.4 Classic server](#2-3-4-classic-server)
         - [2.3.5 OBEX client](#2-3-5-obex-client)
         - [2.3.6 OBEX server](#2-3-6-obex-server)
-        - [2.3.7 MIT App Inventor server](#2-3-7-mit-app-inventor)
+        - [2.3.7 MIT App Inventor server](#2-3-7-mit-app-inventor-server)
 - [3 Interface](#3-interface)
     - [3.1 Bluetooth Connections](#3-1-bluetooth-connections)
     - [3.2 btferret](#3-2-btferret)
@@ -166,7 +166,7 @@ and servers are available for download, and described in the [Hello World](#2-3-
 
 Also included is the code for a simple [mesh network example](#3-10-sample), and
 a [Blue Dot server](#3-12-blue-dot-server) that is a way of controlling a Pi from a phone. Another
-method of control from a phone is [MIT App Inventor](#2-3-7-mit-app-inventor).
+method of control from a phone is [MIT App Inventor](#2-3-7-mit-app-inventor-server).
 OBEX [client](#2-3-5-obex-client) and [server](#2-3-6-obex-server) code exchanges
 files with Windows/Android/etc... devices.
 The [HID Devices](#3-11-hid-devices) section describes how to program a Human Input Device such as
@@ -1255,7 +1255,7 @@ can act as a Classic client or server. The connecting server/client can be anoth
 btferret or any Bluetooth-capable
 device such as a PC or Android running a Blueooth app such as a serial terminal.
 The [Blue Dot app](#3-12-blue-dot-server) uses a classic connection to control a Pi from a phone,
-and so does the [MIT App Inventor](#2-3-7-mit-app-inventor) server example.
+and so does the [MIT App Inventor](#2-3-7-mit-app-inventor-server) server example.
 OBEX (OBject EXchange) is a standard protocol used by most devices to send data (usually files) via a Classic
 connection. OBEX [client](#2-3-5-obex-client) and [server](#2-3-6-obex-server) code examples are included.
 
