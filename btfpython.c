@@ -1,4 +1,4 @@
-//############ VERSION 17 #################
+//############ VERSION 18 #################
 
 #include <Python.h>
 
@@ -21,6 +21,7 @@ static PyObject* Hid_key_code(PyObject* self,PyObject* args);
 static PyObject* Init_blue(PyObject* self,PyObject* args);
 static PyObject* Init_blue_ex(PyObject* self,PyObject* args);
 static PyObject* Keys_to_callback(PyObject* self,PyObject* args);
+static PyObject* Le_advert(PyObject* self,PyObject* args);
 static PyObject* Le_pair(PyObject* self,PyObject* args);
 static PyObject* Le_scan(PyObject* self,PyObject* args);
 static PyObject* Le_server(PyObject* self,PyObject* args);
@@ -55,6 +56,7 @@ static PyObject* Set_le_interval_update(PyObject* self,PyObject* args);
 static PyObject* Set_le_interval_server(PyObject* self,PyObject* args);
 static PyObject* Set_le_random_address(PyObject* self,PyObject* args);
 static PyObject* Set_le_wait(PyObject* self,PyObject* args);
+static PyObject* Set_notify_node(PyObject* self,PyObject* args);
 static PyObject* Set_print_flag(PyObject* self,PyObject* args);
 static PyObject* Strtohex(PyObject* self,PyObject* args);
 static PyObject* User_function(PyObject* self,PyObject* args);
@@ -86,6 +88,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Init_blue",Init_blue,METH_VARARGS,"Init blue"},
   {"Init_blue_ex",Init_blue_ex,METH_VARARGS,"Init blue ex"},
   {"Keys_to_callback",Keys_to_callback,METH_VARARGS,"Keys to callback"},
+  {"Le_advert",Le_advert,METH_VARARGS,"LE advert"},
   {"Le_pair",Le_pair,METH_VARARGS,"LE pair"},
   {"Le_scan",Le_scan,METH_VARARGS,"LE scan"},
   {"Le_server",Le_server,METH_VARARGS,"LE server"},
@@ -119,6 +122,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Set_le_interval_server",Set_le_interval_server,METH_VARARGS,"Set LE interval server"},
   {"Set_le_random_address",Set_le_random_address,METH_VARARGS,"Set LE random address"},
   {"Set_le_wait",Set_le_wait,METH_VARARGS,"Set LE wait"},
+  {"Set_notify_node",Set_notify_node,METH_VARARGS,"Set notify node"},
   {"Set_print_flag",Set_print_flag,METH_VARARGS,"Set print flag"},
   {"Strtohex",Strtohex,METH_VARARGS,"Str to hex"},
   {"User_function",User_function,METH_VARARGS,"User function"},
@@ -212,12 +216,14 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"LE_CONN",LE_CONN);
 
   PyModule_AddIntConstant(module,"ANY_DEVICE",ANY_DEVICE);
+  PyModule_AddIntConstant(module,"ALL_DEVICES",ALL_DEVICES);
   PyModule_AddIntConstant(module,"READ_WAIT",READ_WAIT);
   PyModule_AddIntConstant(module,"PACKET_ENDCHAR",PACKET_ENDCHAR);
 
   PyModule_AddIntConstant(module,"FLAG_ON",FLAG_ON);
   PyModule_AddIntConstant(module,"FLAG_OFF",FLAG_OFF);
   PyModule_AddIntConstant(module,"ENABLE_OBEX",ENABLE_OBEX);
+  PyModule_AddIntConstant(module,"HID_MULTI",HID_MULTI);
   
   return(module);
   }
@@ -798,7 +804,30 @@ static PyObject* Keys_to_callback(PyObject* self,PyObject* args)
     
   return Py_BuildValue("i",n);  
   }
-  
+
+// unsigned char* buf = le_advert(int node);
+static PyObject* Le_advert(PyObject* self,PyObject* args)
+  {
+  int node;
+  PyObject *xobj;
+  unsigned char *buf;
+  static unsigned char fail = 0;
+ 
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"i",&node))
+    {
+    printerror((PyObject*)Le_advert);
+    buf = &fail;
+    }
+  else
+    buf = le_advert(node);
+     
+  xobj = PyBytes_FromStringAndSize((char*)buf,buf[0]+1);
+  if(xobj == NULL)
+    printf("Le_advert fail\n");   
+  return(xobj); 
+  }
+
+ 
 //int le_pair(int node,int flags,int passkey);
 static PyObject* Le_pair(PyObject* self,PyObject* args)
   {
@@ -1271,6 +1300,20 @@ static PyObject* Set_le_wait(PyObject* self,PyObject* args)
     n = set_le_wait(wait);  
   return Py_BuildValue("i",n); 
   }
+
+// void set_notify_node(int node)
+static PyObject* Set_notify_node(PyObject* self,PyObject* args)
+  {
+  int node;
+
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"i",&node))
+    printerror((PyObject*)Set_notify_node);
+  else  
+   set_notify_node(node);
+   
+  Py_RETURN_NONE; 
+  }
+
   
 //int set_print_flag(int flag);
 static PyObject* Set_print_flag(PyObject* self,PyObject* args)

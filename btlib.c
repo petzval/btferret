@@ -1,4 +1,4 @@
-/********* Version 17 *********/
+/********* Version 18 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <fcntl.h>
-#include "btlib.h"             
+#include "btlib.h"                      
 
 #ifdef BTFPYTHON
   #include "btfpython.c"     
@@ -38,9 +38,9 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 17
-   // max possible NUMDEVS = 256 
-#define NUMDEVS 256
+#define VERSION 18
+   // max possible NUMDEVS = 1024 
+#define NUMDEVS 1024
 #define NAMELEN 34
 #define TOPUPCREDIT 200
   // ATT_MTU data cannot be more than 244 
@@ -118,7 +118,8 @@ struct devdata
   int foundflag;
   unsigned char linkey[16];
   char pincode[64]; 
-  
+  unsigned char advert[64];
+    
   unsigned int cryptoflag; 
   unsigned char pres[7];
   unsigned char preq[7];
@@ -156,7 +157,7 @@ struct devdata
         // CONTROL channel 0
 #define CON_LX (1 << 8)
         // LE server
-
+        
 #define CON_PSM1X (1 << 29)  // disconnect requested
 #define CON_PSM3X (1 << 30)
 
@@ -317,6 +318,7 @@ struct globpar
   int settings;
   int keytocb;  // keys to callback     
   int maxpage;
+  int notifynode;  // 0=all
   };
 
 struct globpar gpar;
@@ -1394,7 +1396,7 @@ int init_blue_ex(char *filename,int hcin)
   gpar.settings = ENABLE_OBEX;
   gpar.keytocb = 0;
   gpar.keyboard = 0;
-  
+  gpar.notifynode = 0;
 
   if(initflag == 0)
     {   
@@ -2684,6 +2686,9 @@ int devalloc()
     dp->linkey[j] = lkey[j];
     dp->divrand[j] = 0;
     }
+  for(j = 0 ; j < 64 ; ++j)
+    dp->advert[j] = 0;
+    
   dp->linkflag = 0;        
   dp->type = 0;
   dev[dn]->name[0] = 0; 
@@ -2978,18 +2983,18 @@ int lescanx()
           if(buf[0] == 0)
             {  // no name
             k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) == 0)
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic",7,DIRN_FOR) == 0)
               strcpy(buf,dev[k]->name);  // is also a classic with name 
             else
               {
-              sprintf(buf,"LE node %d",dp->node);
-              NPRINT "    No name so set = %s\n",buf);
+              sprintf(buf," LE %s",baddstr(dp->baddr,0));
+              // NPRINT "    No name so set = %s\n",buf);
               }
             }
           else
             {  // got name
             k = devnfrombadd(dp->baddr,BTYPE_CL,DIRN_FOR);
-            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic node 1",14,DIRN_FOR) != 0)
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"Classic",7,DIRN_FOR) != 0)
               strcpy(dev[k]->name,buf);  // is also a classic without name 
             }
           
@@ -2998,7 +3003,13 @@ int lescanx()
           NPRINT "    New device %s\n",dev[ndevice]->name);
           }
         if(ndevice >= 0)
-          dev[ndevice]->foundflag = 1;  
+          {
+          dev[ndevice]->foundflag = 1;
+          for(k = 0 ; k <= rp[8] && k < 64 ; ++k)
+            dev[ndevice]->advert[k] = rp[8+k];
+          if(dev[ndevice]->advert[0] > 63)
+            dev[ndevice]->advert[0] = 63;
+          }  
         }  // end not found       
       flushprint();          
       // next device entry is length 10+rp[8] away
@@ -3009,9 +3020,20 @@ int lescanx()
     flushprint();         
     ++count;
     }
-  while(1);  
-  
+  while(1); 
   }
+  
+unsigned char* le_advert(int node)
+  {
+  int ndevice;
+  static unsigned char none[4] = { 0,0,0,0 };
+
+  ndevice = devnp(node);
+  if(ndevice < 0)
+    return(none);
+  return(dev[ndevice]->advert);
+  }  
+  
 
 int newnode()
   {
@@ -3691,7 +3713,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       }  
     }
   while((retval & SERVER_CONTINUE) != 0 && key != 'x');
-
+ 
   setkeymode(oldkm);
   
   do
@@ -4018,6 +4040,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
       retval = SERVER_EXIT;
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
+ 
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press - stopping server\n");
@@ -5205,7 +5228,8 @@ int writecticx(int node,int cticn,unsigned char *data,int count,int notflag,int 
     for(devn = 1 ; cp->notify != 0 && devok(devn) != 0 ; ++devn)
       {  // search all other devices for notify
       dp = dev[devn];
-      if((dp->conflag & CON_LX) != 0 && 
+      if((dp->conflag & CON_LX) != 0 &&
+         (gpar.notifynode == 0 || gpar.notifynode == dp->node) && 
          (gpar.btleflag == 0 || gpar.btlenode == 0 || gpar.btlenode == dp->node))
         {  // device devn is connected as LE client
            // send notification
@@ -6581,7 +6605,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           {
           eflag = 1;  // error
           multiflag = 0;  // HID multi
-          if((gpar.hidflag & 1) != 0)  // (gpar.settings & HID_MULTI) == 0)
+          if((gpar.hidflag & 1) != 0 && (gpar.settings & HID_MULTI) == 0)
             {  // check for existing connection
             for(k = 1 ; multiflag == 0 && devok(k) != 0 ; ++k)
               {
@@ -6660,7 +6684,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             }
           }
           
-        if((gpar.hidflag & 1) == 0 && (gpar.meshflag & MESH_W) != 0)
+        if(((gpar.hidflag & 1) == 0 || (gpar.settings & HID_MULTI) != 0) && (gpar.meshflag & MESH_W) != 0)
           mesh_on();
         }  // end IN_LEHAND
       else if(gotflag == IN_CONREQ)
@@ -7445,6 +7469,9 @@ void immediate(long long lookflag)
         }
       else      
         {
+        if((dp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
+          rwlinkey(0,devicen,dp->baddr);  // in file?
+        
         VPRINT "GOT 17 Send key\n"); 
         VPRINT "SEND link key\n"); 
         for(j = 0 ; j < 16 ; ++j)
@@ -11949,12 +11976,12 @@ void clscanx()
         if(j < 0)
           {   // no name
           k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
-          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"LE node 1",9,DIRN_FOR) == 0)
+          if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)" LE ",4,DIRN_FOR) == 0)
             strcpy(buf,dev[k]->name);  // is also LE with name
           else
             {
-            sprintf(buf,"Classic node %d",dp->node);
-            NPRINT "   Unable to read name so set = %s\n",buf);
+            sprintf(buf,"Classic %s",baddstr(dp->baddr,0));
+            // NPRINT "   Unable to read name so set = %s\n",buf);
             }
           }
         else
@@ -12002,7 +12029,7 @@ void clscanx()
           if(flag == 0)
             {
             k = devnfrombadd(dp->baddr,BTYPE_LE,DIRN_FOR);
-            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)"LE node 1",9,DIRN_FOR) != 0)
+            if(k > 0 && bincmp((unsigned char*)dev[k]->name,(unsigned char*)" LE ",4,DIRN_FOR) != 0)
               strcpy(dev[k]->name,buf);  // is also LE without name
             }
           }
@@ -12723,6 +12750,9 @@ void read_notify(int timeoutms)
   unsigned long long to,tox,tim0;
   int kmsav,key;
  
+  if(gpar.serveractive != 0)
+    return;  // not when server
+    
   if(timeoutms < 0)
     to = 0;
   else
@@ -13128,7 +13158,12 @@ void set_flags(int flags,int onoff)
     gpar.settings &= ~flags;
   else
     gpar.settings |= flags;
-  }  
+  } 
+  
+void set_notify_node(int node)
+  {
+  gpar.notifynode = node;
+  }   
   
 int set_le_wait(int waitms)
   {

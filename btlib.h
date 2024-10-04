@@ -1,4 +1,4 @@
-  // for btlib.c Version 17
+  // for btlib.c Version 18
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -82,9 +82,10 @@
 #define FLAG_OFF    0
 #define FLAG_ON     1
 #define ENABLE_OBEX 1
-
+#define HID_MULTI   2
 
 #define ANY_DEVICE 0
+#define ALL_DEVICES 0
 #define READ_WAIT -1
 #define PACKET_ENDCHAR 254
 
@@ -118,6 +119,7 @@ int init_btle(char *name,int hcin);
 
 int keys_to_callback(int flag,int keyboard);
 
+unsigned char* le_advert(int node);
 int le_pair(int node,int flags,int passkey);
 void le_scan(void);
 int le_server(int(*callback)(int,int,int),int timerds);
@@ -166,6 +168,7 @@ int set_le_interval_update(int node,int min,int max);
 int set_le_interval_server(int node,int min,int max);
 void set_le_random_address(unsigned char *add);
 int set_le_wait(int waitms);
+void set_notify_node(int node);
 int set_print_flag(int flag);
 
 unsigned char *strtohex(char *s,int *num);

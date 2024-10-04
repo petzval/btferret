@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
-###### VERSION 17 ######
-### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 17 or later ###
+###### VERSION 18 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 18 or later via:###
+###   python3 btfpy.py build ###
 
 import btfpy
 import os

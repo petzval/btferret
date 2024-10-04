@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 17 
+  btlib.c/h  Version 18 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -15,7 +15,7 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"       
+#include "btlib.h"        
 
 void btlink(void);
 void printhelp(void);

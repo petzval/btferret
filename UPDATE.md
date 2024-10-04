@@ -171,4 +171,26 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    saves it at any time.
   
 3. New function user\_function(). A user-defined function inside btlib.c. For hackers - write your own code
-   inside the library. For Python - a general purpose C subroutine. 
+   inside the library. For Python - a general purpose C subroutine.
+   
+### Version 18
+
+1. New function le\_advert() that returns an LE device's raw advert data after an le\_scan() call.
+
+2. New option for HID devices to allow multiple connections. Previously only one device was allowed to
+   connect for security reasons. See HID\_MULTI option in set\_flags(). But see next item for a way to
+   ensure security for multiple connections. 
+
+3. New option to specify a single device to receive notifications. Normally, when acting as an LE server,
+   notifications are sent to all connected devices. The set\_notify\_node() function limits notifications
+   to a specified device.
+
+4. Hello World sample code for an MIT App Inventor server (mit_server.c/py), with coresponding MIT block code.
+   See section 2.3.7.
+   
+5. If a scan finds a device with no advertised name, the allocated name now contains the address.
+
+6. Bug fix. If a classic server was paired from a device that was not in the devices file (so connected
+   with the Any Devices option), the link key could get lost and re-connecting could fail or require
+   a re-pairing. A classic server started with keyflag = KEY\_ON | PASSKEY\_LOCAL should now work reliably.
+   This has now been set as the default option in classic\_server.c/py and obex\_server.c/py.
