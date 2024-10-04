@@ -1,0 +1,18 @@
+import btfpy
+
+def callback(node,data,len):
+  print("Received: " + data.decode())
+  if data[0] == ord("H"):
+    btfpy.Write_node(node,"Hello world\n",0)
+    print("Disconnecting...")
+    return(btfpy.SERVER_EXIT)
+  else:
+    btfpy.Write_node(node,"Send Hello to exit\n",0)
+    return(btfpy.SERVER_CONTINUE)
+  
+if btfpy.Init_blue("devices.txt") == 0:
+  exit(0) 
+
+btfpy.Classic_server(btfpy.ANY_DEVICE,callback,10,btfpy.KEY_ON | btfpy.PASSKEY_LOCAL)
+btfpy.Close_all()
+  

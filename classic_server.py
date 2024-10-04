@@ -14,7 +14,7 @@ if btfpy.Init_blue("devices.txt") == 0:
   exit(0)
 
 print("IF FAILS - Experiment with security = 0/1/2/3")
-security = 3
+security = 0
 
 keyflag = btfpy.KEY_ON | btfpy.PASSKEY_LOCAL
 if security == 1:

@@ -22,7 +22,7 @@ int main()
     return(0);
   
   printf("IF FAILS - Experiment with security = 0/1/2/3\n");
-  security = 3;
+  security = 0;
 
   keyflag = KEY_ON | PASSKEY_LOCAL;
   if(security == 1)
