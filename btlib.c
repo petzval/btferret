@@ -1,4 +1,4 @@
-/********* Version 18 *********/
+/********* Version 19 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -13,7 +13,7 @@
 #include "btlib.h"                      
 
 #ifdef BTFPYTHON
-  #include "btfpython.c"     
+  #include "btfpython.c"       
 #endif
 
 /********** BLUETOOTH defines ********/
@@ -38,7 +38,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 18
+#define VERSION 19
    // max possible NUMDEVS = 1024 
 #define NUMDEVS 1024
 #define NAMELEN 34
@@ -3000,7 +3000,7 @@ int lescanx()
           
           strcpy(dev[ndevice]->name,buf);
                       
-          NPRINT "    New device %s\n",dev[ndevice]->name);
+          NPRINT "    New device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
           }
         if(ndevice >= 0)
           {
@@ -3521,6 +3521,7 @@ void btle_notifynode(int node)
 int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds)
   {
   int n,dn,key,ndevice,retval,timecount,oldkm,op,cticn,cbflag;
+  unsigned long long tim0,timms;
   struct devdata *dp;
   unsigned char *badd;
 #ifdef BTFPYTHON
@@ -3570,6 +3571,9 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
 #endif
   gpar.serveractive = 1;
 
+  tim0 = timems(TIM_LOCK);
+  timms = timerds * 100;
+  
   retval = SERVER_CONTINUE;  
   do
     {
@@ -3658,8 +3662,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       
     if(cbflag == 0 && timerds > 0)
       {
-      ++timecount;
-      if(timecount >= timerds)
+      if(timems(TIM_RUN) - tim0 >= timms)
         {
         setkeymode(0);
 #ifdef BTFPYTHON
@@ -3670,7 +3673,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
           retval = callback(localnode(),LE_TIMER,0);
 #endif
         setkeymode(1);
-        timecount = 0;
+        tim0 = timems(TIM_RUN);
         }
       }
 
@@ -3713,30 +3716,32 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       }  
     }
   while((retval & SERVER_CONTINUE) != 0 && key != 'x');
- 
+  timems(TIM_FREE);
   setkeymode(oldkm);
-  
-  do
-    {
-    n = findhci(IN_LECMD,0,INS_POP);
-    }
-  while(n >= 0);
-  
-    
+  gpar.serveractive = 0;
+     
   if(key == 'x')
     NPRINT "Key press stop server...\n");
 
-  if(ndevice != 0 && (dp->conflag & CON_LX) != 0)
+  for(dn = 1 ; devok(dn) != 0 ; ++dn)
     {
-    NPRINT "LE Server disconnecting\n");
-    disconnect_node(dp->node);
+    dp = dev[dn];
+    if((dp->conflag & CON_LX) != 0)
+      {
+      NPRINT "Disconnecting %s\n",dp->name);
+      disconnectdev(dn);
+      do
+        {
+        n = findhci(IN_LECMD,dn,INS_POP);
+        }
+      while(n >= 0);
+      }
     }  
 
   flushprint();
 
   popins();    
   mesh_on();
-  gpar.serveractive = 0;
     
   return(1);
   }  
@@ -3841,6 +3846,7 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
       retval = SERVER_EXIT;  // key press or error
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
+  gpar.serveractive = 0;
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press stop server...\n");
@@ -3852,12 +3858,215 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
   disconnect_node(clientnode);  // sever initiated here
                                 // client should be running
                                 // wait_for_disconnect
-    
+  read_node_clear(clientnode);    
   mesh_on();
-  gpar.serveractive = 0;
   
   return(1);
   }  
+
+
+
+int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar,int keyflag,int timerds)
+  {
+  int n,dn,nread,key,ndevice,retval;
+  int node,op,cticn;
+  unsigned char buf[1024];
+  unsigned long long tim0,timms;
+  struct devdata *dp;
+#ifdef BTFPYTHON
+  PyObject *pycallback;
+#endif  
+    
+  if(gpar.serveractive != 0)
+    {
+    NPRINT "Cannot start a second server\n");
+    flushprint();
+    return(0);
+    }
+    
+  if((gpar.hidflag & 3) != 0 || gpar.keytocb != 0)
+    {
+    NPRINT "No HID/random address/keys to callback with universal server\n");
+    flushprint();
+    return(0);
+    } 
+ 
+  VPRINT "Set simple pair mode on\n");
+  sendhci(setspm,0);
+    
+#ifdef BTFPYTHON
+  pycallback = py_callback;
+#endif  
+  gpar.serveractive = 2;    
+  NPRINT "Waiting for any device to connect (x = stop server)\n");
+  flushprint();
+  
+  mesh_on();
+  tim0 = timems(TIM_LOCK);
+  timms = timerds * 100;
+ 
+  do
+    {
+    retval = SERVER_CONTINUE;
+    key = 0;
+    nread = read_all_endchar(&node,buf,1024,endchar,EXIT_KEY | EXIT_TIMEOUT,200);
+    if(read_error() == ERROR_KEY)
+      {
+      key = 'x';
+      retval = SERVER_EXIT;
+      }           
+    else if(nread > 0)
+      {
+      ndevice = devn(node);
+      if(ndevice > 0)
+        {
+        dp = dev[ndevice];
+#ifdef BTFPYTHON
+        if(pycallback != NULL)
+          retval = py_us_callback(pycallback,dp->node,CLASSIC_DATA,0,buf,nread);
+#else      
+        if(callback != NULL)
+          retval = (*callback)(dp->node,CLASSIC_DATA,0,buf,nread);
+#endif
+        }
+      }
+      
+    if((retval & SERVER_CONTINUE) != 0)
+      {
+      n = findhci(IN_CONREQ,0,INS_POP);
+      if(n >= 0)
+        {  // Classic connect
+        ndevice = instack[n+3];
+        dp = dev[ndevice];
+        popins();
+        
+        dp->conflag = CON_SERVER;  
+        dp->linkflag &= KEY_FILE | KEY_NEW;
+        dp->linkflag |= keyflag & (KEY_ON | PASSKEY_LOCAL | PASSKEY_REMOTE);
+                      
+        retval = classicserverx(ndevice);
+        mesh_on();
+        popins();
+        if((dp->conflag & CON_RF) != 0)
+          NPRINT "%s has connected\n",dp->name);
+        flushprint();          
+        }
+        
+      n = findhci(IN_LECMD,0,INS_POP);
+      if(n >= 0)
+        {  // LE input
+        ndevice = instack[n+3];
+        dp = dev[ndevice];  
+        op = insdatn[0];
+        cticn = insdatn[1];
+       
+        if(op == LE_DISCONNECT)
+          VPRINT "%s has disconnected\n",dp->name);
+        else if(op == LE_CONNECT)
+          {
+          if((gpar.hidflag & 1) != 0)
+            {  // HID wait for AUTO_PAIROK
+            NPRINT "Wait for pair...\n");  
+            readhci(ndevice,IN_AUTOEND,0,gpar.leclientwait,0);
+            n = findhci(IN_AUTOEND,ndevice,INS_POP);
+            if(n >= 0)
+              {
+              if(insdat[n] == AUTO_PAIROK)
+                NPRINT "PAIR OK\n");
+              }
+            else
+              NPRINT "PAIR time out\n");
+            }       
+
+          VPRINT "%s has connected\n",dp->name);
+          dp->btletods = 0;
+          if((gpar.hidflag & 1) == 0)  
+            {
+            mesh_on();
+            VPRINT "Set larger data length\n");  
+            sendhci(datlenset,ndevice);
+            }
+          }   
+
+        flushprint();
+        popins();     
+        buf[0] = 0;
+   
+#ifdef BTFPYTHON
+        if(pycallback != NULL)
+          retval = py_us_callback(pycallback,dp->node,op,cticn,buf,0);
+#else
+        if(callback != NULL)
+          retval = callback(dp->node,op,cticn,buf,0);
+#endif
+                   
+        if(op == LE_DISCONNECT)
+          {  // clear all operations from this device
+          dp->btletods = 0; 
+          do
+            {
+            n = findhci(IN_LECMD,ndevice,INS_POP);
+            }
+          while(n >= 0); 
+      
+          popins();
+          }
+        }
+      }
+      
+    if((retval & SERVER_CONTINUE) != 0 && timerds > 0)
+      {
+      if(timems(TIM_RUN) - tim0 >= timms)
+        {
+        buf[0] = 0;
+
+#ifdef BTFPYTHON
+        if(pycallback != NULL)
+          retval = py_us_callback(pycallback,localnode(),SERVER_TIMER,0,buf,0);
+#else
+        if(callback != NULL)
+          retval = callback(localnode(),SERVER_TIMER,0,buf,0);
+#endif
+        tim0 = timems(TIM_RUN);
+        }
+      }   
+    }
+  while((retval & SERVER_CONTINUE) != 0 && key != 'x');
+
+  gpar.serveractive = 0;    
+
+  timems(TIM_FREE);
+  
+  if(key == 'x')
+    NPRINT "Key press - stopping server\n");
+         
+  flushprint();  
+  sleep(2);    // allow time for any last reply sent by callback to transmit      
+
+  for(dn = 1 ; devok(dn) != 0 ; ++dn)
+    {
+    dp = dev[dn];
+    if((dp->conflag & (CON_LX | CON_SERVER)) != 0)
+      {
+      NPRINT "Disconnecting %s\n",dp->name);
+      if((dp->conflag & CON_SERVER) != 0)
+        read_node_clear(dp->node);
+      else
+        {
+        do
+          {
+          n = findhci(IN_LECMD,dn,INS_POP);
+          }
+        while(n >= 0);
+        }
+      disconnectdev(dn);
+      }
+    }  
+     
+  return(1); 
+  }
+
+
     
 /********** CLASSIC SERVER ****************/
 
@@ -3876,6 +4085,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
   if(gpar.serveractive != 0)
     {
     NPRINT "Cannot start a second server\n");
+    flushprint();
     return(0);
     }
     
@@ -3906,7 +4116,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
     
 
   VPRINT "Set simple pair mode on\n");
-  sendhci(setspm,ndevice);
+  sendhci(setspm,0);
 
   flushprint();
   
@@ -4041,6 +4251,7 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
     }
   while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
  
+  gpar.serveractive = 0;    
   
   if(read_error() == ERROR_KEY)
     NPRINT "Key press - stopping server\n");
@@ -4052,9 +4263,10 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
   flushprint();  
   sleep(2);    // allow time for any last reply sent by callback to transmit      
   disconnect_node(dp->node);  // sever initiated here
-                                // client should be running
-                                // wait_for_disconnect
-  gpar.serveractive = 0;    
+                              // client should be running
+                              // wait_for_disconnect
+  read_node_clear(dp->node);
+      
   return(1);
   }  
 
@@ -5140,7 +5352,7 @@ void close_all()
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();      
+  // printins();       
   }  
   
   
@@ -6195,7 +6407,12 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
 
   if(ndevice != 0 && (dev[ndevice]->conflag & CON_LX) != 0)
     lesflag = 1;   // mesh device is LE server
-    
+  if(gpar.serveractive == 2)
+    {
+    lesflag = 1;
+    clsflag = 1;
+    }
+        
   if(level > 8)
     {
     NPRINT "ERROR - Callback has spawned too many nested operations\n"); 
@@ -6478,7 +6695,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         } 
       else if(buf[1] == 0x04)
         {
-        if((sflag & IN_CONREQ) != 0)
+        if((sflag & IN_CONREQ) != 0 || gpar.serveractive == 2)
           {
           gotflag = IN_CONREQ;
           n0 = 3;
@@ -6613,7 +6830,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
                 multiflag = 1;                
               } 
             }
-          if(multiflag == 0 && ((sflag & IN_LEHAND) != 0 || (sflag & IN_LECMD) != 0))
+          if((multiflag == 0 && ((sflag & IN_LEHAND) != 0 || (sflag & IN_LECMD) != 0)) || gpar.serveractive == 2)
             {  // is waiting for this connection
             if(lesflag != 0)
               {  // LE server accepts any client
@@ -6769,15 +6986,15 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           NPRINT "%s has disconnected\n",dev[devicen]->name);
         if((gpar.hidflag & 1) == 0 && (dp->conflag & CON_MESH) != 0)
           mesh_on();
-        dp->conflag = 0;
-        dp->lecflag = 0;
-        dp->setdatlen = 20;
-        if(lesflag != 0)
+        if(lesflag != 0 && (gpar.serveractive != 2 || (dp->conflag & CON_LX) != 0))
           {
           ledat[0] = LE_DISCONNECT;
           ledat[1] = 0;
           pushins(IN_LECMD,devicen,2,ledat);
           }
+        dp->conflag = 0;
+        dp->lecflag = 0;
+        dp->setdatlen = 20;
         }                    
       }
     else if(buf[0] == 2)   // ACL
@@ -6797,11 +7014,16 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         //gotflag = IN_DATA;   // extra LE data
         //firstpacket = 0;
         // add to existing stack entry
-        if(xflag == 0 || dev[devicen]->xwantlen == 0)
-          NPRINT "Unexpected extra data - add time delays\n");
+        datlen = buf[3] + (buf[4] << 8);  // length      
+        if(xflag == 0 || dev[devicen]->xwantlen == 0 || datlen == 0)
+          {
+          if(datlen == 0)
+            VPRINT "Empty extra data\n"); 
+          else
+            NPRINT "Unexpected extra data\n");
+          }
         else
           {
-          datlen = buf[3] + (buf[4] << 8);  // length
           VPRINT "Following packet [3][4] = %04X extra bytes from [5]..\n",datlen);
           datp = buf+5;
           dev[devicen]->xwantlen -= datlen;
@@ -7151,7 +7373,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           else
             VPRINT "\n");         
           }
-        else
+        else if(chan != 0)
           {
           VPRINT "> CHANNEL %04X = ",chan);
           for(k = 9 ; k < wantlen && k < 20 ; ++k)
@@ -9890,7 +10112,7 @@ void printins()
     ++count;
     flushprint();
     }
-  rwlinkey(3,0,NULL);
+  // rwlinkey(3,0,NULL);
   }
 
 
@@ -10415,7 +10637,7 @@ int clconnect0(int ndevice)
     }
  
   VPRINT "Set simple pair mode on\n");
-  sendhci(setspm,ndevice);
+  sendhci(setspm,0);
   // statusok(0,setspm);
 
   savto = gpar.timout;
@@ -12037,7 +12259,7 @@ void clscanx()
         if(flag == 0)
           {
           strcpy(dev[ndevice]->name,buf);                
-          NPRINT "   New device %s\n",dev[ndevice]->name);
+          NPRINT "   New device %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
           rwlinkey(0,ndevice,NULL);  // link key in file?
           }
         ++count;
@@ -12884,7 +13106,7 @@ int readserial(int *node,unsigned char *inbuff,int count,char endchar,int flag,i
         
 int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,int timeoutms)
   {
-  int n,k,len,getout,devicen,flag,gotn,ndev,meshflag;
+  int n,k,len,getout,devicen,flag,gotn,ndev,meshflag,key;
   char lastchar;
   unsigned char *dat,*ecp;
   unsigned long long timstart;
@@ -13017,7 +13239,8 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
       {
       if(timems(TIM_RUN) - timstart > (unsigned long long)timeoutms)
         {
-        VPRINT "Serial read time out\n");
+        if(gpar.serveractive != 2)
+          VPRINT "Serial read time out\n");
         gpar.readerror = ERROR_TIMEOUT;
         timems(TIM_FREE);
         return(gotn);
@@ -13026,7 +13249,8 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
        
     if( (flag & EXIT_KEY) != 0)
       {
-      if(readkey() == 'x')
+      key = readkey();
+      if(key == 'x')
         {
         VPRINT "Serial read aborted by key press\n");
         gpar.readerror = ERROR_KEY;
@@ -13034,10 +13258,18 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
         return(gotn);
         }
       }
-
+    
     // look for a new IN_DATA
     
     readhci(devicen,IN_DATA,0,25,0);   
+
+    if(gpar.serveractive == 2 && findhci(IN_LECMD,0,INS_NOPOP) >= 0)
+      {  // universal server LE input
+      popins();
+      gpar.readerror = 0;  // OK
+      timems(TIM_FREE);
+      return(gotn);  
+      }
 
     flushprint();
               
@@ -13097,33 +13329,35 @@ int setkeymode(int setflag)
   return(oldflag);
   } 
   
-
 void set_le_random_address(unsigned char *add)
   {  
   int n,flag,zflag;
 
   if((gpar.meshflag & MESH_W) != 0)
-    {
-    mesh_off();
     flag = 1;
-    }
   else
     flag = 0;
         
   zflag = 0;
   for(n = 0 ; n < 6 && zflag == 0 ; ++n)
     zflag |= add[n];
-  if(zflag == 0 && (gpar.hidflag & 1) == 0)
+  if(zflag == 0 && (gpar.hidflag & 1) == 0 && (gpar.hidflag & 2) != 0)
     {  // turn off
     VPRINT "LE random address off\n");
+    if(flag != 0)
+      mesh_off();
     gpar.hidflag &= ~2;
     dev[0]->leaddtype = 0; 
     addname();
     sendhci(leadparam,0);
     sendhci(leadvert,0);
+    if(flag != 0)
+      mesh_on();
     }
   else if(zflag != 0)
     { 
+    if(flag != 0)
+      mesh_off();   
     for(n = 0 ; n < 6 ; ++n)
       gpar.randbadd[n] = add[n];  
     gpar.randbadd[0] |= 0xC0;
@@ -13145,11 +13379,13 @@ void set_le_random_address(unsigned char *add)
       }
     else
       sendhci(hidadvert,0); 
+
+    if(flag != 0)
+      mesh_on();
     }
-    
-  if(flag != 0)
-    mesh_on();
+   
   }
+
     
   
 void set_flags(int flags,int onoff)
@@ -13748,10 +13984,14 @@ int readline(FILE *stream,char *s)
   return(0);
   }
 
+void le_handles(int node,int lasthandle)
+  {
+  readleatt(node,lasthandle | 0x40000);
+  }
 
 void readleatt(int node,int xhandle)
   {
-  int n,k,len,uuidtype,ndevice,h0,hx,handle,psflag,allflag,uuid,endff,bdlen,delh;
+  int n,k,len,uuidtype,ndevice,h0,hx,handle,psflag,allflag,uuid,endff,bdlen,delh,lastflag,htype;
   char s[64],sx[8],*sp;
   unsigned char *bd,bdat[256];
   
@@ -13764,8 +14004,12 @@ void readleatt(int node,int xhandle)
   //FILE *stream;  
   
   ndevice = devn(node);
-  if(ndevice < 0)
+  if(ndevice <= 0 || (dev[ndevice]->conflag & (CON_LE | CON_MESH)) == 0)
+    {
+    NPRINT "Not an LE connected device\n");
+    flushprint();
     return;
+    }
      
   // set_le_interval_update(node,6,6);
 
@@ -13778,6 +14022,141 @@ void readleatt(int node,int xhandle)
   h0 = hx;
   delh = 0;
   len = 0;
+  
+  
+  if((xhandle & 0x40000) != 0)
+    {
+    if(hx == 0)
+      hx = 0x800;
+    lastflag = 0;
+    // vhand = 0;
+    NPRINT "Handle    %s\n",dev[ndevice]->name);
+    for(handle = 1 ; handle <= hx ; ++handle)
+      { 
+      uuidtype = 0;
+      psflag = 0;
+      htype = 0;
+      op4[14] = handle & 0xFF;
+      op4[15] = (handle >> 8) & 0xFF;
+      op4[16] = handle & 0xFF;
+      op4[17] = (handle >> 8) & 0xFF;
+      sendhci(op4,ndevice);  
+      readhci(ndevice,IN_ATTDAT,0,2000,0);      
+      n = findhci(IN_ATTDAT,ndevice,INS_POP);
+      if(lastflag != 0 && h0 == 0 && ((n >= 0 && insdat[n] == 0x01) || n < 0))
+        {  
+        flushprint();
+        popins();
+        return;
+        }
+      if(n >= 0 && insdat[n] == 0x05) 
+        { 
+        htype = 3;             
+        if(insdat[n+1] == 1)
+          {
+          uuidtype = 2;
+          if(insdat[n+5] == 0x28 && insdat[n+4] == 0x00)
+            htype = 1;
+          else if(insdat[n+5] == 0x28 && insdat[n+4] == 0x03)
+            htype = 2;
+          }
+        else if(insdat[n+1] == 2)
+          uuidtype = 16;
+        NPRINT "%04X UUID ",handle);
+        if(uuidtype == 2)
+          {
+          NPRINT "%02X%02X",insdat[n+5],insdat[n+4]);
+          if(htype == 1)
+            {
+            NPRINT " Primary service\n");
+            psflag = 1;
+            }
+          else if(htype == 2)
+            NPRINT " Characteristic info\n");
+          else if(insdat[n+5] == 0x29 && insdat[n+4] == 0x02)
+            NPRINT " Notify enable\n");
+          else
+            NPRINT "\n");
+          }  
+        else if(uuidtype == 16)
+          {
+          for(k = 0 ; k < 16 ; ++k)
+            NPRINT "%02X",insdat[n+19-k]);
+          NPRINT "\n");
+          }
+        }
+      flushprint();
+      popins();
+
+      if(htype == 1)
+        {
+        opx2[14] = handle & 0xFF;
+        opx2[15] = (handle >> 8) & 0xFF; 
+        opx2[16] = handle & 0xFF;
+        opx2[17] = (handle >> 8) & 0xFF; 
+        opx2[18] = insdat[n+4];
+        opx2[19] = insdat[n+5];
+        opx2[13] = 0x10;
+        sendhci(opx2,ndevice);
+        readhci(ndevice,IN_ATTDAT,0,2000,0);      
+        n = findhci(IN_ATTDAT,ndevice,INS_POP);          
+        if(n >= 0 && insdat[n] == 0x11)
+          {
+          len = instack[n+1]+(instack[n+2] << 8);
+          NPRINT "     Value ");
+          for(k = len-1 ; k >= 6 ; --k)
+            NPRINT "%02X",insdat[n+k]);
+          NPRINT "\n");
+          NPRINT "     Last handle in service %02X%02X\n",insdat[n+5],insdat[n+4]);
+          if(insdat[n+4] == 0xFF && insdat[n+5] == 0xFF)
+            lastflag = 1;      
+          }
+        }   
+      else if(htype != 0)
+        {  
+        opa[14] = handle & 0xFF;
+        opa[15] = (handle >> 8) & 0xFF;
+        sendhci(opa,ndevice);
+        readhci(ndevice,IN_ATTDAT,0,2000,0);      
+        n = findhci(IN_ATTDAT,ndevice,INS_POP);
+        if(n >= 0 && insdat[n] == 0x0B)
+          {
+          if(htype == 2)
+            {
+            NPRINT "     Permit %02X  Value handle %02X%02X\n",insdat[n+1],insdat[n+3],insdat[n+2]);
+            // vhand = insdat[n+2] + (insdat[n+3] << 8);
+            }
+          else if(htype == 3)
+            {
+            len = instack[n+1]+(instack[n+2] << 8);
+            NPRINT "     Value");
+            if(len <= 1)
+              NPRINT " not set\n");
+            else
+              {
+              for(k = 1 ; k < len ; ++k)
+                {
+                if(k > 1 && ((k-1) & 0x0F) == 0)
+                  NPRINT "\n          ");
+                NPRINT " %02X",insdat[n+k]);
+                }
+              NPRINT "\n");
+              }
+            // vhand = 0;
+            }
+          }
+        else
+          NPRINT "     Value not readable\n");
+        }
+      flushprint();
+      popins();
+    
+      }
+    return;
+    }
+  
+   
+  
   
   if((xhandle & 0x10000) != 0)
     {
@@ -13811,7 +14190,7 @@ void readleatt(int node,int xhandle)
         printval(insdat+n+1,len-1,NULL);
         }
       for(k = 0 ; k < len && k < 256 ; ++k)
-        bdat[k] = insdat[k];
+        bdat[k] = insdat[n+k];
       bd = bdat+1;
       bdlen = len-1;
       }    

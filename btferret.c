@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 18 
+  btlib.c/h  Version 19 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -37,6 +37,7 @@ int clientconnect(void);
 int meshsend(void);
 int clientsend(int fun);
 int server(void);
+int universal_callback(int clientnode,int operation,int cticn,unsigned char *buf,int nread);
 int node_classic_callback(int clientnode,unsigned char *buf,int nread);
 int le_callback(int clientnode,int operation,int cticn);
 int mesh_callback(int clientnode,unsigned char *buf,int nread);
@@ -54,6 +55,7 @@ unsigned short crccalc(unsigned short crc,unsigned char *buf,int len);
 int inputlist(char *buf,int len);
 int clientsecurity(int *passkey);
 int serversecurity(int *passkey);
+void readlehandles();
 
 char endchar = 10;  // terminate char for read/write 
 int lesecurity = 2;
@@ -80,7 +82,7 @@ void btlink()
   char cmds[64];
   
   printf("h = help\n");
-    
+   
   do
     {
     // wait for command char
@@ -191,6 +193,10 @@ void btlink()
         read_all_clear();
         break;
 
+      case 'l':
+        readlehandles();
+        break;
+        
       case 'q':
         return;
         break;
@@ -219,7 +225,7 @@ void printhelp()
   printf("  j LE notify/indicate on/off   R Read LE notifications\n");                     
   printf("  m Mesh transmit on            n Mesh transmit off\n");                     
   printf("  u Clear input buffer         [] Scroll screen back/forward\n"); 
-  printf("  q Quit\n"); 
+  printf("  l Read LE handles             q Quit\n"); 
   }
 
 
@@ -328,22 +334,24 @@ int server()
   int serverflag,clinode,keyflag,inkey,timeds,passkey,pairflags,addr;
      // choose this random address (2 hi bits of 1st byte must be 1)
   static unsigned char randadd[6] = {  0xD9,0x56,0xDB,0x38,0x32,0xA2 };
+  static unsigned char locadd[6] = { 0,0,0,0,0,0 };
   
   pairflags = 0;
   passkey = 0;
      
-  printf("\n  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = mesh server\n");
-  printf("  4 = OBEX server (receive file from Windows, Android...)\n");
-  serverflag = inputint("Input server type 0/1/2/3/4");
-  if(serverflag < 0)
+  printf("\n  0 = Node server\n  1 = Classic server\n  2 = LE server\n");
+  printf("  3 = Universal server (Classic and LE)\n");
+  printf("  4 = Mesh server\n  5 = OBEX server (receive file from Windows, Android...)\n");
+  serverflag = inputint("Input server type 0-5");
+  if(serverflag < 0 || serverflag > 5)
     return(0);
-  if(serverflag == 3)   // Mesh
+  if(serverflag == 4)   // Mesh
     mesh_server(mesh_callback);
-  else if(serverflag == 2)
+  else if(serverflag == 2 || serverflag == 3)
     {   // LE
     if(lesecurity == 2)
       {
-      printf("\nPAIRING and SECURITY\n");
+      printf("\nLE PAIRING and SECURITY\n");
       printf("  Most LE servers do not need security\n");
       printf("  so this option is not necessary\n");
       lesecurity = inputint("Enable security options 0=No 1=Yes");
@@ -358,29 +366,40 @@ int server()
       if(pairflags < 0)
         return(0);
       }
-      
-    printf("\nDEVICE IDENTITY\n");
-    printf("Some clients may fail to connect/pair if the Local address is used\n");
-    printf("Random will set up a new LE address and identity for this device\n");
-    printf("  0 = Local Bluetooth address\n");
-    printf("  1 = Random Bluetooth address\n");
-    addr = inputint("Input 0/1");
-    if(addr < 0)
-      return(0);
-
-    printf("\nInput LE_TIMER interval in deci (0.1) seconds\n   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
+    
+    if(serverflag == 2)
+      {  
+      printf("\nDEVICE IDENTITY\n");
+      printf("Some clients may fail to connect/pair if the Local address is used\n");
+      printf("Random will set up a new LE address and identity for this device\n");
+      printf("  0 = Local Bluetooth address\n");
+      printf("  1 = Random Bluetooth address\n");
+      addr = inputint("Input 0/1");
+      if(addr < 0)
+        return(0);
+      }
+    else
+      addr = 0;
+        
+    printf("\nInput TIMER interval in deci (0.1) seconds\n   0 = No TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...\n");
     timeds = inputint("Timer interval");
     if(timeds < 0)
       return(0);
-
-    keyflag = inputint("\nSend key presses to LE_KEYPRESS callback 0=No 1=Yes");  
-    if(keyflag < 0)
-      return(0);
-      
-    if(addr != 0)
-      {  // Random address identity
+    
+    if(serverflag == 2)
+      {
+      keyflag = inputint("\nSend key presses to KEYPRESS callback 0=No 1=Yes");  
+      if(keyflag < 0)
+        return(0);
+      }
+    else
+      keyflag = 0;
+        
+    if(addr == 0)  // Local address
+      set_le_random_address(locadd);
+    else  // Random address identity
       set_le_random_address(randadd);
-      }                
+                    
         
     if(keyflag == 0)
       keys_to_callback(KEY_OFF,0);
@@ -389,8 +408,9 @@ int server()
 
     le_pair(localnode(),pairflags,passkey);  
     set_le_wait(5000);   // wait 5 seconds for connection/pairing                                         
-        
-    le_server(le_callback,timeds);
+    
+    if(serverflag == 2)     
+      le_server(le_callback,timeds);
     }
   else if(serverflag == 0)
     {  // node    
@@ -402,22 +422,29 @@ int server()
       return(0);
       }
     node_server(clinode,node_classic_callback,endchar);     
-    } 
-  else if(serverflag == 1 || serverflag == 4)
+    }
+     
+  if(serverflag == 1 || serverflag == 5 || serverflag == 3)
     {  // classic
-    printf("\nInput node of client that will connect\n");
-   
-    clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
-    if(clinode < 0)
+    if(serverflag == 3)
+      clinode = 0;
+    else  
       {
-      printf("Cancelled\n");
-      return(0);
+      printf("\nInput node of client that will connect\n");
+   
+      clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
+      if(clinode < 0)
+        {
+        printf("Cancelled\n");
+        return(0);
+        }
       }
+      
     if(clinode != 0 && device_type(clinode) == BTYPE_ME)
       keyflag = KEY_OFF | PASSKEY_OFF;
     else
       {
-      printf("\nClient's security  (0,1,3 to pair or connect Android/Windows.. clients)\n");
+      printf("\nClassic security  (0,1,3 to pair or connect Android/Windows.. clients)\n");
       printf("  0 = Use link key, print passkey here, remote may ask to confirm\n");
       printf("  1 = No link key,  print passkey here (forces re-pair if pairing fails)\n");
       printf("  2 = No keys  (connecting client is another mesh Pi)\n");
@@ -452,14 +479,15 @@ int server()
       printf("  Custom serial set via register serial\n");
       classic_server(clinode,node_classic_callback,endchar,keyflag);
       }
-    else
+    else if(serverflag == 5)
       {
       printf("\nServer will listen on channel 2 and UUID = 1105\n");
       classic_server(clinode,obex_callback,PACKET_ENDCHAR,keyflag);
       }
     }   
-  else
-    printf("Invalid type\n");
+      
+  if(serverflag == 3)
+    universal_server(universal_callback,endchar,keyflag,timeds);
   return(0);
   }  
  
@@ -585,6 +613,138 @@ int le_callback(int clientnode,int operation,int cticn)
     printf("   Key code = %d\n",cticn);
     }    
   return(SERVER_CONTINUE);
+  }
+
+
+
+int universal_callback(int clientnode,int operation,int cticn,unsigned char *buf,int nread)
+  {
+  unsigned char dat[256]; 
+  int n,k,flag,nreadle;
+  char firstc,*s,temps[256];
+  static char destdir[256] = {""};
+  static int nblock = 400;
+
+  
+  if(operation == LE_CONNECT)
+    printf("  %s has connected\n",device_name(clientnode));
+  else if(operation == LE_READ)
+    printf("  %s has read local characteristic %s\n",device_name(clientnode),ctic_name(localnode(),cticn));
+  else if(operation == LE_WRITE)
+    {
+    // read local characteristic that client has just written
+    nreadle = read_ctic(localnode(),cticn,dat,sizeof(dat));
+    printf("  %s has written local characteristic %s =",device_name(clientnode),ctic_name(localnode(),cticn));
+    for(n = 0 ; n < nreadle ; ++n)
+      printf(" %02X",dat[n]);
+    printf("\n");
+    }
+  else if(operation == LE_DISCONNECT)
+    {
+    printf("  %s has disconnected - waiting for another connection\n",device_name(clientnode));
+    // uncomment next line to stop LE server when client disconnects
+    // return(SERVER_EXIT);
+    // otherwise LE server will continue and wait for another connection
+    // or opeeration from clients that are still connected
+    }
+  else if(operation == SERVER_TIMER)
+    {
+    printf("  Timer\n");
+    }      
+  else if(operation == CLASSIC_DATA)
+    {
+    if(buf[0] == endchar || (nread == 2 && buf[0] != 0 && buf[1] == endchar) || 
+           (nread == 3 && buf[0] != 0 && buf[1] <= 13 && buf[2] == endchar) ||
+           buf[0] == 'F' || buf[0] == 'X' || buf[0] == 'Y' || buf[0] == 'G')
+      firstc = buf[0];  // is a single char or FXYG file transfer
+    else
+      firstc = 0;       // more than one char - not a single char command  
+ 
+    if(nread != 0)
+      {   
+      for(k = 0 ; k < nread ; ++k)
+        {   // strip non-ascii chars for print
+        if(k == nread-1 && buf[k] == endchar)
+          buf[k] = 0;  // wipe endchar
+        else if(buf[k] < 32 || buf[k] > 126)
+          buf[k] = '.';
+        }   
+      printf("Recvd from %s: %s\n",device_name(clientnode),buf);  
+      }
+      
+    // check if received string is a known command 
+    // and send reply to client
+          
+    if(firstc == endchar || firstc == 'p')
+      {    
+      printf("Ping\n");
+      sendstring(clientnode,"OK");  // REPLY 2=add endchar   
+      } 
+    else if(firstc == 'D')
+      {
+      printf("Disconnect\n");
+      sendstring(clientnode,"Server disconnecting");
+      }
+    else if(firstc == 'F')
+      {  // receive file      
+      // command = Ffilename  endchar stripped 
+      receivefile((char*)&buf[1],clientnode);
+      }
+    else if(firstc == 'X' && nread > 1)
+      {  // destination directory for get file
+      s = (char*)(buf+1);
+      printf("Destination directory for GET file = %s\n",s);
+      n = 0;
+      while(s[n] != 0 && n < nread && n < 255)
+        {
+        destdir[n] = s[n];
+        ++n;
+        }
+      destdir[n] = 0;
+      }
+    else if(firstc == 'Y' && nread > 1)
+      {  // nblock for get file
+      k = 0;
+      s = (char*)(buf+1);
+      flag = 0;
+      n = 0;
+      while(s[n] != 0 && n < nread)
+        {
+        if(s[n] >= '0' && s[n] <= '9')
+          k = (k*10) + (s[n] - '0');
+        else
+          flag = 1;  // error
+        ++n;
+        }
+      if(flag == 0)
+        {
+        nblock = k; 
+        printf("Block size for GET file = %d\n",nblock);
+        }
+      }
+    else if(firstc == 'G' && nread > 1)
+      { // get file request with file name
+      s =  (char*)(buf+1);
+      n = 0;
+      while(s[n] != 0 && n < nread && n < 255)
+        {
+        temps[n] = s[n];
+        ++n;
+        }
+      temps[n] = 0;
+      printf("GET file %s\n",temps);
+      sendfilex(clientnode,"F",temps,destdir,nblock,endchar);
+      }
+    else
+      {
+      printf("No action\n");
+      sendstring(clientnode,"Unknown command - no action");    
+      }
+    
+    if(firstc == 'D') 
+      disconnect_node(clientnode);  
+    }
+  return(SERVER_CONTINUE);    // loop for another packet
   }
 
 
@@ -1000,6 +1160,16 @@ void readservices()
   return;
   }
   
+void readlehandles()
+  {
+  int node;
+  
+  printf("\nRead LE handles\n");
+  node = inputnode(BTYPE_CONNECTED | BTYPE_LE | BTYPE_ME,0);
+  if(node < 0)
+    return;
+  le_handles(node,0);
+  }  
   
 void readuuid()
   {

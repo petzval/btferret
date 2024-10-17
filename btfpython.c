@@ -1,4 +1,4 @@
-//############ VERSION 18 #################
+//############ VERSION 19 #################
 
 #include <Python.h>
 
@@ -22,6 +22,7 @@ static PyObject* Init_blue(PyObject* self,PyObject* args);
 static PyObject* Init_blue_ex(PyObject* self,PyObject* args);
 static PyObject* Keys_to_callback(PyObject* self,PyObject* args);
 static PyObject* Le_advert(PyObject* self,PyObject* args);
+static PyObject* Le_handles(PyObject* self,PyObject* args);
 static PyObject* Le_pair(PyObject* self,PyObject* args);
 static PyObject* Le_scan(PyObject* self,PyObject* args);
 static PyObject* Le_server(PyObject* self,PyObject* args);
@@ -59,6 +60,7 @@ static PyObject* Set_le_wait(PyObject* self,PyObject* args);
 static PyObject* Set_notify_node(PyObject* self,PyObject* args);
 static PyObject* Set_print_flag(PyObject* self,PyObject* args);
 static PyObject* Strtohex(PyObject* self,PyObject* args);
+static PyObject* Universal_server(PyObject* self,PyObject* args);
 static PyObject* User_function(PyObject* self,PyObject* args);
 static PyObject* Wait_for_disconnect(PyObject* self,PyObject* args);
 static PyObject* Write_ctic(PyObject* self,PyObject* args);
@@ -89,6 +91,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Init_blue_ex",Init_blue_ex,METH_VARARGS,"Init blue ex"},
   {"Keys_to_callback",Keys_to_callback,METH_VARARGS,"Keys to callback"},
   {"Le_advert",Le_advert,METH_VARARGS,"LE advert"},
+  {"Le_handles",Le_handles,METH_VARARGS,"LE handles"},
   {"Le_pair",Le_pair,METH_VARARGS,"LE pair"},
   {"Le_scan",Le_scan,METH_VARARGS,"LE scan"},
   {"Le_server",Le_server,METH_VARARGS,"LE server"},
@@ -125,6 +128,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Set_notify_node",Set_notify_node,METH_VARARGS,"Set notify node"},
   {"Set_print_flag",Set_print_flag,METH_VARARGS,"Set print flag"},
   {"Strtohex",Strtohex,METH_VARARGS,"Str to hex"},
+  {"Universal_server",Universal_server,METH_VARARGS,"Universal server"},
   {"User_function",User_function,METH_VARARGS,"User function"},
   {"Wait_for_disconnect",Wait_for_disconnect,METH_VARARGS,"Wait for disconnect"},
   {"Write_ctic",Write_ctic,METH_VARARGS,"Write ctic"},
@@ -196,6 +200,9 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"LE_BTLETIMER",LE_BTLETIMER);
   PyModule_AddIntConstant(module,"LE_KEYPRESS",LE_KEYPRESS);
 
+  PyModule_AddIntConstant(module,"SERVER_TIMER",SERVER_TIMER);
+  PyModule_AddIntConstant(module,"CLASSIC_DATA",CLASSIC_DATA);
+
   PyModule_AddIntConstant(module,"KEY_OFF",KEY_OFF);
   PyModule_AddIntConstant(module,"PASSKEY_OFF",PASSKEY_OFF);
   PyModule_AddIntConstant(module,"AUTHENTICATION_OFF",AUTHENTICATION_OFF);
@@ -235,6 +242,7 @@ PyObject *py_ncallback = NULL;
 PyObject *py_mecallback = NULL;
 
 int py_cmn_callback(PyObject *pycallback,int clientnode,unsigned char *dat,int datlen);
+int py_us_callback(PyObject *pycallback,int clientnode,int op,int cticn,unsigned char *dat,int datlen);
 int py_mesh_callback(PyObject *pycallback,int clientnode,unsigned char *dat,int datlen);
 int py_le_callback(PyObject *pycallback,int node,int op,int cticn);
 void py_notify_callback(PyObject *pycallback,int node,int cticn,unsigned char *dat,int datlen);
@@ -307,6 +315,87 @@ int py_cmn_callback(PyObject *pycallback,int clientnode,unsigned char *dat,int d
   Py_DECREF(ret);
   return(n);
   }
+
+
+int py_us_callback(PyObject *pycallback,int clientnode,int op,int cticn,unsigned char *dat,int datlen)
+  {
+  int n,err;
+  PyObject *args,*xobj,*ret,*cnode,*dlen,*opr,*ctn;
+  
+  if(PyErr_Occurred() != NULL)
+    {
+    PyErr_Print(); 
+    PyErr_Clear();
+    }
+
+  ret = NULL;
+  err = 0;
+  xobj = PyBytes_FromStringAndSize((char*)dat,datlen);
+  if(xobj == NULL)
+    err = 1;
+  else
+    {
+    cnode = PyLong_FromLong(clientnode);
+    if(cnode == NULL)
+      err = 1;
+    else
+      {
+      opr = PyLong_FromLong(op);
+      if(opr == NULL)
+        err = 1;
+      else
+        {
+        dlen =  PyLong_FromLong(datlen);
+        if(dlen == NULL)
+          err = 1;
+        else
+          {
+          ctn = PyLong_FromLong(cticn);
+          if(ctn == NULL)
+            err = 1;
+          else
+            {
+            args = PyTuple_Pack(5,cnode,opr,ctn,xobj,dlen);
+            if(args == NULL)
+              err = 1;
+            else
+              {
+              ret = PyObject_CallObject(pycallback,args);
+              Py_DECREF(args);
+              }
+            Py_DECREF(ctn);
+            }
+          Py_DECREF(dlen);
+          }
+        Py_DECREF(opr);
+        }
+      Py_DECREF(cnode);
+      }
+    Py_DECREF(xobj);
+    }
+    
+  if(err != 0)  
+    {
+    printf("Callback system error - Server stopped\n");
+    PyErr_Clear();
+    return(SERVER_EXIT);
+    }     
+    
+  if(ret == NULL || PyErr_Occurred() != NULL)
+    {
+    if(PyErr_Occurred() != NULL)
+      PyErr_Print(); 
+    printf("Error in Uiversal callback code - Server stopped\n");
+    PyErr_Clear();
+    if(ret != NULL)
+      Py_DECREF(ret);
+    return(SERVER_EXIT);
+    }
+  n = PyLong_AsLong(ret);
+  Py_DECREF(ret);
+  return(n);
+  }
+
 
 int py_mesh_callback(PyObject *pycallback,int clientnode,unsigned char *dat,int datlen)
   {
@@ -827,6 +916,17 @@ static PyObject* Le_advert(PyObject* self,PyObject* args)
   return(xobj); 
   }
 
+//void le_handles(int node,int lasthandle)
+static PyObject* Le_handles(PyObject* self,PyObject* args)
+  {
+  int node,lasthandle;
+
+  if(PyObject_Size(args) != 2 || !PyArg_ParseTuple(args,"ii",&node,&lasthandle))
+    printerror((PyObject*)Le_handles);
+  else
+    le_handles(node,lasthandle);  
+  Py_RETURN_NONE; 
+  }
  
 //int le_pair(int node,int flags,int passkey);
 static PyObject* Le_pair(PyObject* self,PyObject* args)
@@ -1357,6 +1457,24 @@ static PyObject* Strtohex(PyObject* self,PyObject* args)
   if(xobj == NULL)
     printf("Strtohex fail\n");   
   return(xobj);
+  }
+
+//int universal_server(int (*callback)(),char endchar,int keyflag,int timerds);
+static PyObject* Universal_server(PyObject* self,PyObject* args)
+  {
+  int n,endchar,keyflag,timerds;
+  
+  n = 0;   
+  if(PyObject_Size(args) != 4 || !PyArg_ParseTuple(args,"Oiii",&py_callback,&endchar,&keyflag,&timerds))
+    printerror((PyObject*)Universal_server);
+  else
+    {
+    if(!PyFunction_Check(py_callback))
+      printerror((PyObject*)Universal_server);
+    else
+      n = universal_server(NULL,(char)(endchar & 0xFF),keyflag,timerds);
+    }      
+  return Py_BuildValue("i",n); 
   }
 
 

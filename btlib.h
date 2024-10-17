@@ -1,4 +1,4 @@
-  // for btlib.c Version 18
+  // for btlib.c Version 19
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -59,6 +59,10 @@
 #define LE_TIMER 5
 #define LE_BTLETIMER 6
 #define LE_KEYPRESS 7
+#define SERVER_TIMER 5
+#define CLASSIC_DATA 8
+
+
   // link key
 #define KEY_OFF 0
 #define PASSKEY_OFF 0
@@ -120,6 +124,7 @@ int init_btle(char *name,int hcin);
 int keys_to_callback(int flag,int keyboard);
 
 unsigned char* le_advert(int node);
+void le_handles(int node,int lasthandle);
 int le_pair(int node,int flags,int passkey);
 void le_scan(void);
 int le_server(int(*callback)(int,int,int),int timerds);
@@ -172,6 +177,8 @@ void set_notify_node(int node);
 int set_print_flag(int flag);
 
 unsigned char *strtohex(char *s,int *num);
+
+int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar,int keyflag,int timerds);
 
 int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1);
 

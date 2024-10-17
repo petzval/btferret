@@ -194,3 +194,14 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    with the Any Devices option), the link key could get lost and re-connecting could fail or require
    a re-pairing. A classic server started with keyflag = KEY\_ON | PASSKEY\_LOCAL should now work reliably.
    This has now been set as the default option in classic\_server.c/py and obex\_server.c/py.
+   
+### Version 19
+
+1. New function universal\_server that acts as a Classic and LE server simultaneously. Multiple Classic
+   and LE devices can connect, and there is a timer option for the callback as in le\_server.
+   Hello World files: universal_server.c/py.
+   
+2. New function le\_handles that lists the handles and related info for a connected LE device. Callable
+   from btferret.c/py.
+   
+3. Bug fix: If the LE server had multiple clients connected, it did not disconnect them all on exit.

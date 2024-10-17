@@ -1,8 +1,24 @@
 #!/usr/bin/python3
 
-###### VERSION 18 ######
-### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 18 or later via:###
-###   python3 btfpy.py build ###
+###### VERSION 19 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 19 or later via:###
+###
+### apt-get install python3-setuptools
+### apt-get install python3-dev
+### python3 btfpy.py build
+###
+### btfpy.py code:
+###   import os
+###   from setuptools import setup, Extension
+###   print("Removing any existing module")
+###   os.system('rm build/lib*/btfpy*.so')
+###   module1 = Extension(name='btfpy',sources=['btlib.c'],extra_compile_args=['-D BTFPYTHON'])
+###   ret = setup(name = 'BtfpyPackage',
+###               version = '1.0',
+###               description = 'Bluetooth interface',
+###               ext_modules = [module1])
+###   print("Copying module to btfpy.so")
+###   os.system('cp build/lib*/btfpy*.so btfpy.so')
 
 import btfpy
 import os
@@ -745,6 +761,98 @@ def classic_node_callback(clientnode,dat,datlen):
   # end node_classic_callback
 
 
+# Callback for Universal servers
+
+def universal_callback(clientnode,operation,cticn,dat,datlen):
+  global endchar
+  global gdestdir
+  global gnblock
+    
+  name = btfpy.Device_name(clientnode)
+  if(operation == btfpy.LE_CONNECT):
+    print(name + " has connected")
+  elif(operation == btfpy.LE_READ):
+    print(name + " has read local characteristic " + btfpy.Ctic_name(btfpy.Localnode(),cticn))
+  elif(operation == btfpy.LE_WRITE):
+    # read local characteristic that client has just written
+    dat = btfpy.Read_ctic(btfpy.Localnode(),cticn)
+    print(name + " has written local characteristic " + btfpy.Ctic_name(btfpy.Localnode(),cticn))
+    btfpy.Print_data(dat)    
+  elif(operation == btfpy.LE_DISCONNECT):
+    print(name + " has disconnected")
+  elif(operation == btfpy.CLASSIC_DATA):
+    dlen = len(dat)
+    if(dlen > 0):
+      firstc = dat[0]  
+    else:
+      firstc = 0
+
+    print("Received from " + name + " =",end = ' ')
+    if printifascii(dat,1) == 0:
+      btfpy.Print_data(dat)
+      
+    # check if received string is a known command 
+    # and send reply to client
+          
+    if(firstc == endchar or firstc == ord('p')):  # ord() converts character to ascii integer
+      print("Ping")
+      sendstring(clientnode,"OK")  # OK reply
+    elif(firstc == ord('D')):
+      print("Disconnect")
+      sendstring(clientnode,"Server disconnecting")
+      btfpy.Disconnect_node(clientnode); # disconnect
+    elif(firstc == ord('F')):
+      # receive file      
+      # command = Ffilename  endchar stripped
+      if(dlen > 2):
+        if(dat[dlen-1] == endchar):
+          temps = dat[1:dlen-1]
+        else:
+          temps = dat[1:]
+        receive_file(clientnode,temps)
+      else:
+        sendstring(clientnode,"SEND file - no filename")
+    elif(firstc == ord('X')):
+      # destination directory for get file
+      if(dat[dlen-1] == endchar):
+        gdestdir = dat[1:dlen-1]
+      else:
+        gdestdir = dat[1:] 
+      print("Destination directory for GET file = " + gdestdir.decode())
+    elif(firstc == ord('Y')):
+      # nblock for get file
+      if(dlen > 2):
+        gnblock = 0
+        n = 1
+        while(n < dlen and dat[n] >= ord('0') and dat[n] <= ord('9')):
+          gnblock = (gnblock*10) + (dat[n] - ord('0'))
+          n = n + 1
+      else:
+        gnblock = 400
+      print("Block size for GET file = " + str(gnblock))
+    elif(firstc == ord('G')):
+       # get file request with file name
+      if(dlen > 2):
+        if(dat[dlen-1] == endchar):
+          temps = dat[1:dlen-1]
+        else:
+          temps = dat[1:] 
+        print("GET file " + temps.decode())
+        send_file(clientnode,temps,gdestdir,gnblock)
+      else:
+        sendstring(clientnode,"GET file - no filename")
+    else:
+      print("No action")
+      sendstring(clientnode,"Unknown command - no action")    
+    # end CLASSIC_DATA
+  elif(operation == btfpy.SERVER_TIMER):
+    print("Timer")
+    # end TIMER    
+  return(btfpy.SERVER_CONTINUE)  # loop for another packet
+  # end universal_callback
+
+
+
 
 def obex_callback(node,data,plen):
   global count
@@ -937,7 +1045,7 @@ def printhelp():
   print("  j LE notify/indicate on/off   R Read LE notifications")                     
   print("  m Mesh transmit on            n Mesh transmit off")
   print("  u Clear input buffer         [] Scroll screen back/forward") 
-  print("  q Quit") 
+  print("  l Read LE handles             q Quit") 
   return
    
 def settings():
@@ -1346,14 +1454,15 @@ def server():
   pairflags = 0
   passkey = 0
   
-  print("  0 = node server\n  1 = classic server\n  2 = LE server\n  3 = Mesh server")
-  print("  4 = OBEX server (receive file from Windows/Android...)")
-  serverflag = inputint("Input server type 0/1/2/3/4")
-  if(serverflag < 0):
+  print("  0 = Node server\n  1 = Classic server\n  2 = LE server")
+  print("  3 = Universal server (Classic and LE)")
+  print("  4 = Mesh server\n  5 = OBEX server (receive file from Windows/Android...)")
+  serverflag = inputint("Input server type 0-5")
+  if(serverflag < 0 or serverflag > 5):
     return(0)
-  if(serverflag == 3):  # Mesh
+  if(serverflag == 4):  # Mesh
     btfpy.Mesh_server(mesh_callback)
-  elif(serverflag == 2):  # LE
+  elif(serverflag == 2 or serverflag == 3):  # LE
       
     if(lesecurity == 2):
       print("\nPAIRING and SECURITY")
@@ -1369,27 +1478,36 @@ def server():
       (pairflags,passkey) = serversecurity()
       if(pairflags < 0):
         return(0)
-
-    print("\nDEVICE IDENTITY")
-    print("Some clients may fail to connect/pair if the Local address is used")
-    print("Random will set up a new LE address and identity for this device")
-    print("  0 = Local Bluetooth address")
-    print("  1 = Random Bluetooth address")
-    addr = inputint("Input 0/1")
-    if(addr < 0):
-      return(0)
-        
-    print("\nInput LE_TIMER interval in deci (0.1) seconds")
-    print("   0 = No LE_TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...")
+    
+    if(serverflag == 2):
+      print("\nDEVICE IDENTITY")
+      print("Some clients may fail to connect/pair if the Local address is used")
+      print("Random will set up a new LE address and identity for this device")
+      print("  0 = Local Bluetooth address")
+      print("  1 = Random Bluetooth address")
+      addr = inputint("Input 0/1")
+      if(addr < 0):
+        return(0)
+    else:
+      addr = 0
+          
+    print("\nInput TIMER interval in deci (0.1) seconds")
+    print("   0 = No TIMER calls\n  10 = One second interval\n  50 = Five second interval etc...")
     timeds = inputint("Timer interval")
     if(timeds < 0):
       return(0)
       
-    keyflag = inputint("\nSend key presses to LE_KEYPRESS callback 0=No 1=Yes")
-    if(keyflag < 0):
-      return(0)
-
-    if(addr != 0):
+    if(serverflag == 2):
+      keyflag = inputint("\nSend key presses to KEYPRESS callback 0=No 1=Yes")
+      if(keyflag < 0):
+        return(0)
+    else:
+      keyflag = 0
+      
+    if(addr == 0):
+      # Local address
+      btfpy.Set_le_random_address([0,0,0,0,0,0])
+    else:
       # Random address identity - choose 6-byte address (2 hi bits of 1st byte must be 1)
       btfpy.Set_le_random_address([0xD1,0x58,0xD3,0x24,0x32,0xA7])
     
@@ -1400,8 +1518,8 @@ def server():
       
     btfpy.Le_pair(btfpy.Localnode(),pairflags,passkey)
     btfpy.Set_le_wait(5000)   # wait 5 seconds for connection/pairing
-
-    btfpy.Le_server(le_callback,timeds)
+    if(serverflag == 2):
+      btfpy.Le_server(le_callback,timeds)
   elif(serverflag == 0):  # node
     print("\nInput node of client that will connect")
     clinode = inputnode(btfpy.BTYPE_ME,0)  
@@ -1409,14 +1527,17 @@ def server():
       print("Cancelled")
       return(0)
     btfpy.Node_server(clinode,classic_node_callback,endchar)
-  elif(serverflag == 1 or serverflag == 4):  # classic
-    print("\nInput node of client that will connect")
-    clinode = inputnode(btfpy.BTYPE_ME | btfpy.BTYPE_CL,2)        
+  elif(serverflag == 1 or serverflag == 5 or serverflag == 3):  # classic
+    if(serverflag == 3):
+      clinode = 0
+    else:
+      print("\nInput node of client that will connect")
+      clinode = inputnode(btfpy.BTYPE_ME | btfpy.BTYPE_CL,2)        
    
     if(clinode != 0 and btfpy.Device_type(clinode) == btfpy.BTYPE_ME):
       keyflag = btfpy.KEY_OFF | btfpy.PASSKEY_OFF
     else:
-      print("\nClient's security  (0,1,3 to pair or connect Android/Windows.. clients)")
+      print("\nClassic security  (0,1,3 to pair or connect Android/Windows.. clients)")
       print("  0 = Use link key, print passkey here, remote may ask to confirm")
       print("  1 = No link key,  print passkey here (forces re-pair if pairing fails)")
       print("  2 = No keys  (connecting client is another mesh Pi)")
@@ -1446,13 +1567,13 @@ def server():
       print("  Standard serial 16-byte")
       print("  Custom serial set via register serial")
       btfpy.Classic_server(clinode,classic_node_callback,endchar,keyflag)
-    else:
+    elif(serverflag == 5):
       print("Server will listen on channel 2 and UUID = 1105")
       print("You may need to pair this device first")
       btfpy.Classic_server(clinode,obex_callback,btfpy.PACKET_ENDCHAR,keyflag) 
-           
-  else:
-   print("Invalid type")
+            
+  if(serverflag == 3):
+    btfpy.Universal_server(universal_callback,endchar,keyflag,timeds)
   return(0)
 
 
@@ -1472,7 +1593,16 @@ def readservices():
   return
 
 
-       
+def readlehandles():
+  print("Read LE handles")
+  
+  node = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LE | btfpy.BTYPE_ME,0)
+  if(node < 0):
+    return
+  btfpy.Le_handles(node,0)
+  return
+
+  
 def readuuid():
   print("\nFind services that contain a specified UUID")
   print("  0 = List services")
@@ -1722,6 +1852,8 @@ while s[0] != 'q':
   elif s[0] == 'n':    
     btfpy.Mesh_off()
     print("Mesh off")
+  elif s[0] == 'l':
+    readlehandles()
   elif s[0] != 'q':      
     print("Unknown command")
   # end
