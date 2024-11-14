@@ -1397,7 +1397,8 @@ int init_blue_ex(char *filename,int hcin)
   gpar.keytocb = 0;
   gpar.keyboard = 0;
   gpar.notifynode = 0;
-
+  gpar.hci = -1;
+  
   if(initflag == 0)
     {   
     gpar.s = (char*)calloc(PRBUFSZ,1);
