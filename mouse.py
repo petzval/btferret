@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 import btfpy
+import os
 
 # ********** Bluetooth mouse **********
 # From https://github.com/petzval/btferret
+#   Version 20 or later
 #   Build btfpy.so module - instructions in README file
 #
 # Download
@@ -18,9 +20,7 @@ import btfpy
 #
 # Connect from phone/tablet/PC to "HID" device
 #
-# Arrow keys move cursor. ESC stops server
-# Button press  F1 = Left   F2 = Middle   F3 = Right
-# Pg Up/Pg Dn  Increase/Decrease cursor step distance per key press
+# Mouse data from /dev/input/mouse0 sent to client
 #
 # This code sets an unchanging random address.
 # If connection is unreliable try changing the address.
@@ -75,61 +75,42 @@ hidinfo = [0x01,0x11,0x00,0x02]
 reportindex = -1
 node = 0
 xydel = 8   # cursor step size
-
+fd = None
 
 def lecallback(clientnode,op,cticn):
   global xydel
-      
-  if(op == btfpy.LE_CONNECT): 
-    print("Connected OK. Arrow keys move cursor. ESC stops server")
-    print("Button press  F1 = Left   F2 = Middle   F3 = Right")
-    print("Pg Up/Pg Dn  Increase/Decrease cursor step distance per key press")
-   
-  if(op == btfpy.LE_KEYPRESS):   
-    # cticn = one of the following btferret custom key codes:
-    # 
-    #                          28 = Right arrow
-    #              14 = F1     29 = Left arrow
-    # 6 = PgUp     15 = F2     30 = Down arrow
-    # 7 = PgDn     16 = F3     31 = Up arrow 
-   
-    dx = 0   # x step
-    dy = 0   # y step
-    but = 0  # lo 3 bits = buttons
+  global fd
+       
+  if(op == btfpy.LE_CONNECT):
+    fd = open('/dev/input/mouse0','rb')
+    if(fd == None):
+      print("Connected OK. Failed to open /dev/input/mouse0. x stops server")
+    else: 
+      print("Connected OK. Mouse sent to client. x stops server")
+      os.set_blocking(fd.fileno(),False)
     
-    if(cticn == 6 and xydel < 127):
-      xydel = xydel+1
-      print("New step size = " + str(xydel))
-    if(cticn == 7 and xydel > 1):
-      xydel = xydel-1
-      print("New step size = " + str(xydel))
-      
-    if(cticn == 14):
-      but = 1
-    elif(cticn == 15):
-      but = 4
-    elif(cticn == 16):
-      but = 2
-        
-    if(cticn == 28):
-      dx = xydel
-    elif(cticn == 29):
-      dx = -xydel
-    elif(cticn == 30):
-      dy = xydel
-    elif(cticn == 31):
-      dy = -xydel
-    
-    if(dx != 0 or dy != 0 or but != 0):    
-      send_key(dx,dy,but)      
-
+  if(fd != None and op == btfpy.LE_TIMER):   
+    buf = fd.read(3)
+    if(buf != None and len(buf) == 3):
+      send_mouse(buf[1],-buf[2],buf[0])      
+      # OR if Y is reversed  send_mouse(buf[1],buf[2],buf[0])
   if(op == btfpy.LE_DISCONNECT):
     return(btfpy.SERVER_EXIT)
   return(btfpy.SERVER_CONTINUE)
 
-#*********** SEND KEY *****************
+#*********** SEND MOUSE *****************
+# x,y = mouse movement -127 to 127
+#
+# but  1 = Left button click
+#      2 = Right button click
+#      4 = Middle button click
+#  
+#  For a single click these button presses are followed
+#  by a buf[0]=0 send which indicates button up.
+#      
+#********************************/
 
-def send_key(x,y,but):
+def send_mouse(x,y,but):
   global reportindex
   global node
 
@@ -146,9 +127,7 @@ def send_key(x,y,but):
            
   # send to Report1
   btfpy.Write_ctic(node,reportindex,[but,ux,uy],0)
-  if(but != 0):
-    # send no button pressed - all zero
-    btfpy.Write_ctic(node,reportindex,[0,0,0],0) 
+
   return
 
 
@@ -200,16 +179,19 @@ btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),pnpinfo,0)
  
   # Choose the following 6 numbers
   # 2 hi bits of first number must be 1
-randadd = [0xD3,0x56,0xD3,0x15,0x32,0xA0]
+randadd = [0xD3,0x56,0xD6,0x74,0x33,0x05]
 btfpy.Set_le_random_address(randadd)
      
-btfpy.Keys_to_callback(btfpy.KEY_ON,0)   # enable LE_KEYPRESS calls in lecallback
-                                         # 0 = GB keyboard  
+  
 btfpy.Set_le_wait(20000)  # Allow 20 seconds for connection to complete
                                          
 btfpy.Le_pair(btfpy.Localnode(),btfpy.JUST_WORKS,0)  # Easiest option, but if client requires
                                                      # passkey security - remove this command  
 
-btfpy.Le_server(lecallback,0)
-  
+btfpy.Set_flags(btfpy.FAST_TIMER,btfpy.FLAG_ON)
+btfpy.Le_server(lecallback,20)  # 20ms fast timer
+
+if fd != None:
+  fd.close()
+    
 btfpy.Close_all()

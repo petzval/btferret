@@ -1,44 +1,25 @@
-/********** Bluetooth keyboard **********
+/********** Bluetooth HID keyboard and mouse **********
+
 Download from https://github.com/petzval/btferret
-  keyboard.c   this code
-  keyboard.txt
   btlib.c    Version 20 or later
   btlib.h    Version 20 or later
- 
-Edit keyboard.txt to set ADDRESS=
+  keymouse.c  this code
+  keymouse.txt
+   
+Edit keymouse.txt to set ADDRESS=
 to the address of the local device
 that runs this code
 
 Compile
-  gcc keyboard.c btlib.c -o keyboard
+  gcc keymouse.c btlib.c -o keymouse
   
 Run
-  sudo ./keyboard
+  sudo ./keymouse
 
 Connect from phone/tablet/PC to "HID" device
 
-All keystrokes go to connecting device
+Keystrokes and mouse data sent to client
 F10 sends "Hello" plus Enter
-ESC stops the server 
-
-To add a battery level service:
-uncomment all battery level labelled
-code in keyboard.txt and here.
-F10 will then also send a battery level notification
-
-Note: This code uses the lowest level of security.
-Do not use it if you need high security.
-
-Non-GB keyboards
-Even if the keyboard of this device is non-GB
-it must be specified as "gb" in the boot info as follows:
-
-Edit /etc/default/keyboard to include the line:
-XKBLAYOUT="gb"
-
-It is the receiving device that decides which
-characters correspond to which keys. See discussion
-in the HID Devices section of the documentation.
 
 This code sets an unchanging random address.
 If connection is unreliable try changing the address.
@@ -50,91 +31,42 @@ more infomation.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "btlib.h"   
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include "btlib.h"  
 
 int lecallback(int clientnode,int op,int cticn);
 int send_key(int key);
+int send_mouse(char x,char y,char but);
 
-/*********  keyboard.txt DEVICES file ******
-DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
-  PRIMARY_SERVICE = 1800
-    LECHAR=Device Name   SIZE=4   Permit=02 UUID=2A00  
-    LECHAR=Appearance    SIZE=2   Permit=02 UUID=2A01  
-  PRIMARY_SERVICE = 180A
-    LECHAR= PnP ID       SIZE=7 Permit=02 UUID=2A50  
-  PRIMARY_SERVICE = 1812
-    LECHAR=Protocol Mode   SIZE=1  Permit=06  UUID=2A4E  
-    LECHAR=HID Info        SIZE=4  Permit=02  UUID=2A4A  
-    LECHAR=HID Ctl Point   SIZE=8  Permit=04  UUID=2A4C  
-    LECHAR=Report Map      SIZE=47 Permit=02  UUID=2A4B  
-    LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
-        ; Report1 must have Report ID = 1 
-        ;   0x85, 0x01 in Report Map
-        ; unsigned char uuid[2]={0x2A,0x4D};
-        ; index = find_ctic_index(localnode(),UUID_2,uuid);
-        ; Send data: write_ctic(localnode(),index,data,0);
-
-;  *** Optional battery level ***
-;  PRIMARY_SERVICE = 180F
-;    LECHAR=Battery Level   SIZE=1 Permit=12  UUID=2A19   
-
-********/
-
-
-/**** KEYBOARD REPORT MAP *****
-0x05, 0x01 Usage Page (Generic Desktop)
-0x09, 0x06 Usage (Keyboard)
-0xa1, 0x01 Collection (Application)
-0x85, 0x01 Report ID = 1
-0x05, 0x07 Usage Page (Keyboard)
-0x19, 0xe0 Usage Minimum (Keyboard LeftControl)
-0x29, 0xe7 Usage Maximum (Keyboard Right GUI)
-0x15, 0x00 Logical Minimum (0)
-0x25, 0x01 Logical Maximum (1)
-0x75, 0x01 Report Size (1)  
-0x95, 0x08 Report Count (8)
-0x81, 0x02 Input (Data, Variable, Absolute) Modifier byte
-0x95, 0x01 Report Count (1)
-0x75, 0x08 Report Size (8)
-0x81, 0x01 Input (Constant) Reserved byte
-0x95, 0x06 Report Count (6)
-0x75, 0x08 Report Size (8)
-0x15, 0x00 Logical Minimum (0)
-0x25, 0x65 Logical Maximum (101)
-0x05, 0x07 Usage Page (Key Codes)
-0x19, 0x00 Usage Minimum (Reserved (no event indicated))
-0x29, 0x65 Usage Maximum (Keyboard Application)
-0x81, 0x00 Input (Data,Array) Key arrays (6 bytes)
-0xc0 End Collection
-*******************/
-
-    // NOTE the size of reportmap (47 in this case) must appear in keyboard.txt as follows:
-    //   LECHAR=Report Map      SIZE=47 Permit=02  UUID=2A4B  
-unsigned char reportmap[47] = {0x05,0x01,0x09,0x06,0xA1,0x01,0x85,0x01,0x05,0x07,0x19,0xE0,0x29,0xE7,0x15,0x00,
+unsigned char reportmap[99] = {0x05,0x01,0x09,0x06,0xA1,0x01,0x85,0x01,0x05,0x07,0x19,0xE0,0x29,0xE7,0x15,0x00,
                                0x25,0x01,0x75,0x01,0x95,0x08,0x81,0x02,0x95,0x01,0x75,0x08,0x81,0x01,0x95,0x06,
-                               0x75,0x08,0x15,0x00,0x25,0x65,0x05,0x07,0x19,0x00,0x29,0x65,0x81,0x00,0xC0};
+                               0x75,0x08,0x15,0x00,0x25,0x65,0x05,0x07,0x19,0x00,0x29,0x65,0x81,0x00,0xC0,
+                               0x05,0x01,0x09,0x02,0xA1,0x01,0x85,0x02,0x09,0x01,0xA1,0x00,0x05,0x09,0x19,0x01,
+                               0x29,0x03,0x15,0x00,0x25,0x01,0x95,0x03,0x75,0x01,0x81,0x02,0x95,0x01,0x75,0x05,
+                               0x81,0x01,0x05,0x01,0x09,0x30,0x09,0x31,0x15,0x81,0x25,0x7F,0x75,0x08,0x95,0x02,
+                               0x81,0x06,0xC0,0xC0};
 
-    // NOTE the size of report (8 in this case) must appear in keyboard.txt as follows:
-    //   LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
 unsigned char report[8] = {0,0,0,0,0,0,0,0};
-
 unsigned char *name = "HID"; 
 unsigned char appear[2] = {0xC1,0x03};  // 03C1 = keyboard icon appears on connecting device 
 unsigned char pnpinfo[7] = {0x02,0x6B,0x1D,0x46,0x02,0x37,0x05};
 unsigned char protocolmode[1] = {0x01};
 unsigned char hidinfo[4] = {0x01,0x11,0x00,0x02};
-unsigned char battery[1] = {100}; 
+int fd = -1;
 
 int main()
   {
   unsigned char uuid[2],randadd[6];
    
-  if(init_blue("keyboard.txt") == 0)
+  if(init_blue("keymouse.txt") == 0)
     return(0);
     
   if(localnode() != 1)
     {
-    printf("ERROR - Edit keyboard.txt to set ADDRESS = %s\n",device_address(localnode()));
+    printf("ERROR - Edit keymouse.txt to set ADDRESS = %s\n",device_address(localnode()));
     return(0);
     }
 
@@ -166,26 +98,15 @@ int main()
   uuid[0] = 0x2A;
   uuid[1] = 0x50;
   write_ctic(localnode(),find_ctic_index(localnode(),UUID_2,uuid),pnpinfo,0);
-   
-  /**** battery level ******/
-  //  uuid[0] = 0x2A;
-  //  uuid[1] = 0x19;
-  //  write_ctic(localnode(),find_ctic_index(localnode(),UUID_2,uuid),battery,1); 
-  /************************/     
-                          
+                            
   // Set unchanging random address by hard-coding a fixed value.
-  // If connection produces an "Attempting Classic connection"
-  // error then choose a different address.
-  // If set_le_random_address() is not called, the system will set a
-  // new and different random address every time this code is run.  
- 
   // Choose the following 6 numbers
   randadd[0] = 0xD3;  // 2 hi bits must be 1
   randadd[1] = 0x56;
   randadd[2] = 0xD6;
   randadd[3] = 0x74;
   randadd[4] = 0x33;
-  randadd[5] = 0x04;
+  randadd[5] = 0x06;
   set_le_random_address(randadd);
      
   keys_to_callback(KEY_ON,0);  // enable LE_KEYPRESS calls in lecallback
@@ -194,7 +115,11 @@ int main()
                                          
   le_pair(localnode(),JUST_WORKS,0);  // Easiest option, but if client requires
                                       // passkey security - remove this command  
-  le_server(lecallback,0);
+  set_flags(FAST_TIMER,FLAG_ON);
+  le_server(lecallback,20);  // 20ms FAST_TIMER
+
+  if(fd > 0)
+    close(fd);
   
   close_all();
   return(1);
@@ -203,33 +128,29 @@ int main()
 
 int lecallback(int clientnode,int op,int cticn)
   {
-  int n;
-  static char hello[8] = { "Hello\n"};  // \n = Enter
+  int n,nread;
+  unsigned char buf[3];
         
   if(op == LE_CONNECT)
     {
-    printf("Connected OK. Key presses sent to client. ESC stops server\n");
-    printf("F10 sends Hello plus Enter\n");
+    fd = open("/dev/input/mouse0",O_NONBLOCK);
+    if(fd > 0)
+      printf("Connected OK. Keys and mouse sent to client. ESC stops server\n");
+    else
+      printf("Connected OK. Keys sent to client. Failed to open /dev/input/mouse0. ESC stops\n");
+    }
+  if(fd > 0 && op == LE_TIMER)
+    {
+    nread = read(fd,buf,3);
+    if(nread == 3)
+      {
+      send_mouse(buf[1],(char)(-buf[2]),buf[0]);
+      // or if Y is reversed:  send_mouse(buf[1],buf[2],buf[0]);
+      }
     }
   if(op == LE_KEYPRESS)
     {  // cticn = ASCII code of key OR btferret custom code
-    if(cticn == 23)
-      {    // 23 = btferret custom code for F10
-           // Send "Hello" plus Enter
-      for(n = 0 ; hello[n] != 0 ; ++n)
-        send_key(hello[n]);
-        
-      /**** battery level ****/
-      //  if(battery[0] > 0)
-      //    --battery[0];
-      //  uuid[0] = 0x2A;
-      //  uuid[1] = 0x19;
-      //  write_ctic(localnode(),find_ctic_index(localnode(),UUID_2,uuid),battery,1);
-      /*******************/
-      }
-    else  
-      send_key(cticn);      
- 
+    send_key(cticn);      
     }
   if(op == LE_DISCONNECT)
     return(SERVER_EXIT);
@@ -309,5 +230,44 @@ int send_key(int key)
   buf[0] = 0;
   buf[2] = 0;
   write_ctic(localnode(),reportindex,buf,0); 
+  return(1);
+  }
+
+/*********** SEND MOUSE *********
+x,y = mouse movement -127 to 127
+
+but  1 = Left button click
+     2 = Right button click
+     4 = Middle button click
+  
+  For a single click these button presses are followed
+  by a buf[0]=0 send which indicates button up.      
+********************************/
+
+int send_mouse(char x,char y,char but)
+  {
+  unsigned char buf[3];
+  static int reportindex = -1;
+  
+  if(reportindex < 0)
+    {  // look up Report 1 index
+    buf[0] = 0x2A;
+    buf[1] = 0x4D;
+    reportindex = find_ctic_index(localnode(),UUID_2,buf);
+    if(reportindex < 0)
+      {
+      printf("Failed to find Report characteristic\n");
+      return(0);
+      }
+    ++reportindex;  // Mouse is Report 2
+    }     
+ 
+  buf[0] = but;
+  buf[1] = x;
+  buf[2] = y;
+        
+  // send to Report2
+  write_ctic(localnode(),reportindex,buf,0);
+
   return(1);
   }

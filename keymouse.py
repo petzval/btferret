@@ -1,32 +1,30 @@
 #!/usr/bin/python3
 import btfpy
+import os
 
-# ********** Bluetooth keyboard **********
+# ********** Bluetooth keyboard and mouse **********
 # From https://github.com/petzval/btferret
 #   Version 20 or later
 #   Build btfpy.so module - instructions in README file
 #
 # Download
-#   keyboard.py
-#   keyboard.txt
+#   keymouse.py
+#   keymouse.txt
 # 
-# Edit keyboard.txt to set ADDRESS=
+# Edit keymouse.txt to set ADDRESS=
 # to the address of the local device
 # that runs this code
 #
 # Run
-#   sudo python3 keyboard.py
+#   sudo python3 keymouse.py
 #
 # Connect from phone/tablet/PC to "HID" device
 #
-# All keystrokes go to connecting device
+# All keystrokes go to client
 # F10 sends "Hello" plus Enter
 # ESC stops the server 
 #
-# To add a battery level service:
-# uncomment all battery level labelled
-# code in keyboard.txt and here.
-# F10 will then also send a battery level notification
+# Mouse movements and button clicks go to client
 #
 # Note: This code uses the lowest level of security.
 # Do not use it if you need high security.
@@ -50,65 +48,17 @@ import btfpy
 #
 # ********************************    
 
-#/*********  keyboard.txt DEVICES file ******
-# DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
-#  PRIMARY_SERVICE = 1800
-#    LECHAR=Device Name   SIZE=4   Permit=02 UUID=2A00  
-#    LECHAR=Appearance    SIZE=2   Permit=02 UUID=2A01  
-#  PRIMARY_SERVICE = 180A
-#    LECHAR= PnP ID       SIZE=7 Permit=02 UUID=2A50  
-#  PRIMARY_SERVICE = 1812
-#    LECHAR=Protocol Mode   SIZE=1  Permit=06  UUID=2A4E  
-#    LECHAR=HID Info        SIZE=4  Permit=02  UUID=2A4A  
-#    LECHAR=HID Ctl Point   SIZE=8  Permit=04  UUID=2A4C  
-#    LECHAR=Report Map      SIZE=47 Permit=02  UUID=2A4B  
-#    LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
-#        ; Report1 must have Report ID = 1 
-#        ;   0x85, 0x01 in Report Map
-#        ; uuid = [0x2A,0x4D]
-#        ; index = btfpy.Find_ctic_index(btfpy.Localnode(),btfpy.UUID_2,uuid)
-#        ; Send data: btfpy.Write_ctic(btfpy.Localnode(),index,data,0)
-#
-# ;  *** Optional battery level ***
-# ;  PRIMARY_SERVICE = 180F
-# ;    LECHAR=Battery Level   SIZE=1 Permit=12  UUID=2A19   
-#
-# ********
-
-# **** KEYBOARD REPORT MAP *****
-# 0x05, 0x01 Usage Page (Generic Desktop)
-# 0x09, 0x06 Usage (Keyboard)
-# 0xa1, 0x01 Collection (Application)
-# 0x85, 0x01 Report ID = 1
-# 0x05, 0x07 Usage Page (Keyboard)
-# 0x19, 0xe0 Usage Minimum (Keyboard LeftControl)
-# 0x29, 0xe7 Usage Maximum (Keyboard Right GUI)
-# 0x15, 0x00 Logical Minimum (0)
-# 0x25, 0x01 Logical Maximum (1)
-# 0x75, 0x01 Report Size (1)  
-# 0x95, 0x08 Report Count (8)
-# 0x81, 0x02 Input (Data, Variable, Absolute) Modifier byte
-# 0x95, 0x01 Report Count (1)
-# 0x75, 0x08 Report Size (8)
-# 0x81, 0x01 Input (Constant) Reserved byte
-# 0x95, 0x06 Report Count (6)
-# 0x75, 0x08 Report Size (8)
-# 0x15, 0x00 Logical Minimum (0)
-# 0x25, 0x65 Logical Maximum (101)
-# 0x05, 0x07 Usage Page (Key Codes)
-# 0x19, 0x00 Usage Minimum (Reserved (no event indicated))
-# 0x29, 0x65 Usage Maximum (Keyboard Application)
-# 0x81, 0x00 Input (Data,Array) Key arrays (6 bytes)
-# 0xc0 End Collection
-#*******************
-
-    # NOTE the size of reportmap (47 in this case) must appear in keyboard.txt as follows:
-    #   LECHAR=Report Map      SIZE=47 Permit=02  UUID=2A4B  
+    # NOTE the size of reportmap (99 in this case) must appear in keymouse.txt as follows:
+    #   LECHAR=Report Map      SIZE=99 Permit=02  UUID=2A4B  
 reportmap = [0x05,0x01,0x09,0x06,0xA1,0x01,0x85,0x01,0x05,0x07,0x19,0xE0,0x29,0xE7,0x15,0x00,\
              0x25,0x01,0x75,0x01,0x95,0x08,0x81,0x02,0x95,0x01,0x75,0x08,0x81,0x01,0x95,0x06,\
-             0x75,0x08,0x15,0x00,0x25,0x65,0x05,0x07,0x19,0x00,0x29,0x65,0x81,0x00,0xC0]
+             0x75,0x08,0x15,0x00,0x25,0x65,0x05,0x07,0x19,0x00,0x29,0x65,0x81,0x00,0xC0,\
+             0x05,0x01,0x09,0x02,0xA1,0x01,0x85,0x02,0x09,0x01,0xA1,0x00,0x05,0x09,0x19,0x01,\
+             0x29,0x03,0x15,0x00,0x25,0x01,0x95,0x03,0x75,0x01,0x81,0x02,0x95,0x01,0x75,0x05,\
+             0x81,0x01,0x05,0x01,0x09,0x30,0x09,0x31,0x15,0x81,0x25,0x7F,0x75,0x08,0x95,0x02,\
+             0x81,0x06,0xC0,0xC0]
 
-    # NOTE the size of report (8 in this case) must appear in keyboard.txt as follows:
+    # NOTE the size of report (8 in this case) must appear in keymouse.txt as follows:
     #   LECHAR=Report1         SIZE=8  Permit=92  UUID=2A4D  
 report = [0,0,0,0,0,0,0,0]
 
@@ -120,32 +70,30 @@ hidinfo = [0x01,0x11,0x00,0x02]
 battery = [100] 
 reportindex = -1
 node = 0
+fd = None
 
 def lecallback(clientnode,op,cticn):
-    
+  global fd
+      
   if(op == btfpy.LE_CONNECT):
-    print("Connected OK. Key presses sent to client. ESC stops server")
+    fd = open('/dev/input/mouse0','rb')
+    if(fd == None):
+      print("Connected OK. Keys to client. Fail to open /dev/input/mouse0. ESC stops server")
+    else: 
+      print("Connected OK. Keys/Mouse sent to client. ESC stops server")
+      os.set_blocking(fd.fileno(),False)
     print("F10 sends Hello plus Enter")
  
   if(op == btfpy.LE_KEYPRESS):
     # cticn = ASCII code of key OR btferret custom code
-    if(cticn == 23):
-      # 23 = btferret custom code for F10
-      # Send "Hello" plus Enter
-      # Must use ord() to send ASCII value from a string
-      hello = "Hello\n"
-      for n in range(len(hello)):
-        send_key(ord(hello[n]))
-          
-      #**** battery level ****
-      #  if(battery[0] > 0):
-      #    battery[0] = battery[0] - 1
-      #  uuid = [0x2A,0x19]
-      #  btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),battery,1)
-      #*******************
-    else:  
-      send_key(cticn)      
+    send_key(cticn)      
  
+  if(fd != None and op == btfpy.LE_TIMER):   
+    buf = fd.read(3)
+    if(buf != None and len(buf) == 3):
+      send_mouse(buf[1],-buf[2],buf[0])      
+      # OR if Y is reversed  send_mouse(buf[1],buf[2],buf[0])
+
   if(op == btfpy.LE_DISCONNECT):
     return(btfpy.SERVER_EXIT)
   return(btfpy.SERVER_CONTINUE)
@@ -208,13 +156,46 @@ def send_key(key):
   btfpy.Write_ctic(node,reportindex,buf,0) 
   return
 
+#*********** SEND MOUSE *****************
+# x,y = mouse movement -127 to 127
+#
+# but  1 = Left button click
+#      2 = Right button click
+#      4 = Middle button click
+#  
+#  For a single click these button presses are followed
+#  by a buf[0]=0 send which indicates button up.
+#      
+#********************************/
+
+def send_mouse(x,y,but):
+  global reportindex
+  global node
+
+  # convert signed xy to signed byte
+  if(x < 0):
+    ux = x + 256
+  else:
+    ux = x
+    
+  if(y < 0):
+    uy = y + 256
+  else:
+    uy = y
+           
+  # send to Report2
+  btfpy.Write_ctic(node,reportindex+1,[but,ux,uy],0)
+ 
+  return
+
+
 ############ START ###########
    
-if(btfpy.Init_blue("keyboard.txt") == 0):
+if(btfpy.Init_blue("keymouse.txt") == 0):
   exit(0)
 
 if(btfpy.Localnode() != 1):
-  print("ERROR - Edit keyboard.txt to set ADDRESS = " + btfpy.Device_address(btfpy.Localnode()))
+  print("ERROR - Edit keymouse.txt to set ADDRESS = " + btfpy.Device_address(btfpy.Localnode()))
   exit(0)
       
 node = btfpy.Localnode()    
@@ -248,11 +229,7 @@ btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),report,0)
 uuid = [0x2A,0x50]
 btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),pnpinfo,0)
    
-  #**** battery level *****
-  # uuid = [0x2A,0x19]
-  # btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),battery,1) 
-  #************************     
-                          
+                         
   # Set unchanging random address by hard-coding a fixed value.
   # If connection produces an "Attempting Classic connection"
   # error then choose a different address.
@@ -261,7 +238,7 @@ btfpy.Write_ctic(node,btfpy.Find_ctic_index(node,btfpy.UUID_2,uuid),pnpinfo,0)
  
   # Choose the following 6 numbers
   # 2 hi bits of first number must be 1
-randadd = [0xD3,0x56,0xD6,0x74,0x33,0x04]
+randadd = [0xD3,0x56,0xD6,0x74,0x33,0x06]
 btfpy.Set_le_random_address(randadd)
      
 btfpy.Keys_to_callback(btfpy.KEY_ON,0)   # enable LE_KEYPRESS calls in lecallback
@@ -271,6 +248,10 @@ btfpy.Set_le_wait(20000)  # Allow 20 seconds for connection to complete
 btfpy.Le_pair(btfpy.Localnode(),btfpy.JUST_WORKS,0)  # Easiest option, but if client requires
                                                      # passkey security - remove this command  
 
-btfpy.Le_server(lecallback,0)
-  
+btfpy.Set_flags(btfpy.FAST_TIMER,btfpy.FLAG_ON)
+btfpy.Le_server(lecallback,20)  # 20ms fast timer
+ 
+if fd != None:
+  fd.close()
+   
 btfpy.Close_all()

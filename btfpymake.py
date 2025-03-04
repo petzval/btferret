@@ -1,4 +1,4 @@
-#### run with build option:   python3 btfpy.py build
+#### run with build option:   python3 btfpymake.py build
 import os
 from setuptools import setup, Extension
 

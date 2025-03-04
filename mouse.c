@@ -1,9 +1,9 @@
 /********** Bluetooth mouse **********
 Download from https://github.com/petzval/btferret
-  mouse.c
+  mouse.c  this code
   mouse.txt
-  btlib.c    Version 15 or later
-  btlib.h    Version 15 or later
+  btlib.c    Version 20 or later
+  btlib.h    Version 20 or later
  
 Edit mouse.txt to set ADDRESS=
 to the address of the local device
@@ -17,9 +17,7 @@ Run
 
 Connect from phone/tablet/PC to "HID" device
 
-Arrow keys move cursor. ESC stops server
-Button press  F1 = Left   F2 = Middle   F3 = Right
-Pg Up/Pg Dn  Increase/Decrease cursor step distance per key press
+Mouse data from /dev/input/mouse0 sent to client
 
 This code sets an unchanging random address.
 If connection is unreliable try changing the address.
@@ -31,10 +29,14 @@ more infomation.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "btlib.h"
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include "btlib.h"  
 
 int lecallback(int clientnode,int op,int cticn);
-int send_key(char x,char y,char but);
+int send_mouse(char x,char y,char but);
 
 /*********  mouse.txt DEVICES file ******
 DEVICE = My Pi   TYPE=Mesh  node=1  ADDRESS = DC:A6:32:04:DB:56
@@ -83,6 +85,7 @@ unsigned char appear[2] = {0xC2,0x03};  // 03C2 = mouse icon appears on connecti
 unsigned char pnpinfo[7] = {0x02,0x6B,0x1D,0x46,0x02,0x37,0x05};
 unsigned char protocolmode[1] = {0x01};
 unsigned char hidinfo[4] = {0x01,0x11,0x00,0x02};
+int fd = -1;
 
 int main()
   {
@@ -135,20 +138,22 @@ int main()
   // Choose the following 6 numbers
   randadd[0] = 0xD3;  // 2 hi bits must be 1
   randadd[1] = 0x56;
-  randadd[2] = 0xD3;
+  randadd[2] = 0xD6;
   randadd[3] = 0x74;
-  randadd[4] = 0x32;
-  randadd[5] = 0xA0;
+  randadd[4] = 0x33;
+  randadd[5] = 0x05;
   set_le_random_address(randadd);
      
-  keys_to_callback(KEY_ON,0);  // enable LE_KEYPRESS calls in lecallback
-                               // 0 = GB keyboard  
   set_le_wait(20000);  // Allow 20 seconds for connection to complete
                                          
   le_pair(localnode(),JUST_WORKS,0);  // Easiest option, but if client requires
                                       // passkey security - remove this command  
-  le_server(lecallback,0);
+  set_flags(FAST_TIMER,FLAG_ON);
+  le_server(lecallback,20);  // 20ms FAST_TIMER
   
+  if(fd > 0)
+    close(fd);
+    
   close_all();
   return(1);
   }
@@ -156,68 +161,44 @@ int main()
 
 int lecallback(int clientnode,int op,int cticn)
   {
-  char dx,dy,but;
-  static unsigned char del = 8;  // step size per key press
+  int n,nread;
+  unsigned char buf[3];
           
   if(op == LE_CONNECT)
     {
-    printf("Connected OK. Arrow keys move cursor. ESC stops server\n");
-    printf("Button press  F1 = Left   F2 = Middle   F3 = Right\n");
-    printf("Pg Up/Pg Dn  Increase/Decrease cursor step distance per key press\n");
+    fd = open("/dev/input/mouse0",O_NONBLOCK);
+    if(fd > 0)
+      printf("Connected OK. Mouse sent to client. x stops server\n");
+    else
+      printf("Connected OK. Failed to open /dev/input/mouse0. x stops server\n");
     }
-  if(op == LE_KEYPRESS) 
-    {  
-    /***** 
-    cticn = one of the following btferret custom key codes:
-
-                             28 = Right arrow
-                 14 = F1     29 = Left arrow
-    6 = PgUp     15 = F2     30 = Down arrow
-    7 = PgDn     16 = F3     31 = Up arrow 
-    *****/
-
-    dx = 0;   // x step
-    dy = 0;   // y step
-    but = 0;  // lo 3 bits = buttons
-    
-    if(cticn == 6 && del < 127)
+  if(fd > 0 && op == LE_TIMER)
+    {
+    nread = read(fd,buf,3);
+    if(nread == 3)
       {
-      ++del;
-      printf("New step size = %d\n",del);
+      send_mouse(buf[1],(char)(-buf[2]),buf[0]);
+      // or if Y is reversed:  send_mouse(buf[1],buf[2],buf[0]);
       }
-    if(cticn == 7 && del > 1)
-      {
-      --del;
-      printf("New step size = %d\n",del);
-      }
-      
-    if(cticn == 14)
-      but = 1;
-    else if(cticn == 15)
-      but = 4;
-    else if(cticn == 16)
-      but = 2;
-        
-    if(cticn == 28)
-      dx = del;
-    else if(cticn == 29)
-      dx = -del;
-    else if(cticn == 30)
-      dy = del;
-    else if(cticn == 31)
-      dy = -del;
-    
-    if(dx != 0 || dy != 0 || but != 0)    
-      send_key(dx,dy,but);      
     }
   if(op == LE_DISCONNECT)
     return(SERVER_EXIT);
   return(SERVER_CONTINUE);
   }
 
-/*********** SEND KEY *****************/
+/*********** SEND MOUSE *********
+x,y = mouse movement -127 to 127
 
-int send_key(char x,char y,char but)
+but  1 = Left button down
+     2 = Right button down
+     4 = Middle button down
+  
+  For a single click, these button presses are followed
+  by a buf[0]=0 send which indicates button up.
+        
+********************************/
+
+int send_mouse(char x,char y,char but)
   {
   unsigned char buf[3];
   static int reportindex = -1;
@@ -240,13 +221,6 @@ int send_key(char x,char y,char but)
         
   // send to Report1
   write_ctic(localnode(),reportindex,buf,0);
-
-  if(buf[0] != 0)
-    {  // button pressed
-    // send no button pressed - all zero
-    buf[0] = 0;
-    write_ctic(localnode(),reportindex,buf,0);
-    }
 
   return(1);
   }
