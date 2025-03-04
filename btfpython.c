@@ -1,4 +1,4 @@
-//############ VERSION 19 #################
+//############ VERSION 20 #################
 
 #include <Python.h>
 
@@ -23,6 +23,7 @@ static PyObject* Init_blue_ex(PyObject* self,PyObject* args);
 static PyObject* Keys_to_callback(PyObject* self,PyObject* args);
 static PyObject* Le_advert(PyObject* self,PyObject* args);
 static PyObject* Le_handles(PyObject* self,PyObject* args);
+static PyObject* Le_interval(PyObject* self,PyObject* args);
 static PyObject* Le_pair(PyObject* self,PyObject* args);
 static PyObject* Le_scan(PyObject* self,PyObject* args);
 static PyObject* Le_server(PyObject* self,PyObject* args);
@@ -59,9 +60,12 @@ static PyObject* Set_le_random_address(PyObject* self,PyObject* args);
 static PyObject* Set_le_wait(PyObject* self,PyObject* args);
 static PyObject* Set_notify_node(PyObject* self,PyObject* args);
 static PyObject* Set_print_flag(PyObject* self,PyObject* args);
+static PyObject* Sleep_ms(PyObject* self,PyObject* args);
 static PyObject* Strtohex(PyObject* self,PyObject* args);
+static PyObject* Time_ms(PyObject* self,PyObject* args);
 static PyObject* Universal_server(PyObject* self,PyObject* args);
 static PyObject* User_function(PyObject* self,PyObject* args);
+static PyObject* Uuid_advert(PyObject* self,PyObject* args);
 static PyObject* Wait_for_disconnect(PyObject* self,PyObject* args);
 static PyObject* Write_ctic(PyObject* self,PyObject* args);
 static PyObject* Write_mesh(PyObject* self,PyObject* args);
@@ -92,6 +96,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Keys_to_callback",Keys_to_callback,METH_VARARGS,"Keys to callback"},
   {"Le_advert",Le_advert,METH_VARARGS,"LE advert"},
   {"Le_handles",Le_handles,METH_VARARGS,"LE handles"},
+  {"Le_interval",Le_interval,METH_VARARGS,"LE interval"},
   {"Le_pair",Le_pair,METH_VARARGS,"LE pair"},
   {"Le_scan",Le_scan,METH_VARARGS,"LE scan"},
   {"Le_server",Le_server,METH_VARARGS,"LE server"},
@@ -127,9 +132,12 @@ static PyMethodDef BtfpyMethods[] =
   {"Set_le_wait",Set_le_wait,METH_VARARGS,"Set LE wait"},
   {"Set_notify_node",Set_notify_node,METH_VARARGS,"Set notify node"},
   {"Set_print_flag",Set_print_flag,METH_VARARGS,"Set print flag"},
+  {"Sleep_ms",Sleep_ms,METH_VARARGS,"Sleep ms"},
   {"Strtohex",Strtohex,METH_VARARGS,"Str to hex"},
+  {"Time_ms",Time_ms,METH_VARARGS,"Time ms"},
   {"Universal_server",Universal_server,METH_VARARGS,"Universal server"},
   {"User_function",User_function,METH_VARARGS,"User function"},
+  {"Uuid_advert",Uuid_advert,METH_VARARGS,"Uuid advert"},
   {"Wait_for_disconnect",Wait_for_disconnect,METH_VARARGS,"Wait for disconnect"},
   {"Write_ctic",Write_ctic,METH_VARARGS,"Write ctic"},
   {"Write_mesh",Write_mesh,METH_VARARGS,"Write mesh"},
@@ -157,6 +165,8 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"BTYPE_CONNECTED",BTYPE_CONNECTED);
   PyModule_AddIntConstant(module,"BTYPE_DISCONNECTED",BTYPE_DISCONNECTED);
   PyModule_AddIntConstant(module,"BTYPE_SHORT",BTYPE_SHORT);
+  PyModule_AddIntConstant(module,"BTYPE_ANY",BTYPE_ANY);
+  PyModule_AddIntConstant(module,"BTYPE_SERME",BTYPE_SERME);
 
   PyModule_AddIntConstant(module,"EXIT_TIMEOUT",EXIT_TIMEOUT);
   PyModule_AddIntConstant(module,"EXIT_KEY",EXIT_KEY);
@@ -177,9 +187,7 @@ PyMODINIT_FUNC PyInit_btfpy()
 
   PyModule_AddIntConstant(module,"SERVER_CONTINUE",SERVER_CONTINUE);
   PyModule_AddIntConstant(module,"SERVER_EXIT",SERVER_EXIT);
-  PyModule_AddIntConstant(module,"SERVER_BTLETIMER",SERVER_BTLETIMER);
-  PyModule_AddIntConstant(module,"SERVER_BTLESTOP",SERVER_BTLESTOP);
- 
+  
   PyModule_AddIntConstant(module,"ERROR_TIMEOUT",ERROR_TIMEOUT);
   PyModule_AddIntConstant(module,"ERROR_KEY",ERROR_KEY);
   PyModule_AddIntConstant(module,"ERROR_FATAL",ERROR_FATAL);
@@ -197,11 +205,11 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"LE_WRITE",LE_WRITE);
   PyModule_AddIntConstant(module,"LE_DISCONNECT",LE_DISCONNECT);
   PyModule_AddIntConstant(module,"LE_TIMER",LE_TIMER);
-  PyModule_AddIntConstant(module,"LE_BTLETIMER",LE_BTLETIMER);
   PyModule_AddIntConstant(module,"LE_KEYPRESS",LE_KEYPRESS);
-
   PyModule_AddIntConstant(module,"SERVER_TIMER",SERVER_TIMER);
   PyModule_AddIntConstant(module,"CLASSIC_DATA",CLASSIC_DATA);
+  PyModule_AddIntConstant(module,"LE_NOTIFY_ENABLE",LE_NOTIFY_ENABLE);
+  PyModule_AddIntConstant(module,"LE_NOTIFY_DISABLE",LE_NOTIFY_DISABLE);
 
   PyModule_AddIntConstant(module,"KEY_OFF",KEY_OFF);
   PyModule_AddIntConstant(module,"PASSKEY_OFF",PASSKEY_OFF);
@@ -231,6 +239,7 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"FLAG_OFF",FLAG_OFF);
   PyModule_AddIntConstant(module,"ENABLE_OBEX",ENABLE_OBEX);
   PyModule_AddIntConstant(module,"HID_MULTI",HID_MULTI);
+  PyModule_AddIntConstant(module,"FAST_TIMER",FAST_TIMER);
   
   return(module);
   }
@@ -927,6 +936,21 @@ static PyObject* Le_handles(PyObject* self,PyObject* args)
     le_handles(node,lasthandle);  
   Py_RETURN_NONE; 
   }
+
+//int le_interval(int node);
+static PyObject* Le_interval(PyObject* self,PyObject* args)
+  {
+  int n,node;
+
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"i",&node))
+    {
+    printerror((PyObject*)Le_interval);
+    n = 0;
+    }
+  else
+    n = le_interval(node);  
+  return Py_BuildValue("i",n); 
+  }
  
 //int le_pair(int node,int flags,int passkey);
 static PyObject* Le_pair(PyObject* self,PyObject* args)
@@ -1429,6 +1453,19 @@ static PyObject* Set_print_flag(PyObject* self,PyObject* args)
     n = set_print_flag(flag);  
   return Py_BuildValue("i",n); 
   }
+
+// void sleep_ms(int ms)
+static PyObject* Sleep_ms(PyObject* self,PyObject* args)
+  {
+  int ms;
+
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"i",&ms))
+    printerror((PyObject*)Sleep_ms);
+  else  
+   sleep_ms(ms);
+   
+  Py_RETURN_NONE; 
+  }
   
 //char *strtohex(char *s,int *num);
 //   Strtohex(char *s)
@@ -1458,6 +1495,16 @@ static PyObject* Strtohex(PyObject* self,PyObject* args)
     printf("Strtohex fail\n");   
   return(xobj);
   }
+
+//unsinged long long time_ms(void);
+static PyObject* Time_ms(PyObject* self,PyObject* args)
+  {
+  unsigned long long n;
+  
+  n = time_ms();
+  return Py_BuildValue("K",n);   
+  }
+
 
 //int universal_server(int (*callback)(),char endchar,int keyflag,int timerds);
 static PyObject* Universal_server(PyObject* self,PyObject* args)
@@ -1495,6 +1542,26 @@ static PyObject* User_function(PyObject* self,PyObject* args)
     n = user_function(n0,n1,n2,n3,buf0,buf1);
     }  
   return Py_BuildValue("i",n); 
+  }
+
+//void uuid_advert(unsigned char *uuid);
+static PyObject* Uuid_advert(PyObject* self,PyObject* args)
+  {
+  int len;
+  PyObject *obj;
+  unsigned char buf[64];
+  
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"O",&obj))
+    printerror((PyObject*)Set_le_random_address);
+  else
+    {
+    len = objtobuf(obj,buf,64);
+    if(len == 2)  
+      uuid_advert(buf);
+    else
+      printf("Uuid_advert not 2 bytes\n");
+    }  
+  Py_RETURN_NONE; 
   }
 
 

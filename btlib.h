@@ -1,4 +1,4 @@
-  // for btlib.c Version 19
+  // for btlib.c Version 20
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -9,6 +9,8 @@
 #define BTYPE_CONNECTED    (1 << 16)
 #define BTYPE_DISCONNECTED (1 << 17)
 #define BTYPE_SHORT        (1 << 18)
+#define BTYPE_ANY          (1 << 19)
+#define BTYPE_SERME        (1 << 20)
 
    // flags for read
 #define EXIT_TIMEOUT  1
@@ -33,9 +35,6 @@
   // callback returns
 #define SERVER_CONTINUE 1
 #define SERVER_EXIT 0
-#define SERVER_BTLETIMER 2
-#define SERVER_BTLESTOP  4 
- 
    // read_error() returns
 #define ERROR_TIMEOUT 1
 #define ERROR_KEY     2 
@@ -57,11 +56,11 @@
 #define LE_WRITE   3
 #define LE_DISCONNECT 4
 #define LE_TIMER 5
-#define LE_BTLETIMER 6
 #define LE_KEYPRESS 7
 #define SERVER_TIMER 5
 #define CLASSIC_DATA 8
-
+#define LE_NOTIFY_ENABLE 9
+#define LE_NOTIFY_DISABLE 10
 
   // link key
 #define KEY_OFF 0
@@ -87,6 +86,7 @@
 #define FLAG_ON     1
 #define ENABLE_OBEX 1
 #define HID_MULTI   2
+#define FAST_TIMER  4
 
 #define ANY_DEVICE 0
 #define ALL_DEVICES 0
@@ -125,6 +125,7 @@ int keys_to_callback(int flag,int keyboard);
 
 unsigned char* le_advert(int node);
 void le_handles(int node,int lasthandle);
+int le_interval(int node);
 int le_pair(int node,int flags,int passkey);
 void le_scan(void);
 int le_server(int(*callback)(int,int,int),int timerds);
@@ -175,12 +176,16 @@ void set_le_random_address(unsigned char *add);
 int set_le_wait(int waitms);
 void set_notify_node(int node);
 int set_print_flag(int flag);
+void sleep_ms(int ms);
 
 unsigned char *strtohex(char *s,int *num);
+
+unsigned long long time_ms(void);
 
 int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar,int keyflag,int timerds);
 
 int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1);
+void uuid_advert(unsigned char *uuid);
 
 int wait_for_disconnect(int node,int timout);
 int write_ctic(int node,int cticn,unsigned char *outbuf,int count);

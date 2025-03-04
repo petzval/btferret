@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 19 
+  btlib.c/h  Version 20 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -15,7 +15,7 @@ EDIT
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "btlib.h"        
+#include "btlib.h"         
 
 void btlink(void);
 void printhelp(void);
@@ -29,7 +29,7 @@ int sendfileobex(int node,char *fname);
 int receivefile(char *fname,int clientnode);
 int receivefilex(char *fname,int clientnode);
 int filelength(FILE *file);
-int inputnode(int typemask,int meshflag);
+int inputnode(int typemask);
 int inputchan(int node,int *channel,int *method);
 void readservices(void);
 void readuuid(void);
@@ -262,12 +262,11 @@ int clientsend(int cmd)
   int flag,node;
   char coms[256];
   
+  flag = BTYPE_CL | BTYPE_ME | BTYPE_CONNECTED;
   if(cmd == 'D')
-    flag = 1;  // all mesh servers option
-  else
-    flag = 0;
+    flag |= BTYPE_SERME;  // all mesh servers option
   
-  node = inputnode(BTYPE_CL | BTYPE_ME | BTYPE_CONNECTED,flag);   // only connected classic/mesh
+  node = inputnode(flag);   // only connected classic/mesh
         
   if(node < 0)
     {
@@ -415,7 +414,7 @@ int server()
   else if(serverflag == 0)
     {  // node    
     printf("\nInput node of client that will connect\n");
-    clinode = inputnode(BTYPE_ME,0);  
+    clinode = inputnode(BTYPE_ME);  
     if(clinode < 0)
       {
       printf("Cancelled\n");
@@ -432,7 +431,7 @@ int server()
       {
       printf("\nInput node of client that will connect\n");
    
-      clinode = inputnode(BTYPE_ME | BTYPE_CL,2);  
+      clinode = inputnode(BTYPE_ME | BTYPE_CL | BTYPE_ANY);  
       if(clinode < 0)
         {
         printf("Cancelled\n");
@@ -858,7 +857,7 @@ int clientconnect()
   int pairflags,passkey,pairwait;
     
      // only disconnected devices
-  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_ME,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_DISCONNECTED | BTYPE_ME);
 
   if(node < 0)
     {
@@ -1081,7 +1080,7 @@ void localdisconnect()
   printf("\nUse D instead to disconnect btferret node and mesh servers\n");
      
       // only connected devices
-  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED);
   if(node < 0)
     {
     printf("Cancelled\n");
@@ -1148,7 +1147,7 @@ void readservices()
   
   printf("\nRead services\n");
   
-  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME | BTYPE_LO,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME | BTYPE_LO);
   if(node < 0)
     return;
 
@@ -1165,7 +1164,7 @@ void readlehandles()
   int node;
   
   printf("\nRead LE handles\n");
-  node = inputnode(BTYPE_CONNECTED | BTYPE_LE | BTYPE_ME,0);
+  node = inputnode(BTYPE_CONNECTED | BTYPE_LE | BTYPE_ME);
   if(node < 0)
     return;
   le_handles(node,0);
@@ -1188,7 +1187,7 @@ void readuuid()
     return;
     }
     
-  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME,0);
+  node = inputnode(BTYPE_CL | BTYPE_LE | BTYPE_ME);
   if(node < 0)
     return;
   
@@ -1283,7 +1282,7 @@ int sendgetfile()
     return(0);
     }
      
-  servernode = inputnode(BTYPE_CONNECTED | BTYPE_ME | BTYPE_CL,0);       
+  servernode = inputnode(BTYPE_CONNECTED | BTYPE_ME | BTYPE_CL);       
   if(servernode < 0)
     {
     printf("Cancelled\n");
@@ -2232,7 +2231,7 @@ void readle()
   
   printf("\nRead an LE characteristic\n");
   
-  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED | BTYPE_LO,0);   // only connected LE devices
+  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED | BTYPE_LO);   // only connected LE devices
   if(node < 0)
     {
     printf("Cancelled\n");
@@ -2282,7 +2281,7 @@ void writele()
   
   printf("\nWrite an LE characteristic\n");
   
-  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED | BTYPE_LO,0);   // only connected LE devices
+  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED | BTYPE_LO);   // only connected LE devices
   if(node < 0)
     {
     printf("Cancelled\n");
@@ -2317,7 +2316,7 @@ void notifyle()
      
   printf("\nEnable/Disable LE characteristic notify/indicate\n"); 
   
-  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED,0);  // only connected LE devices
+  node = inputnode(BTYPE_LE | BTYPE_ME | BTYPE_CONNECTED);  // only connected LE devices
   if(node < 0)
     {
     printf("Cancelled\n");
@@ -2448,60 +2447,23 @@ int inputlist(char *s,int len)
 
 /********** USER INPUT FUNCTIONS *******/
  
-int inputnode(int mask,int meshflag)
+int inputnode(int mask)
   {
-  int n,count,node,flag;
+  int n,node,flag;
 
-  printf("\n");
-
-  count = 0; 
-   
-  flag = 0;
-  if((mask & BTYPE_CL) != 0)
-    {
-    printf("CLASSIC servers");
-    flag = 1;
-    }
-  if((mask & BTYPE_LE) != 0)
-    {
-    if(flag != 0)
-      printf(" + ");
-    printf("LE servers");
-    flag = 1;
-    }
-  if((mask & BTYPE_ME) != 0)
-    {
-    if(flag != 0)
-      printf(" + ");
-    printf("NODE servers");
-    }
-    
-  if((mask & BTYPE_CONNECTED) != 0)
-    printf(" - connected only");
-  if((mask & BTYPE_DISCONNECTED) != 0)
-    printf(" - disconnected only");
-  printf("\n");
-  
+  printf("AVAILABLE DEVICES\n");
+ 
   n = device_info(mask | BTYPE_SHORT);
   if(n == 0)
-    printf("  None\n");
-    
-  count += n;
-       
-  if(meshflag == 1)
-    printf(" 0 - All mesh servers (not connected node servers)\n");
-  else if(meshflag == 2)
-    printf(" 0 - Any device\n");  
-  else if(count == 0)
-    return(-1);  
-                
+    printf("  None\n");    
+
   do
     {
     flag = 0;
     node = inputint("Input node");
     if(node < 0)
       return(-1);   // cancel
-    if(meshflag != 0 && node == 0)
+    if(node == 0 && (mask & (BTYPE_ANY | BTYPE_SERME)) != 0)
       flag = 1;
     else if((device_type(node) & mask) != 0)
       flag = 1;

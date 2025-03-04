@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 
-###### VERSION 19 ######
-### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 19 or later via:###
+###### VERSION 20 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 20 or later via:###
 ###
 ### apt-get install python3-setuptools
 ### apt-get install python3-dev
-### python3 btfpy.py build
+### python3 btfpymake.py build
 ###
-### btfpy.py code:
+### btfpymake.py code:
 ###   import os
 ###   from setuptools import setup, Extension
 ###   print("Removing any existing module")
@@ -58,45 +58,20 @@ def inputint(ps):
   return(val)
 
 
-def inputnode(mask,meshflag):
-  count = 0  
-  flag = 0
-  if((mask & btfpy.BTYPE_CL) != 0):
-    print("CLASSIC servers",end = '')
-    flag = 1
-  
-  if((mask & btfpy.BTYPE_LE) != 0):
-    print("  LE servers",end = '')
-    flag = 1
- 
-  if((mask & btfpy.BTYPE_ME) != 0):
-    print("  NODE servers",end = '')
-  print()      
-  if((mask & btfpy.BTYPE_CONNECTED) != 0):
-    print("Connected only")
-  if((mask & btfpy.BTYPE_DISCONNECTED) != 0):
-    print("Disconnected only")
+def inputnode(mask):
+  print("AVAILABLE DEVICES") 
    
   n = btfpy.Device_info(mask | btfpy.BTYPE_SHORT)
   if(n == 0):
-    print("None")
-    
-  count = count + n
-       
-  if(meshflag == 1):
-    print(" 0 - All mesh servers (not connected node servers)")
-  elif(meshflag == 2):
-    print(" 0 - Any device")
-  elif(count == 0):
-    return(-1)  
-                
+    print("None")  
+              
   flag = 0
   while flag == 0:
     flag = 0
     node = inputint("Input node")
     if(node < 0):
       return(-1)  # cancel
-    if(meshflag != 0 and node == 0):
+    if(node == 0 and (mask & (btfpy.BTYPE_ANY | btfpy.BTYPE_SERME)) != 0):
       flag = 1
     elif((btfpy.Device_type(node) and mask) != 0):
       flag = 1
@@ -1089,7 +1064,7 @@ def sendgetfile():
   else:
     print("file - must be connected to a btferret transfer protocol server")
    
-  servernode = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_ME | btfpy.BTYPE_CL,0)       
+  servernode = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_ME | btfpy.BTYPE_CL)       
   if(servernode < 0):
     print("Cancelled")
     return(0)
@@ -1227,7 +1202,7 @@ def clientsecurity():
 def clientconnect():
   global lesecurity
     
-  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_DISCONNECTED | btfpy.BTYPE_ME,0)
+  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_DISCONNECTED | btfpy.BTYPE_ME)
 
   if(node < 0):
     print("Cancelled")
@@ -1329,13 +1304,13 @@ def clientconnect():
 
                   
 def clientsend(cmd):
+
+  flag = btfpy.BTYPE_CL | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED
   if(cmd == 'D'):
-    flag = 1  # all mesh servers option
-  else:
-    flag = 0
+    flag = flag | btfpy.BTYPE_SERME  # all mesh servers option
   
   # only connected classic/mesh
-  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED,flag) 
+  node = inputnode(flag) 
         
   if(node <= 0):
     print("Cancelled")
@@ -1389,7 +1364,7 @@ def localdisconnect():
 
   print("Use D instead to disconnect btferret node and mesh servers")    
      # only connected devices
-  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED,0)
+  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED)
   if(node < 0):
     print("Cancelled")
     return
@@ -1522,7 +1497,7 @@ def server():
       btfpy.Le_server(le_callback,timeds)
   elif(serverflag == 0):  # node
     print("\nInput node of client that will connect")
-    clinode = inputnode(btfpy.BTYPE_ME,0)  
+    clinode = inputnode(btfpy.BTYPE_ME)  
     if(clinode < 0):
       print("Cancelled")
       return(0)
@@ -1532,7 +1507,7 @@ def server():
       clinode = 0
     else:
       print("\nInput node of client that will connect")
-      clinode = inputnode(btfpy.BTYPE_ME | btfpy.BTYPE_CL,2)        
+      clinode = inputnode(btfpy.BTYPE_ME | btfpy.BTYPE_CL | btfpy.BTYPE_ANY)        
    
     if(clinode != 0 and btfpy.Device_type(clinode) == btfpy.BTYPE_ME):
       keyflag = btfpy.KEY_OFF | btfpy.PASSKEY_OFF
@@ -1581,7 +1556,7 @@ def server():
 def readservices():
   print("Read services")
   
-  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_LO,0)
+  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_LO)
   if(node < 0):
     return
 
@@ -1596,7 +1571,7 @@ def readservices():
 def readlehandles():
   print("Read LE handles")
   
-  node = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LE | btfpy.BTYPE_ME,0)
+  node = inputnode(btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LE | btfpy.BTYPE_ME)
   if(node < 0):
     return
   btfpy.Le_handles(node,0)
@@ -1613,7 +1588,7 @@ def readuuid():
     print("Invalid entry")
     return
         
-  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME,0)
+  node = inputnode(btfpy.BTYPE_CL | btfpy.BTYPE_LE | btfpy.BTYPE_ME)
   if(node < 0):
     return
   
@@ -1667,7 +1642,7 @@ def readle():
 
   print("Read an LE characteristic")
   # only connected LE devices
-  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LO,0)  
+  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LO)  
   if(node < 0):
     print("Cancelled")
     return
@@ -1690,7 +1665,7 @@ def writele():
  
   print("Write an LE characteristic")
   
-  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LO,0)  
+  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED | btfpy.BTYPE_LO)  
   if(node < 0):
     print("Cancelled")
     return
@@ -1722,7 +1697,7 @@ def notifyle():
   print("Enable/Disable LE characteristic notify/indicate") 
   
   # only connected LE devices
-  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED,0) 
+  node = inputnode(btfpy.BTYPE_LE | btfpy.BTYPE_ME | btfpy.BTYPE_CONNECTED) 
   if(node < 0):
     print("Cancelled")
     return

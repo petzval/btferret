@@ -205,3 +205,50 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
    from btferret.c/py.
    
 3. Bug fix: If the LE server had multiple clients connected, it did not disconnect them all on exit.
+
+### Version 20
+
+1. Standard LE profiles. Additional sample code files for standard LE server profiles: Heart Rate, Current
+   Time, and Cycling Speed and Cadence (in the leprofiles subdirectory). See section 3.12 for details of
+   standard LE profiles. 
+       
+2. New function uuid\_advert(). Adds a 2-byte UUID to the advertised information when a random address is
+   set for an LE server via set\_le\_random_address(). This is useful for standard LE profiles, so connecting
+   clients can identify the type of device from the advertised UUID.
+   
+3. When a random address is set for an LE server via set\_le\_random\_address(), the mesh transmission
+   functions no longer work. This allows the advertising to be used for standard LE profiles. 
+   
+4. New function time\_ms() returns the time in ms since the program was started. 
+
+5. New function sleep\_ms() delays for the specified time in ms. 
+
+6. New function le\_interval(). Returns the connection interval for a connected LE device. The interval
+   time in ms is the returned value x 1.25ms.
+   
+7. New option for set\_flags() - FAST\_TIMER. For LE and Universal servers. When the flag is set,
+   the timer period in le\_server() and universal\_server() is in units of ms rather than the default
+   deci-seconds, so LE\_TIMER and SERVER\_TIMER callbacks can be faster than ten times per second.
+   But if the callback sends LE packets at a faster rate, some may be lost, so the user is responsible for
+   controlling the send rate.
+   
+8. New LE server callback operations: LE\_NOTIFY\_ENABLE and LE\_NOTIFY\_DISABLE. Called when the client
+   enables/disables a characteristic's notification. 
+   
+9. New flag options for device\_info() when BTYPE\_SHORT is set. BTYPE\_ANY includes a "0 - Any device" item,
+   and BTYPE\_SERME includes a "0 - Mesh Servers" item.
+   
+10. A new role for le\_pair. If called inside an LE server callback, it will ask the client to initiate pairing
+   and security. (Normally, the client will initiate pairing.)
+   
+11. If Bluetooth is soft blocked by rfkill it is now automatically unblocked by init\_blue.
+
+12. New HID sample: keymouse.c/py. Combined keyboard and mouse. Also, mouse.c/py has been modified to
+    read the Pi's mouse and send its data to the client (replacing the key press inputs).
+   
+13. The Python build program name has been changed from btfpy.py to btfpymake.py because it could confuse
+    the import btfpy instruction.
+       
+14. BUG FIX. If le\_server was started with a short timer value (less than 1 second), key strokes could be
+    lost. This was a particular problem if keys\_to\_callback was also set.
+   
