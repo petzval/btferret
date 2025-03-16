@@ -1,4 +1,4 @@
-/********* Version 20 *********/
+/********* Version 20.1 *********/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -109,8 +109,6 @@ struct devdata
   unsigned int id;
   int method;                 // connection method BLUEZ/HCI
   int credits;                // serial data credits
-  int nx;                     // extra data stack index
-  int xwantlen;               // missing extra data
   int dhandle[2];             // handle returned by connect  [0]=lo [1]=hi
   int linkflag;
   int setdatlen;
@@ -236,12 +234,6 @@ struct devdata
 #define DIRN_FOR  0
 #define DIRN_REV  1
 
-// timer
-#define TIM_RUN 0
-#define TIM_LOCK 1
-#define TIM_FREE 2
-#define TIM_COUNT 3
-
 // cryptoflag
 #define CRY_NEW 1
 #define CRY_SC (1 << 1)
@@ -277,9 +269,7 @@ struct globpar
   int blockflag;       
   int hci;             // file desc for hci/acl commands sendhci/readhci
   int devid;           // hciX number
-  int bluez;           // 0/1 bluez down/up for server functions
   int lecap;           // LE capable
-  int hcidelay;        // on each sendhci
   int timout;          // long time out for replies ms
   int toshort;         // short time out replies
   int cmdcount;        // command stack pointer
@@ -350,7 +340,6 @@ struct sdpdata
   unsigned char *uuid;
   };
 
-
 int meshpacket(unsigned char *buf);
 void clscanx(void);
 int lescanx(void);
@@ -367,7 +356,6 @@ void hexdump(unsigned char *buf, int len);
 void printascii(unsigned char *s,int len);
 unsigned char calcfcs(unsigned char *s,int count);
 int pushins(long long int typebit,int ndevice,int len,unsigned char *s);
-int addins(int nx,int len,unsigned char *s);
 void popins(void);
 int decodesdp(unsigned char *sin,int len,struct servicedata *serv,int servlen);
 int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp);
@@ -381,11 +369,13 @@ void setcredits(int ndevice);
 int readpack(char *c,int clen,int *ndevice,int count,int endchar,int toflag,int abtflag);
 int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int flag,int timeoutms);
 int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout,int toshort);
+int readpacket(unsigned char *buf,int toms);
+int readbytes(unsigned char *dat,int *len,int wantlen,int toms);
 int setkeymode(int setflag);
 int leconnect(int ndevice);
 int openremotesdpx(int ndevice);
 int sconnectx(int ndevice);
-unsigned long long timems(int flag);
+unsigned long long timems(void);
 unsigned int strinstr(char *s,char *t);
 int hexchar(char c);
 int entrylen(unsigned int *ind,int in);
@@ -439,8 +429,8 @@ unsigned char *strtohexx(char *s,int slen,int *num);
 
 void readleatt(int node,int handle);
 void printval(unsigned char *s,int len,unsigned char *t);
-int splitcmd(unsigned char *s,int plen);
-int splitwrite(unsigned char *cmd,int len);
+int splitcmd(unsigned char *s,int plen,int ndevice);
+int splitwrite(unsigned char *cmd,int len,int ndevice);
 int stuuid(unsigned char *s);  
 
 int calce(unsigned char *key,unsigned char *in,unsigned char *out);
@@ -1311,21 +1301,21 @@ int init_blue_ex(char *filename,int hcin)
   unsigned char *data;
   FILE *stream;
   static char errs[16] = {"   ERROR **** "};
-  static int initflag = 0;
-    
-     // global parameters 
-
+  static int initflag = 0;    
+   
   if(initflag != 0)
     {
     printf("Init_blue called twice\n");
     return(0);
     }
-
+    
+  initflag = 1;
+  
   printf("Initialising...\n");
 
-  timems(TIM_RUN);
+  timems();
 
- 
+   // global 
   gpar.screenoff = 0;
   gpar.debug = 0;
   gpar.serveractive = 0; 
@@ -1333,11 +1323,6 @@ int init_blue_ex(char *filename,int hcin)
   gpar.toshort = 5;    // ms
   gpar.cmdcount = 0;
   gpar.lecap = 0;
-#ifdef BTFPYTHON
-  gpar.hcidelay = 10; 
-#else
-  gpar.hcidelay = 5; 
-#endif
   gpar.lastsend = 0;
   gpar.meshflag = 0;    // le advertising off
   gpar.readerror = 0;
@@ -1387,12 +1372,7 @@ int init_blue_ex(char *filename,int hcin)
 
   register_serial(strtohex("FCF05AFD-67D8-4F41-83F5-7BEE22C03CDB",NULL),"My custom serial");  
  
-  gpar.bluez = 1;   // assume bluez up
-  bluezdown();      // down
-     
-  errcount = 0;
-  meshcount = 0;
-       
+    
   // zero entries  n=first undefined
   for(k = 0 ; k < NUMDEVS ; ++k)
     dev[k] = NULL;
@@ -1408,26 +1388,27 @@ int init_blue_ex(char *filename,int hcin)
   
   clearins(0);   // initialise BT packet input stack 
    
-  for(k = 0 ; k < 2 ; ++k)
+  bluezdown();
+
+  if(hcisock() == 0)
     {
+    printf("Trying to unblock bluetooth with rfkill\n");
+    sleep_ms(500);
+    n = system("rfkill unblock bluetooth");
+    sleep_ms(500);
+    bluezdown();
     if(hcisock() == 0)
-      {    
-      if(k == 0)
-        {
-        printf("Trying to unblock bluetooth with rfkill\n");
-        n = system("rfkill unblock bluetooth");
-        }
-      else
-        {
-        NPRINT "No root permission or Bluetooth (hci%d) is off or crashed\n",gpar.devid); 
-        NPRINT "Must run with root permission via sudo as follows:\n"); 
-        NPRINT "  sudo ./btferret (for C) or  sudo python3 btferret.py\n");
-        flushprint();
-        return(0);
-        }
+      {
+      NPRINT "No root permission or Bluetooth (hci%d) is off or crashed\n",gpar.devid); 
+      NPRINT "Must run with root permission via sudo as follows:\n"); 
+      NPRINT "  sudo ./btferret (for C) or  sudo python3 btferret.py\n");
+      flushprint();
+      return(0);
       }
     }
-     
+  
+  errcount = 0;
+  meshcount = 0;
   gpar.lecap = 0;
   flag = 0;
   VPRINT "Read local supported commands\n");
@@ -1941,7 +1922,6 @@ int init_blue_ex(char *filename,int hcin)
 
   rwlinkey(0,0,NULL);
   atexit(close_all);
-  initflag = 1;
 
 
   if(gpar.lecap == 0)
@@ -1993,7 +1973,6 @@ int init_blue_ex(char *filename,int hcin)
   return(1);     
   }
 
-
 char *cticerrs(struct cticdata * cp)
   {
   static char errs[128];
@@ -2002,7 +1981,6 @@ char *cticerrs(struct cticdata * cp)
   return(errs);
   }
   
-
 
 int localctics()
   {
@@ -2625,8 +2603,6 @@ int devalloc()
   dp->lecflag = 0;
   dp->dhandle[0] = 0;
   dp->dhandle[1] = 0;
-  dp->nx = -1;
-  dp->xwantlen = 0;
   dp->matchname = 0;
   dp->setdatlen = 20;
   dp->foundflag = 0;
@@ -3557,7 +3533,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
   
   gpar.serveractive = 1;
 
-  tim0 = timems(TIM_LOCK);
+  tim0 = timems();
   timms = timerds;
   loopt = 0;
   if((gpar.settings & FAST_TIMER) == 0)
@@ -3642,7 +3618,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       
     if(cbflag == 0 && timerds > 0)
       {
-      if(timems(TIM_RUN) - tim0 >= timms)
+      if(timems() - tim0 >= timms)
         {
 #ifdef BTFPYTHON
         if(pycallback != NULL)
@@ -3651,7 +3627,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
         if(callback != NULL)
           retval = callback(localnode(),LE_TIMER,0);
 #endif
-        tim0 = timems(TIM_RUN);
+        tim0 = timems();
         }
       }
       
@@ -3679,7 +3655,7 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
       }  
     }
   while((retval & SERVER_CONTINUE) != 0 && key != 'x');
-  timems(TIM_FREE);
+  
   setkeymode(oldkm);
   gpar.serveractive = 0;
      
@@ -3869,7 +3845,7 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
   flushprint();
   
   mesh_on();
-  tim0 = timems(TIM_LOCK);
+  tim0 = timems();
   timms = timerds;
   loopt = 0;
   if((gpar.settings & FAST_TIMER) == 0)
@@ -3994,7 +3970,7 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
       
     if((retval & SERVER_CONTINUE) != 0 && timerds > 0)
       {
-      if(timems(TIM_RUN) - tim0 >= timms)
+      if(timems() - tim0 >= timms)
         {
         buf[0] = 0;
 
@@ -4005,7 +3981,7 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
         if(callback != NULL)
           retval = callback(localnode(),SERVER_TIMER,0,buf,0);
 #endif
-        tim0 = timems(TIM_RUN);
+        tim0 = timems();
         }
       }   
     }
@@ -4013,8 +3989,7 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
 
   gpar.serveractive = 0;    
 
-  timems(TIM_FREE);
-  
+    
   if(key == 'x')
     NPRINT "Key press - stopping server\n");
          
@@ -5165,16 +5140,15 @@ int wait_for_disconnect(int node,int timout)
   if(ndevice < 0)
     return(0);
 
-  timstart = timems(TIM_LOCK);
+  timstart = timems();
   
-  while(dev[ndevice]->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned long long)timout)
+  while(dev[ndevice]->conflag != 0 && timems() - timstart < (unsigned long long)timout)
     {
     readhci(0,0,0,25,0);  
     flushprint();
     }
    
-  timems(TIM_FREE);
-  
+    
   // conflag should be 0 - call disconnect to be sure  
     
   disconnectdev(ndevice);
@@ -5318,12 +5292,10 @@ void waitdis(int ndevice,unsigned int timout)
   // wait for dp->conflag=0 set by readhci
   
   dp = dev[ndevice];
-  timstart = timems(TIM_LOCK);
+  timstart = timems();
   
-  while(dp->conflag != 0 && timems(TIM_RUN) - timstart < (unsigned long long)timout)
-      readhci(0,0,0,20,0);   // sets conflag=0 on event 05
-      
-  timems(TIM_FREE);
+  while(dp->conflag != 0 && timems() - timstart < (unsigned long long)timout)
+      readhci(0,0,0,20,0);   // sets conflag=0 on event 05 
   }
   
 
@@ -5357,7 +5329,7 @@ void close_all()
   flushprint();
   flag = 1;  // disable atexit call
   
-  // printins();         
+  // printins();            
   }  
   
   
@@ -6114,22 +6086,21 @@ int sendhci(unsigned char *s,int ndevice)
     
   if(gpar.ledatlenflag == 0 && (s == lereadreply || s == lewrite || s == lenotify || s == le09replyv))
     {
-    if(splitcmd(s+PAKHEADSIZE,32) != 0)
+    if(splitcmd(s+PAKHEADSIZE,32,ndevice) != 0)
       return(1);
     }  
   
   
   if(dp->conflag == CON_LE || dp->conflag == CON_LX || dp->conflag == CON_MESH)
     {
-    n = (int)(dp->leinterval * 1.25) + 1;
-    n0 = (int)(timems(TIM_RUN) - gpar.lastsend);
+    n = (int)(dp->leinterval * 1.25) + 2;
+    n0 = (int)(timems() - gpar.lastsend);
     if(n0 < n)
       usleep((n-n0) * 1000);
     } 
  
   ntogo = len;  // first header entry is length of cmd
-  timstart = timems(TIM_LOCK);  
-  gpar.lastsend = timstart;
+  timstart = timems();  
    
   do
     {
@@ -6143,16 +6114,14 @@ int sendhci(unsigned char *s,int ndevice)
     else
       usleep(500);
         
-    if(timems(TIM_RUN) - timstart > (unsigned long long)5000)   // 5 sec timeout
+    if(ntogo != 0 && timems() - timstart > (unsigned long long)5000)   // 5 sec timeout
       {
       NPRINT "Send CMD timeout - may need to reboot\n");
-      timems(TIM_FREE);
       return(0);
       }
     }
   while(ntogo != 0);
-  timems(TIM_FREE);
-  
+  gpar.lastsend = timems();    
   gpar.cmdcount += cmdflag;
   
   return(1);
@@ -6160,7 +6129,7 @@ int sendhci(unsigned char *s,int ndevice)
 
 
 
-int splitcmd(unsigned char *s,int plen)
+int splitcmd(unsigned char *s,int plen,int ndevice)
   {
   int n,k,sn,tn,t20,len,numx,remx,kx,flag;
   unsigned char t[512];
@@ -6187,7 +6156,7 @@ int splitcmd(unsigned char *s,int plen)
   tn = plen;
   VPRINT "Split into %d packets\n",numx+1);
   if(flag != 0)  
-    splitwrite(t,plen);
+    splitwrite(t,plen,ndevice);
   for(n = 0 ; n < numx ; ++n)
     {
     ++gpar.cmdcount;
@@ -6214,23 +6183,33 @@ int splitcmd(unsigned char *s,int plen)
       ++sn;
       }
     if(flag != 0)   
-      splitwrite(t+plen*(n+1),kx+5);
+      splitwrite(t+plen*(n+1),kx+5,ndevice);
     }
   if(flag == 0)
-    splitwrite(t,tn);
+    splitwrite(t,tn,ndevice);
   ++gpar.cmdcount;
   return(1);
   }
 
-int splitwrite(unsigned char *cmd,int len)
+int splitwrite(unsigned char *cmd,int len,int ndevice)
   {
-  int ntogo,nwrit;
+  int n,n0,ntogo,nwrit;
   unsigned long long timstart;
   unsigned char *cmdx;
+  struct devdata *dp;
+
+  dp = dev[ndevice];
+  if(dp->conflag == CON_LE || dp->conflag == CON_LX || dp->conflag == CON_MESH)
+    {
+    n = (int)(dp->leinterval * 1.25) + 10;
+    n0 = (int)(timems() - gpar.lastsend);
+    if(n0 < n)
+      usleep((n-n0) * 1000);
+    } 
    
   ntogo = len;
   cmdx = cmd;  
-  timstart = timems(TIM_LOCK);  
+  timstart = timems();
   do
     {
     nwrit = write(gpar.hci,cmdx,ntogo);
@@ -6239,16 +6218,18 @@ int splitwrite(unsigned char *cmd,int len)
       {
       ntogo -= nwrit;
       cmdx += nwrit;
-      }   
-    if(timems(TIM_RUN) - timstart > (unsigned long long)2000)   // 2 sec timeout
+      }
+    else
+      usleep(500);
+         
+    if(ntogo != 0 && timems() - timstart > (unsigned long long)2000)   // 2 sec timeout
       {
       NPRINT "Send CMD timeout\n");
-      timems(TIM_FREE);
       return(0);
       }
     }
   while(ntogo != 0);
-  timems(TIM_FREE);
+  gpar.lastsend = timems();
   return(1);
   }
 
@@ -6384,17 +6365,21 @@ RETURN
 int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout,int toshort)
   {
   unsigned char b0,*datp,*rsp,ledat[2];   
-  int len,blen,wantlen,xwantlen,add,doneflag,crflag,disflag,lesflag,eflag;
-  int gotn,k,j,n0,nxx,chan,xflag,xprintflag,devicen,stopverb,buf3sav;
+  int add,doneflag,crflag,disflag,lesflag,eflag;
+  int gotn,k,j,n0,chan,xprintflag,devicen,stopverb,buf3sav;
   int retval,datlen,ascflag,clsflag,multiflag,seqflag;
   long long int locmustflag,gotflag;
-  unsigned long long timstart,timx,timendms,savtimendms;
+  unsigned long long timstart,timx,timendms;
   struct devdata *dp,*condp;
   static long long int sflag;
   static int level = 0;   
-  unsigned char buf[2048];
-  struct pollfd pfd[1];
+  static unsigned char *buf = NULL;
   
+  int toms,packlen;
+  
+  if(buf == NULL)
+    buf = malloc(8192);
+     
   //if(level > 0 && ndevice == 0 && mustflag == 0 && lookflag == 0 && timout == 0 && toshort == 0)
   //  return(0);
   
@@ -6447,148 +6432,56 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     sflag |= lookflag | locmustflag; // add to existing from previous level
 
   ++level;
-    
-  for(k = 0 ; devok(k) != 0 ; ++k)
-    {
-    dev[k]->nx = -1;  // extra data
-    dev[k]->xwantlen = 0;
-    }
-             
-  timstart = timems(TIM_LOCK);         
+                
+  timstart = timems();         
    
   
   gotn = 0;   // number of reply
   devicen = 0; 
-  blen = 0;         // existing buffer length
-  wantlen = 8192;   // expected messaage length - new message flag
-  xwantlen = 0; 
-  xflag = 0;
   xprintflag = 0;
   disflag = 0;
-  savtimendms = 0;
-  len = 0;
+    
   
   do   
-    {
-    if(wantlen == 8192 && blen == 0 && xflag == 0)
+    {      
+    if(locmustflag != 0 && findhci(mustflag,ndevice,INS_NOPOP) >= 0) 
       {
-      timx = timems(TIM_RUN);
-      immediate(lookflag | locmustflag);
-      timendms += timems(TIM_RUN) - timx;  // ignore time spent in immediate
-      
-      if(locmustflag != 0 && findhci(mustflag,ndevice,INS_NOPOP) >= 0) 
-        {
-        locmustflag = 0;
-        doneflag = 1;
-        timendms = toshort;
-        timstart = timems(TIM_RUN);
-        }
+      locmustflag = 0;
+      doneflag = 1;
+      timendms = toshort;
+      timstart = timems();
       }
-      
-    // next message may loop with data in buf
-    do     // wait for complete message
-      { 
-      if(blen != 0 && wantlen == 8192)   // find expected messaage length
+       
+    toms = (int)(timstart + (unsigned long long)timendms - timems());
+    if(toms < 0)
+      toms = 0;
+    packlen = readpacket(buf,toms);
+       
+    if(packlen <= 0)  
+      {    // nothing read and timed out - normal exit route                         
+      if(mustflag == 0 || doneflag != 0 || (disflag != 0 && ndevice == devicen) )
+        retval = 1;  // OK normal exit or waiting for packet from disconnected device
+      else
         {
-        b0 = buf[0];
-        if(!(b0==1 || b0==2 || b0==4))
-          {   
-          NPRINT "Unknown reply type\n");
-          // clear reads and exit
-          hexdump(buf,blen);
-                        
-          timstart = timems(TIM_RUN);  // start timer
-          timendms = toshort;
-          do
-            {
-            len = read(gpar.hci,buf,sizeof(buf));
-          
-            if(len > 0)  // restart timeout - still toshort
-              {
-              timstart = timems(TIM_RUN);    // restart timer
-              }          
-            }
-          while(timems(TIM_RUN) - timstart < timendms);
-   
-          flushprint();
-          --level;
-          
-          timems(TIM_FREE);
-          return(0);
-          }
-          
-        if(b0 == 1 && blen > 3)
-          wantlen = buf[3] + 4;
-        else if(b0 == 2 && blen > 4)
-          wantlen = buf[3] + (buf[4] << 8) + 5;        
-        else if(b0 == 4 && blen > 2)
-          wantlen = buf[2] + 3;
-        }
-       
-      if(blen < wantlen)   // need more or short TO to exit        
-        {         
-        do       // read block of data - may be less than or more than one line
-          {
-          pfd[0].fd = gpar.hci;
-          pfd[0].events = POLLIN;
-          if(poll(pfd,1,1) == 0)
-            len = 0;
-          else if((pfd[0].events & POLLIN) != 0)
-            len = read(gpar.hci,&buf[blen],sizeof(buf)-blen);           
-          else
-            len = 0;
-             
-           // len = number of bytes read  0=EOF -1=error
-           
-          if(len <= 0 && (timendms == 0 || (timems(TIM_RUN) - timstart) >= timendms))  
-            {    // nothing read and timed out - normal exit route                         
-            if(len > 0 || blen > 0)
-              NPRINT "Exit with partial reply\n");
-
-            
-            if(mustflag == 0 || doneflag != 0 || (disflag != 0 && ndevice == devicen) )
-              {
-              retval = 1;  // OK normal exit or waiting for packet from disconnected device
-              }
-            else
-              {
-              if(mustflag != IN_DATA && mustflag != IN_CONREQ && mustflag != IN_LEACK && lesflag == 0 && clsflag == 0)
-                VPRINT "Timed out waiting for expected packet\n"); 
+        if(mustflag != IN_DATA && mustflag != IN_CONREQ && mustflag != IN_LEACK && lesflag == 0 && clsflag == 0)
+          VPRINT "Timed out waiting for expected packet\n"); 
  
-              retval = 0;
-              }
-            flushprint();
-            popins();
-            
-       
-            --level;
-            
-            timems(TIM_FREE);
-            for(k = 0 ; devok(k) != 0 ; ++k)
-              dev[k]->xwantlen = 0;
+        retval = 0;
+        }
+      flushprint();
+      popins();     
+      --level;            
 
-            if(xflag != 0)
-              {
-              NPRINT "Missing extra data - add time delays\n");
-              immediate(lookflag | locmustflag);
-              }
-              
-            return(retval);     
-            }
-          }
-        while(len <= 0);  // want to exit if len=0 end of file
+      return(retval);
+      }
 
-        if(doneflag != 0)
-          {  // want quick exit but more coming - reset short TO
-          // NPRINT "Reset TO 2\n");   
-          timstart = timems(TIM_RUN);  // restart timer
-          timendms = toshort;   // x 1024 ms to us     
-          }
-        blen += len;  // new length of buffer
-        }                 
-      }    
-    while(blen < wantlen);
-    
+    if(doneflag != 0)
+      {  // want quick exit but more coming - reset short TO
+      // NPRINT "Reset TO 2\n");   
+      timstart = timems();  // restart timer
+      timendms = toshort;   // x 1024 ms to us     
+      }
+
     gotflag = 0;  // no save to instack
     crflag = 0;   // no print credit decrement
     ascflag = 0;    // not serial data for ascii print
@@ -6597,7 +6490,6 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     chan = 0;
     xprintflag = 0;
     devicen = 0;      // sending device unknown
-    xwantlen = 0;
     buf3sav = -1;
     
     if(buf[0] == 4)    // HCI events
@@ -6899,7 +6791,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             else
               dp->conflag = CON_MESH;  // LE connected as mesh device
             doneflag = 1;  
-            timstart = timems(TIM_RUN);
+            timstart = timems();
             timendms = toshort;
             }              
           else  // error disconnect
@@ -6967,7 +6859,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             dp->conflag |= CON_HCI;  
             VPRINT "GOT Open OK (Event 03) with handle = %02X%02X\n",buf[5],buf[4]);
             doneflag = 1;  
-            timstart = timems(TIM_RUN);
+            timstart = timems();
             timendms = toshort;
             }
           else  // not waiting - disconnect
@@ -6991,7 +6883,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
      
                       
       if(gotflag != 0 && gotflag != IN_CNAME)
-        dev[devicen]->nx = pushins(gotflag,devicen,buf[2],&buf[3]);
+        pushins(gotflag,devicen,buf[2],&buf[3]);
            
       if(disflag != 0 && devicen != 0)
         {
@@ -7024,233 +6916,166 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
           }
         }
 
-      if((buf[2] & 0x30) == 0x10)
-        {  // extra data
-        //gotflag = IN_DATA;   // extra LE data
-        //firstpacket = 0;
-        // add to existing stack entry
-        datlen = buf[3] + (buf[4] << 8);  // length      
-        if(xflag == 0 || dev[devicen]->xwantlen == 0 || datlen == 0)
-          {
-          if(datlen == 0)
-            VPRINT "Empty extra data\n"); 
-          else
-            NPRINT "Unexpected extra data\n");
+      chan = (buf[7] + (buf[8]<<8));  // channel
+        
+      if(chan == 4)    // LE or mesh
+        {
+        if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] == 0x1B || buf[9] == 0x1D))
+          {  // client notify
+          gotflag = IN_NOTIFY | IN_IMMED;
+          if(mustflag == IN_NOTIFY)
+            locmustflag &= ~IN_NOTIFY;
           }
+        else if((dev[devicen]->conflag & CON_LX) != 0)
+          {  // server
+          gotflag = IN_ATTDAT | IN_IMMED;
+           
+          // buf[9]==1  error=buf[13] return
+                         
+          if(buf[9] == 0x1E || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
+            {  // indicate ack 
+            gotflag = IN_LEACK;
+            }
+          }
+        else if(dev[devicen]->type == BTYPE_ME && (dev[devicen]->conflag & CON_LE) == 0)
+          gotflag = IN_DATA;    // mesh data
         else
           {
-          VPRINT "Following packet [3][4] = %04X extra bytes from [5]..\n",datlen);
-          datp = buf+5;
-          dev[devicen]->xwantlen -= datlen;
-          xwantlen = dev[devicen]->xwantlen;  // for print
-          nxx = dev[devicen]->nx;
-          if(dev[devicen]->xwantlen <= 0 && datlen > 0 && nxx >= 0 && ((long long int)1 << instack[nxx]) == IN_DATA && (dev[devicen]->conflag & CON_RF) != 0)
-            --datlen;  // last packet of serial data - not FCS  
-          if(nxx >= 0 && datlen > 0)
-            dev[devicen]->nx = addins(nxx,datlen,datp);  
-          if(dev[devicen]->xwantlen <= 0)
-            {
-            if(xflag > 0)
-              --xflag;  // got all extra bytes 
-            dev[devicen]->nx = -1;
-            dev[devicen]->xwantlen = 0;
-            if(xflag == 0)
-              timendms = savtimendms;
-            }  
-          xprintflag = 2;         
-          ascflag = 1;
-          }
-        }
-      else
-        {   // first packet
-        // firstpacket = 1;
-        if(dev[devicen]->xwantlen > 0 && xflag > 0)
-          {  
-          NPRINT "Missing extra data - add time delays\n");
-          dev[devicen]->xwantlen = 0;
-          dev[devicen]->nx = -1;
-          --xflag;
-          if(xflag == 0)
-            timendms = savtimendms;
-          }
-                   
-        k = buf[5] + (buf[6] << 8) + 9 - wantlen;  // extra needed in next messages
-        if(k > 0)
-          {  // need more
-          dev[devicen]->nx = -1;  // pushins will change
-          dev[devicen]->xwantlen = k;
-          xwantlen = k;  // for print
-          if(xflag == 0)
-            {
-            savtimendms = timendms;  // restore when got entire packet
-            timendms += 500;         // more time       
-            }
-          ++xflag;
-          }
-        
-        chan = (buf[7] + (buf[8]<<8));  // channel
-        
-        if(chan == 4)    // LE or mesh
-          {
-          if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] == 0x1B || buf[9] == 0x1D))
-            {  // client notify
-            gotflag = IN_NOTIFY | IN_IMMED;
-            if(mustflag == IN_NOTIFY)
-              locmustflag &= ~IN_NOTIFY;
-            }
-          else if((dev[devicen]->conflag & CON_LX) != 0)
-            {  // server
-            gotflag = IN_ATTDAT | IN_IMMED;
-           
-            // buf[9]==1  error=buf[13] return
+          if(buf[9] != 3)  // not MTU ack
+            gotflag = IN_ATTDAT;  // LE        
                          
-            if(buf[9] == 0x1E || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
-              {  // indicate ack 
-              gotflag = IN_LEACK;
-              }
-            }
-          else if(dev[devicen]->type == BTYPE_ME && (dev[devicen]->conflag & CON_LE) == 0)
-            gotflag = IN_DATA;    // mesh data
-          else
-            {
-            if(buf[9] != 3)  // not MTU ack
-              gotflag = IN_ATTDAT;  // LE        
-                         
-            // buf[9] == 1  error buf[13]
+          // buf[9] == 1  error buf[13]
           
-            if(buf[9] == 0x13 || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
-              {  // writc ctic ack
-              gotflag = IN_LEACK;
-              }
+          if(buf[9] == 0x13 || ((sflag & IN_LEACK) != 0 && buf[9] == 0x01))
+            {  // writc ctic ack
+            gotflag = IN_LEACK;
+            }
                      
-            if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] & 1) == 0 && buf[9] <= 0x20)
-              {  // even opcode = request from server - let odd opcodes go to ATTDAT 
-              gotflag = 0;  // ditch
-              if(buf[9] == 0x02)
-                {  // MTU exhange
-                VPRINT "SEND MTU exchange reply\n");
-                lemtu[PAKHEADSIZE+10] = (unsigned char)((LEDATLEN + 3) & 0xFF);
-                lemtu[PAKHEADSIZE+11] = (unsigned char)(((LEDATLEN + 3) >> 8) & 0xFF);
-                sendhci(lemtu,devicen);
-                dev[devicen]->setdatlen = LEDATLEN;
-                }
-              else 
-                {
-                VPRINT "%s is requesting attributes - fob it off\n",dev[devicen]->name);
-                if(buf[9] == 0x04 && buf[10] == 0x01 && buf[11] == 0x00) 
-                   sendhci(fob05,devicen);
-                else if((buf[9] == 0x08 || buf[9] == 0x10) &&
-                            buf[10] == 0x01 && buf[11] == 0x00 && buf[14] == 0x00 && buf[15] == 0x28)
-                  {         
-                  if(buf[9] == 0x08)
-                    sendhci(fob09,devicen);
-                  else
-                    sendhci(fob11,devicen);           
-                  }
-                else
-                  {
-                  lefail[PAKHEADSIZE+10] = buf[9];
-                  lefail[PAKHEADSIZE+11] = buf[10];
-                  lefail[PAKHEADSIZE+12] = buf[11];
-                  if(buf[9] == 0x04 || buf[9] == 0x06 || buf[9] == 0x08 || buf[9] == 0x10)
-                    lefail[PAKHEADSIZE+13] = 0x0A;  // attribute not found
-                  else if(buf[9] == 0x0A || buf[9] == 0x12)
-                    lefail[PAKHEADSIZE+13] = 0x01;  // invalid handle
-                  else
-                    lefail[PAKHEADSIZE+13] = 0x06;  // req not supported
-                 
-                  sendhci(lefail,devicen);  // error reply
-                  }
-                }
-              } 
-            } 
-          }          
-        else if(chan == 1)
-          {
-          if(buf[9] == 0x02)
-             gotflag = IN_L2ASKCT | IN_IMMED;
-          else if(buf[9] == 0x04)
-            gotflag =  IN_L2ASKCF | IN_IMMED;
-          else if(buf[9] == 0x06)
-            gotflag = IN_L2ASKDIS | IN_IMMED;
-          else if(buf[9] == 0x0A)
-            gotflag = IN_L2ASKINFO | IN_IMMED;                                     
-          else if(buf[9] == 0x08)
-            gotflag = IN_ECHO | IN_IMMED;           
-          else if((sflag & IN_L2REPCT) != 0 && buf[9] == 0x03 && buf[17] == 0 && buf[18] == 0)  // result=0 done   [17]=1 pending
-            {
-            gotflag =  IN_L2REPCT;
-            if(devicen != 0)
+          if((dev[devicen]->conflag & CON_LE) != 0 && (buf[9] & 1) == 0 && buf[9] <= 0x20)
+            {  // even opcode = request from server - let odd opcodes go to ATTDAT 
+            gotflag = 0;  // ditch
+            if(buf[9] == 0x02)
+              {  // MTU exhange
+              VPRINT "SEND MTU exchange reply\n");
+              lemtu[PAKHEADSIZE+10] = (unsigned char)((LEDATLEN + 3) & 0xFF);
+              lemtu[PAKHEADSIZE+11] = (unsigned char)(((LEDATLEN + 3) >> 8) & 0xFF);
+              sendhci(lemtu,devicen);
+              dev[devicen]->setdatlen = LEDATLEN;
+              }
+            else 
               {
-              dp = dev[devicen];
-              if(buf[15] == 0x41 || buf[15] == 0x42)
-                {
-                k = 2;  // psm 1
-                dp->conflag |= CON_PSM1;
+              VPRINT "%s is requesting attributes - fob it off\n",dev[devicen]->name);
+              if(buf[9] == 0x04 && buf[10] == 0x01 && buf[11] == 0x00) 
+                 sendhci(fob05,devicen);
+              else if((buf[9] == 0x08 || buf[9] == 0x10) &&
+                          buf[10] == 0x01 && buf[11] == 0x00 && buf[14] == 0x00 && buf[15] == 0x28)
+                {         
+                if(buf[9] == 0x08)
+                  sendhci(fob09,devicen);
+                else
+                  sendhci(fob11,devicen);           
                 }
               else
                 {
-                k = 0;   // psm 3
-                dp->conflag |= CON_PSM3;
+                lefail[PAKHEADSIZE+10] = buf[9];
+                lefail[PAKHEADSIZE+11] = buf[10];
+                lefail[PAKHEADSIZE+12] = buf[11];
+                if(buf[9] == 0x04 || buf[9] == 0x06 || buf[9] == 0x08 || buf[9] == 0x10)
+                  lefail[PAKHEADSIZE+13] = 0x0A;  // attribute not found
+                else if(buf[9] == 0x0A || buf[9] == 0x12)
+                  lefail[PAKHEADSIZE+13] = 0x01;  // invalid handle
+                else
+                  lefail[PAKHEADSIZE+13] = 0x06;  // req not supported
+                 
+                sendhci(lefail,devicen);  // error reply
                 }
-              dp->dcid[k] = buf[13];
-              dp->dcid[k+1] = buf[14];
-              }                
-            }
-          else if((sflag & IN_L2REPCF) != 0 && buf[9] == 0x05)
-            gotflag = IN_L2REPCF;
-          else if((sflag & IN_L2REPDIS) != 0 && buf[9] == 0x07)
-            gotflag = IN_L2REPDIS;
-          else if((sflag & IN_L2REPINFO) != 0 && buf[9] == 0x0B)
-            gotflag = IN_L2REPINFO;
-          }
-        else if( chan >= 0x40)   // dynamic channel
+              }
+            } 
+          } 
+        }   // end chan 4          
+      else if(chan == 1)
+        {
+        if(buf[9] == 0x02)
+           gotflag = IN_L2ASKCT | IN_IMMED;
+        else if(buf[9] == 0x04)
+          gotflag =  IN_L2ASKCF | IN_IMMED;
+        else if(buf[9] == 0x06)
+          gotflag = IN_L2ASKDIS | IN_IMMED;
+        else if(buf[9] == 0x0A)
+          gotflag = IN_L2ASKINFO | IN_IMMED;                                     
+        else if(buf[9] == 0x08)
+          gotflag = IN_ECHO | IN_IMMED;           
+        else if((sflag & IN_L2REPCT) != 0 && buf[9] == 0x03 && buf[17] == 0 && buf[18] == 0)  // result=0 done   [17]=1 pending
           {
-          add = buf[9] >> 3;  // 0=CONTROL else RFCOMM 
-          if(buf[7] == 0x41 && (buf[9] == 6 || buf[9] == 4 || buf[9] == 2) )  // 41 = psm 1 channel
-            gotflag = IN_SSAREQ | IN_IMMED; 
-          if( (sflag & IN_SSAREP) != 0 && (buf[9] == 1 || buf[9] == 3 || buf[9] == 5 || buf[9] == 7) && buf[10] == 0)         
-            gotflag = IN_SSAREP;
-          else if( (sflag & IN_RFUA) != 0 && buf[10] == 0x73)
-            gotflag = IN_RFUA;    
-          else if(buf[10] == 0x3F)
-            gotflag = IN_CONCHAN | IN_IMMED;
-          else if(buf[10] == 0xEF && add == 0 && buf[12] == 0x83)
-            gotflag = IN_RFCHAN | IN_IMMED;
-          else if( (sflag & IN_PNRSP) != 0 &&  buf[10] == 0xEF && add == 0 && buf[12] == 0x81)
-            gotflag = IN_PNRSP;    
-          else if(buf[10] == 0xEF && buf[9] == 0x03 && (buf[12] == 0xE1 || buf[12] == 0xE3 || 
-                       buf[12] == 0x93 || buf[12] == 0x91))
-            {     // copy for reply
-            gotflag = IN_MSC | IN_IMMED;
-            datlen = buf[3] + (buf[4] << 8) + 2;
-            if((buf[12] & 0xF0) == 0xE0)
-              rsp = msccmdrspe;
+          gotflag =  IN_L2REPCT;
+          if(devicen != 0)
+            {
+            dp = dev[devicen];
+            if(buf[15] == 0x41 || buf[15] == 0x42)
+              {
+              k = 2;  // psm 1
+              dp->conflag |= CON_PSM1;
+              }
             else
-              rsp = msccmdrsp9;
-            for(k = 0 ; k < datlen && k < 60 ; ++k)
-              rsp[PAKHEADSIZE+k+3] = buf[k+3];  // same reply
-            rsp[0] = datlen+3; 
-            }
-          else if( (buf[10] & 0xEF) == 0xEF && add != 0)   // EF or FF
-            gotflag = IN_DATA;    
-          else if(buf[10] == 0x53)
-            gotflag = IN_DISCH | IN_IMMED;  // close CONTROL/RFCOMM            
+              {
+              k = 0;   // psm 3
+              dp->conflag |= CON_PSM3;
+              }
+            dp->dcid[k] = buf[13];
+            dp->dcid[k+1] = buf[14];
+            }                
           }
-        else if(chan == 5)
-          {
-          if(buf[9] == 0x12)
-            gotflag = IN_CONUP5 | IN_IMMED;
+        else if((sflag & IN_L2REPCF) != 0 && buf[9] == 0x05)
+          gotflag = IN_L2REPCF;
+        else if((sflag & IN_L2REPDIS) != 0 && buf[9] == 0x07)
+          gotflag = IN_L2REPDIS;
+        else if((sflag & IN_L2REPINFO) != 0 && buf[9] == 0x0B)
+          gotflag = IN_L2REPINFO;
+        }
+      else if( chan >= 0x40)   // dynamic channel
+        {
+        add = buf[9] >> 3;  // 0=CONTROL else RFCOMM 
+        if(buf[7] == 0x41 && (buf[9] == 6 || buf[9] == 4 || buf[9] == 2) )  // 41 = psm 1 channel
+          gotflag = IN_SSAREQ | IN_IMMED; 
+        if( (sflag & IN_SSAREP) != 0 && (buf[9] == 1 || buf[9] == 3 || buf[9] == 5 || buf[9] == 7) && buf[10] == 0)         
+          gotflag = IN_SSAREP;
+        else if( (sflag & IN_RFUA) != 0 && buf[10] == 0x73)
+          gotflag = IN_RFUA;    
+        else if(buf[10] == 0x3F)
+          gotflag = IN_CONCHAN | IN_IMMED;
+        else if(buf[10] == 0xEF && add == 0 && buf[12] == 0x83)
+          gotflag = IN_RFCHAN | IN_IMMED;
+        else if( (sflag & IN_PNRSP) != 0 &&  buf[10] == 0xEF && add == 0 && buf[12] == 0x81)
+          gotflag = IN_PNRSP;    
+        else if(buf[10] == 0xEF && buf[9] == 0x03 && (buf[12] == 0xE1 || buf[12] == 0xE3 || 
+                     buf[12] == 0x93 || buf[12] == 0x91))
+          {     // copy for reply
+          gotflag = IN_MSC | IN_IMMED;
+          datlen = buf[3] + (buf[4] << 8) + 2;
+          if((buf[12] & 0xF0) == 0xE0)
+            rsp = msccmdrspe;
+          else
+            rsp = msccmdrsp9;
+          for(k = 0 ; k < datlen && k < 60 ; ++k)
+            rsp[PAKHEADSIZE+k+3] = buf[k+3];  // same reply
+          rsp[0] = datlen+3; 
           }
-        else if(chan == 6)
-          {
-          gotflag = IN_CRYPTO | IN_IMMED;
-          }
+        else if( (buf[10] & 0xEF) == 0xEF && add != 0)   // EF or FF
+          gotflag = IN_DATA;    
+        else if(buf[10] == 0x53)
+          gotflag = IN_DISCH | IN_IMMED;  // close CONTROL/RFCOMM            
+        }
+      else if(chan == 5)
+        {
+        if(buf[9] == 0x12)
+          gotflag = IN_CONUP5 | IN_IMMED;
+        }
+      else if(chan == 6)
+        {
+        gotflag = IN_CRYPTO | IN_IMMED;
+        }
             
-        }  // end not extra
-   
-      //nxx = -2;   // stack index
-          
+         
       if(gotflag != 0)
         {        
         if(gotflag == IN_DATA)
@@ -7259,7 +7084,7 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
             {
             datlen = buf[3] + (buf[4] << 8) - 4;
             datp = buf+9;
-            dev[devicen]->nx = pushins(gotflag,devicen,datlen,datp);
+            pushins(gotflag,devicen,datlen,datp);
             xprintflag = 1;
             ascflag = 1;
             }
@@ -7281,22 +7106,18 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
               if(devicen != 0)
                 {
                 condp = dev[devicen];     
-                --condp->credits;
+                --condp->credits;  // no extra inc
                 crflag = 1;
                 }
-              if(buf[5] + (buf[6] << 8) + 9 - wantlen != 0)
-                {  // multiple packets - this packet less than datlen
-                datlen = wantlen - 12 - k; 
-                }
               if(datlen > 0)
-                dev[devicen]->nx = pushins(gotflag,devicen,datlen,datp);
+                pushins(gotflag,devicen,datlen,datp);
               ascflag = 1;  // may print ascii with hexdump          
               }
             }
           }   // end IN_DATA 
         else
           {   // normal push
-          dev[devicen]->nx = pushins(gotflag,devicen,buf[3] + (buf[4] << 8) - 4,buf+9);
+          pushins(gotflag,devicen,buf[3] + (buf[4] << 8) - 4,buf+9);
           }
         }  // end gotflag
       }  // end 02 packet   
@@ -7325,9 +7146,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         {
         VPRINT "> ");
         VPRINT "Event %02X =",buf[1]);
-        for(k = 3 ; k < wantlen && k < 13 ; ++k)
+        for(k = 3 ; k < packlen && k < 13 ; ++k)
           VPRINT " %02X",buf[k]);
-        if(k == wantlen)
+        if(k == packlen)
           VPRINT "\n");
         else
           VPRINT "...\n");
@@ -7391,9 +7212,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
         else if(chan != 0)
           {
           VPRINT "> CHANNEL %04X = ",chan);
-          for(k = 9 ; k < wantlen && k < 20 ; ++k)
+          for(k = 9 ; k < packlen && k < 20 ; ++k)
             VPRINT " %02X",buf[k]);
-          if(k == wantlen)
+          if(k == packlen)
             VPRINT "\n");
           else
             VPRINT "...\n");
@@ -7402,15 +7223,9 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
       else
         VPRINT "> Unknown\n");
     
-      hexdump(buf,wantlen);
+      hexdump(buf,packlen);
       if(ascflag != 0)   // serial read data - print if all ascii
-        printascii(datp,datlen);
-      
-    
-      if(xwantlen != 0)
-        {
-        VPRINT "Need an extra %04X bytes\n",xwantlen);
-        }
+        printascii(datp,datlen);      
       }   // end print
     
 
@@ -7418,48 +7233,241 @@ int readhci(int ndevice,long long int mustflag,long long int lookflag,int timout
     if(crflag != 0)
       {
       VPRINT "  Has used a credit. Number remaining = %d\n",condp->credits);  
-      if(condp->credits < 3)
+      if(condp->credits < 8)
         setcredits(devicen);   // top up credits
       } 
-
-
-    if(blen == wantlen)
-      {    // have got exact message length
-      blen = 0;
-      }
-    else
-      {   // have got part of next packet as well
-          // wipe last packet length wantlen - copy next down
-          // starts at buf[wantlen] ends at buf[blen-1]
-          // copy to buf[0]             
-      for(k = wantlen ; k < blen ; ++k)
-        buf[k-wantlen] = buf[k];       
-      blen -= wantlen;
-      }
-
-    wantlen = 8192;  // new message flag
-       
+ 
     if(seqflag != 0)
       {  // restart short to
-      timstart = timems(TIM_RUN);
+      timstart = timems();
       timendms = toshort;
       }   
        
-    if((xflag == 0 && doneflag == 0 && mustflag != 0 && locmustflag == 0) ||
+    if((doneflag == 0 && mustflag != 0 && locmustflag == 0) ||
        (disflag != 0 && ndevice == devicen)  )
       {  // done - switch to short timeout
          // or waiting for packet from device that has disconnected unexpectedly 
       doneflag = 1;  
-      timstart = timems(TIM_RUN);
+      timstart = timems();
       timendms = toshort;
       }
-    flushprint();        
+    flushprint(); 
+    
+       
+    timx = timems();
+    immediate(lookflag | locmustflag);
+    timendms += timems() - timx;  // ignore time spent in immediate         
     }
   while(1);  
    
   return(1);
   } 
 
+
+int readbytes(unsigned char *dat,int *len,int wantlen,int toms)
+  {
+  int rlen,loclen;
+  struct pollfd pfd[1];
+  unsigned long long tim0;
+  
+     
+  loclen = *len;
+  if(loclen >= wantlen)
+    return(1);
+
+  tim0 = timems();
+  do
+    {  
+    pfd[0].fd = gpar.hci;
+    pfd[0].events = POLLIN;
+    if(poll(pfd,1,1) != 0 && (pfd[0].events & POLLIN) != 0)
+      {
+      rlen = read(gpar.hci,dat+loclen,8190-loclen);
+      if(rlen > 0)
+        {
+        loclen += rlen;
+        *len = loclen;
+        }
+      }
+    if(loclen >= wantlen)
+      return(1);
+    }
+  while((int)(timems() - tim0) < toms);
+  
+  return(0);
+  }   
+
+
+int readpacket(unsigned char *buf,int toms)
+  {
+  int n,sn,nx,ny,dn,dlen,nread,xnread,totlen,thislen,handle,errflag;
+  unsigned char b0,xb0;
+  static int blen = 0;
+  static int packlen = 0;
+  
+  for(n = packlen ; n < blen ; ++n)
+    buf[n-packlen] = buf[n];
+  blen -= packlen;  // >0 if store
+  packlen = 0;  
+  handle = 0;
+  totlen = 0;
+      
+  do  // dunp orphan loop
+    {
+    if(readbytes(buf,&blen,1,toms) == 0)
+      {
+      // normal time out no bytes from store or new read
+      return(0);
+      } 
+   
+    b0 = buf[0];
+    if(b0 == 1)
+      nread = 4;
+    else if(b0 == 2)
+      nread = 7;
+    else if(b0 == 4)
+      nread = 3;
+    else
+      {
+      NPRINT "Invalid packet\n");
+      blen = 0;
+      packlen = 0;
+      return(0);  // fatal
+      }
+   
+    if(readbytes(buf,&blen,nread,1000) == 0)
+      {
+      NPRINT "Timed out waiting\n");
+      blen = 0;
+      packlen = 0;
+      return(0);  // fatal
+      }
+       
+    if(b0 == 1)
+      packlen = buf[3] + 4;
+    else if(b0 == 4) 
+      packlen = buf[2] + 3;
+    else if(b0 == 2)
+      {
+      thislen = buf[3] + (buf[4] << 8);
+      packlen = thislen + 5;
+      thislen -= 4;
+      totlen = buf[5] + (buf[6] << 8);
+      handle = (buf[1] + (buf[2] << 8)) & 0xFFF;
+      if((buf[2] & 0x30) == 0x10)
+        {
+        NPRINT "Orphan extra data\n");
+        // remove packet
+        for(n = packlen ; n < blen ; ++n)
+          buf[n-packlen] = buf[n];
+        blen -= packlen;
+        packlen = 0; // loop for next  
+        }
+      else
+        {  // temp change totlen to this packet only
+        n = packlen - 9;  // mew totlen
+        buf[5] = n & 0xFF;
+        buf[6] = (n >> 8) & 0xFF;
+        }       
+      }         
+    }
+  while(packlen == 0);
+     
+  if(readbytes(buf,&blen,packlen,1000) == 0)
+    {
+    NPRINT "Timed out waiting\n");
+    blen = 0;
+    packlen = 0;
+    return(0);  // fatal
+    }
+     
+  // Check extra data needed
+  sn = packlen;
+  while(b0 == 2 && packlen > 0 && totlen > thislen)
+    {
+    // find extra data handle with 10 flag
+    // sn = start next packet        
+    nx = -1;
+    do
+      {
+      errflag = 1;
+      // need 1+ sn
+      if(readbytes(buf,&blen,sn+1,1000) != 0)
+        {  
+        xb0 = buf[sn];
+        if(xb0 == 1)
+          xnread = 4;
+        else if(xb0 == 2)
+          xnread = 5;
+        else if(xb0 == 4)
+          xnread = 3;
+        else
+          xnread = 0;  // missing
+  
+        if(xnread != 0 && readbytes(buf,&blen,sn+xnread,1000) != 0)
+          {
+          // packet size dn        
+          if(xb0 == 1)
+            dn = buf[sn+3] + 4; 
+          else if(xb0 == 4)
+            dn = buf[sn+2] + 3;
+          else if(xb0 == 2)
+            dn = buf[sn+3] + (buf[sn+4] << 8) + 5;
+
+          if(readbytes(buf,&blen,sn+dn,1000) != 0)
+            {
+            if(xb0 == 2 && ((buf[sn+1] + (buf[sn+2] << 8)) & 0xFFF) == handle && (buf[sn+2] & 0x30) == 0x10)
+              {
+              nx = sn;
+              ny = nx + 5;
+              dlen = dn - 5; // extra data size ny to sn
+              }
+            sn += dn;
+            errflag = 0;
+            }
+          }
+        }
+      if(errflag != 0)
+        {
+        NPRINT "Missing extra data\n");
+        blen = sn;  // sn is previous value OK
+        return(packlen);  // so data missing but legal data in packlen
+        } 
+      }
+    while(nx < 0);
+    
+    // add nx data
+    // shift up dlen
+    for(n = blen-1 ; n >= packlen ; --n)
+      buf[n+dlen] = buf[n];
+    blen += dlen;
+    sn += dlen;
+    nx += dlen;
+    ny += dlen;
+    // copy extra data
+    for(n = 0 ; n < dlen ; ++n)
+      buf[packlen+n] = buf[ny+n];
+    packlen += dlen;
+    // shift remainder to nix extra
+    dn = blen - sn;
+    for(n = 0 ; n < dn ; ++n)
+      buf[nx+n] = buf[sn+n];
+    dn = sn - nx;
+    blen -= dn;
+    sn -= dn;
+    // update sizes so legal     
+    thislen += dlen;
+    n = packlen - 5;  // new thislen
+    buf[3] = n & 0xFF;
+    buf[4] = (n >> 8) & 0xFF;
+    n = packlen - 9;  // mew totlen
+    buf[5] = n & 0xFF;
+    buf[6] = (n >> 8) & 0xFF;       
+    }  // emd extra data search
+      
+  return(packlen);
+  }
+   
 void immediate(long long lookflag)
   {
   int n,j,devicen,id,ch,psm,scflag,popflag;
@@ -9942,57 +9950,6 @@ int pushins(long long int typebit,int devicen,int len,unsigned char *s)
   return(nret);
   }
 
-int addins(int nx,int len,unsigned char *s)
-  {
-  int n,xn,k,newlen,oldlen;
-
-  // find last entry
- 
-  if(nx < 0)
-    return(-1);
-
-  oldlen = instack[nx+1] + (instack[nx+2] << 8);
-  newlen = oldlen + len;
-  
-  xn = 0;  
-  k = 0;
-  while(instack[k] != INS_FREE)
-    {
-    xn = k;  // last entry
-    k += instack[k+1] + (instack[k+2] << 8) + INSHEADSIZE;  // next type
-    }
-  
-    // xn is last
-  
-  if(xn != nx)
-    {   // not last entry - need new
-    xn = pushins(1,instack[nx+3],oldlen,instack+nx+INSHEADSIZE);
-    if(xn < 0)
-      return(-1);
-    instack[xn] = instack[nx];  // replace type 1
-    instack[nx] = INS_POP;  // ditch old    
-    }
-
-   // xn is last - can extend
-
-  
-  instack[xn+1] = (newlen & 255);
-  instack[xn+2] = (newlen >> 8) & 255;
-  n = xn + oldlen + INSHEADSIZE;
-  if(n + len > INSTACKSIZE-16)
-    {
-    NPRINT "Serial buffer full - use read_all_clear()\n");
-    return(-1);
-    }
-  for(k = 0 ; k < len ; ++k)
-    {
-    instack[n] = s[k];
-    ++n;
-    }  
-  instack[n] = INS_FREE;  // next free
-  return(xn);
-  }
-
 /******* POP IN STACK **********
 pop all type = INS_POP
 ********************/
@@ -10002,12 +9959,6 @@ void popins()
   int n,k,lastffn,lastn,lastwasff,count;
   
   
-  for(k = 0 ; devok(k) != 0 ; ++k)
-    {
-    if(dev[k]->xwantlen != 0 && dev[k]->nx >= 0)
-      return;  // waiting for extra - do not move nx
-    }
-    
   // find last FF pop type
   do
     {
@@ -10158,9 +10109,7 @@ int bluezdown()
   {
   int dd,retval;
   
-  if(gpar.bluez == 0)
-    return(1);  // already down
-    
+ 
   VPRINT "Bluez down\n");
 
   retval = 0;
@@ -10178,8 +10127,7 @@ int bluezdown()
     VPRINT "Bluez down failed\n");
        
   flushprint();  
-  gpar.bluez = 0;  // bluez down
-  sleep(1);  
+  sleep_ms(500);  
   return(retval);
   }
 
@@ -13026,14 +12974,14 @@ void read_notify(int timeoutms)
    
   kmsav = setkeymode(1);
    
-  tim0 = timems(TIM_LOCK);
+  tim0 = timems();
   do
     {
     readhci(0,0,0,tox,0);
     key = readkey();
     }
-  while(timems(TIM_RUN) - tim0 < to && key != 'x');
-  timems(TIM_FREE);
+  while(timems() - tim0 < to && key != 'x');
+  
   setkeymode(kmsav);
   return;
   }
@@ -13164,7 +13112,7 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
     
   flag = inflag;
   lastchar = 0;
-  timstart = timems(TIM_LOCK);
+  timstart = timems();
 
   do  // until exit from within loop
     {
@@ -13222,7 +13170,6 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
             {  // count is buffer size
             NPRINT "Read exceeded buffer size\n");
             popins();
-            timems(TIM_FREE);
             return(gotn);   // run out of memory
             }
 
@@ -13232,7 +13179,6 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
             {
             popins();
             gpar.readerror = 0;  // OK
-            timems(TIM_FREE);
             return(gotn);  // found endchar or got count or got mesh packet - normal exit - done OK
             }
 
@@ -13243,14 +13189,12 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
           {  // got one IN_DATA mesh packet
           popins();
           gpar.readerror = 0;  // OK
-          timems(TIM_FREE);
           return(gotn);
           }
         else if(gotn > 0 && (flag & EXIT_CHAR) != 0 && *ecp == PACKET_ENDCHAR) 
           {
           popins();
           gpar.readerror = 0;  // OK
-          timems(TIM_FREE);
           return(gotn);  // found endchar or got count or got mesh packet - normal exit - done OK
           }
         
@@ -13266,19 +13210,17 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
       {
       VPRINT "READ disconnect exit\n"); 
       gpar.readerror = ERROR_DISCONNECT;
-      timems(TIM_FREE);
       return(gotn);
       }
 
 
     if( (flag & EXIT_TIMEOUT) != 0)
       {
-      if(timems(TIM_RUN) - timstart > (unsigned long long)timeoutms)
+      if(timems() - timstart > (unsigned long long)timeoutms)
         {
         if(gpar.serveractive != 2)
           VPRINT "Serial read time out\n");
         gpar.readerror = ERROR_TIMEOUT;
-        timems(TIM_FREE);
         return(gotn);
         }
       }
@@ -13290,7 +13232,6 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
         {
         VPRINT "Serial read aborted by key press\n");
         gpar.readerror = ERROR_KEY;
-        timems(TIM_FREE);
         return(gotn);
         }
       }
@@ -13303,7 +13244,6 @@ int readrf(int *ndevice,unsigned char *inbuff,int count,char endchar,int inflag,
       {  // universal server LE input
       popins();
       gpar.readerror = 0;  // OK
-      timems(TIM_FREE);
       return(gotn);  
       }
 
@@ -13694,28 +13634,16 @@ return time in milliseconds since first call reset
 
 unsigned long long time_ms()
   {
-  return(timems(TIM_RUN));  
+  return(timems());  
   }
 
-unsigned long long timems(int flag)
+unsigned long long timems()
   {
   unsigned long long dt;
   struct timespec ts;
   static time_t tim0;
   static int xflag = 0;  // force reset on first call
-  static int count = 0;
-  
-
-  if(flag == TIM_COUNT)
-    return(count);
-  else if(flag == TIM_FREE)
-    {
-    --count;
-    return(0);
-    }
-  else if(flag == TIM_LOCK)
-    ++count;
-       
+        
   clock_gettime(CLOCK_MONOTONIC_RAW,&ts);
 
   if(xflag == 0)
@@ -14868,6 +14796,6 @@ int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char 
   // your code here
   // For Python - recompile the module via 
   //     python3 btfpymake.py build   
-
+   
   return(0);
   }
