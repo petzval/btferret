@@ -251,4 +251,41 @@ action by an LE server. So there are now two ways of doing this: the timer (LE\_
        
 14. BUG FIX. If le\_server was started with a short timer value (less than 1 second), key strokes could be
     lost. This was a particular problem if keys\_to\_callback was also set.
+    
+### Version 21
+
+1. Ported to Windows. The btlib library and code written for Linux will now run on Windows if a
+Raspberry Pi Zero 2W is set up as a Bluetooth dongle for a PC. Instructions in the windows folder README.md.
+
+2. New option for devices files ADDRESS=LOCAL. Set the address of the node to the local address.
+This option avoids the need to edit the devices file to specify the local address. 
+
+3. New return option for server callbacks SERVER\_EXIT\_CONNECTED. Normally, a server callback
+will return SERVER\_EXIT when the client disconnects.
+The connected option exits the server but does not disconnect. This might be
+used to swap client/server roles. The server becomes the client and vice-versa. Both devices will have to
+be programmed to enable this behaviour. It can also be used to simplify the sending of LE notifications
+which can be coded outside the server callback function.
+
+4. New function device\_info\_ex. Same as device\_info with BTYPE\_SHORT, but copies the device list to a string variable
+rather than printing on the screen. Allows porting to Windows input functions.
+
+5. New function list\_ctics\_ex. Same as list\_ctics, but copies the characteristics list to a
+string variable rather than printing on the screen. Allows porting to Windows input functions.
+
+6. New function list\_channels\_ex. Same as list\_channels, but copies the channels list to a
+string variable rather than printing on the screen. Allows porting to Windows input functions.
+
+7. New input/output functions for Windows: input\_integer, input\_string, input\_filename,
+input\_select, input\_radio, print.
+
+8. New Hello World example for HM10 BLE modules: hm10_client.c/py. An HM10 module uses LE
+to make a serial connection. The sample code scans for LE devices to find an active HM10
+device, connects and sends "Hello" then waits for a reply which can be sent from
+a PC running a serial terminal connected to the HM10.
+
+ 
+
+
+
    

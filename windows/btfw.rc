@@ -1,0 +1,105 @@
+#include <windows.h>
+
+#define DLG_PROMPT 70
+#define DLG_STRING 71
+#define DLG_BROWSE 72
+#define DLG_SELECT 73
+#define DLG_YES 74
+#define DLG_NO  75
+#define DLG_OK 76
+#define DLG_CANCEL 77
+#define DLG_RAD0 78
+#define DLG_RAD1 79
+#define DLG_RAD2 80
+#define DLG_RAD3 81
+#define DLG_RAD4 82
+#define DLG_RAD5 83
+#define DLG_RAD6 84
+#define DLG_RAD7 85
+
+BTFWMenu MENU
+  {
+  POPUP "Dongle"
+    {
+    MENUITEM "Auto open",30
+    MENUITEM "Manual open...",31
+    MENUITEM "Ping dongle",32,GRAYED
+    MENUITEM "Shut down...",33,GRAYED
+    MENUITEM "Exit btfdongle...",34,GRAYED
+    MENUITEM "Emergency STOP...",35,GRAYED
+    MENUITEM SEPARATOR
+    MENUITEM "Exit",39
+    }
+  POPUP "Edit"
+    {
+    MENUITEM "Save As...",40
+    MENUITEM "Clear",41
+    MENUITEM "Select all",42
+    MENUITEM "Find...",43
+    MENUITEM "Find next  F3",44
+    }
+
+  POPUP "Run",GRAYED
+    {
+    MENUITEM "BT_ferret",50
+    MENUITEM "My code 1",51
+    MENUITEM "My code 2",52
+    MENUITEM "My code 3",53
+    MENUITEM "My code 4",54
+    MENUITEM "My code 5",55
+    MENUITEM "My code 6",56
+    MENUITEM "My code 7",57
+    MENUITEM "My code 8",58
+    MENUITEM "My code 9",59
+    MENUITEM "My code 10",60
+    }
+  POPUP "BT_ferret",GRAYED
+    {
+    MENUITEM "i - Device Info",100
+    MENUITEM "a - Classic scan",101
+    MENUITEM "b - LE scan",102
+    MENUITEM "c - Connect",103
+    MENUITEM "s - Server",104
+    MENUITEM "p - Ping server",105
+    MENUITEM "d - Disconnect",106
+    MENUITEM "D - Tell server to disconnect",107
+    MENUITEM "v - Read server services",108
+    MENUITEM "t - Send string to server",109
+    MENUITEM "r - Read LE characteristic",110
+    MENUITEM "w - Write LE characteristic",111
+    MENUITEM "j - Enable/disable LE notify",112
+    MENUITEM "R - Read LE notifications",113
+    MENUITEM "T - Send string to mesh",114
+    MENUITEM "f - File transfer",115
+    MENUITEM "k - Settings",116
+    MENUITEM "u - Clear input buffer",117
+    MENUITEM "l - Read LE handles",118
+    MENUITEM "m - Mesh transmit on",119
+    MENUITEM "n - Mesh transmit off",120
+    MENUITEM "q - Quit",121
+    }
+  MENUITEM "EXIT_SERVER",90,GRAYED
+  }
+
+AboutBox DIALOG 0,0,300,250
+  STYLE WS_POPUP | WS_CAPTION | DS_ABSALIGN | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+  {
+  // id,x,y,xwid,yht
+  LTEXT "Prompt"    DLG_PROMPT,10,100,300,10
+  EDITTEXT        DLG_STRING,50,115,160,14,ES_LEFT | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL
+  PUSHBUTTON "Browse.."  DLG_BROWSE,210,115,50,14
+  COMBOBOX        DLG_SELECT,50,130,160,30,CBS_DROPDOWNLIST | WS_VSCROLL
+  DEFPUSHBUTTON "OK"  DLG_OK,20,170,50,14
+  PUSHBUTTON "Yes"  DLG_YES,70,170,100,14
+  PUSHBUTTON "No"  DLG_NO,120,170,50,14
+  PUSHBUTTON "Cancel"  DLG_CANCEL,170,170,50,14
+  RADIOBUTTON "Radio0" DLG_RAD0,170,170,100,14
+  RADIOBUTTON "Radio1" DLG_RAD1,170,170,100,14
+  RADIOBUTTON "Radio2" DLG_RAD2,170,170,100,14
+  RADIOBUTTON "Radio3" DLG_RAD3,170,170,100,14
+  RADIOBUTTON "Radio4" DLG_RAD4,170,170,100,14
+  RADIOBUTTON "Radio5" DLG_RAD5,170,170,100,14
+  RADIOBUTTON "Radio6" DLG_RAD6,170,170,100,14
+  RADIOBUTTON "Radio7" DLG_RAD7,170,170,100,14
+  }
+

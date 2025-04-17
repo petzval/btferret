@@ -16,7 +16,7 @@ EDIT
 #include <string.h>
 #include "btlib.h"
 
-//#define BTFWINDOWS
+#define BTFWINDOWS
 
 int btfdespatch(char c);
 void printhelp(void);

@@ -1,4 +1,4 @@
-//############ VERSION 20 #################
+//############ VERSION 21 #################
 
 #include <Python.h>
 
@@ -187,6 +187,7 @@ PyMODINIT_FUNC PyInit_btfpy()
 
   PyModule_AddIntConstant(module,"SERVER_CONTINUE",SERVER_CONTINUE);
   PyModule_AddIntConstant(module,"SERVER_EXIT",SERVER_EXIT);
+  PyModule_AddIntConstant(module,"SERVER_EXIT_CONNECTED",SERVER_EXIT_CONNECTED);
   
   PyModule_AddIntConstant(module,"ERROR_TIMEOUT",ERROR_TIMEOUT);
   PyModule_AddIntConstant(module,"ERROR_KEY",ERROR_KEY);

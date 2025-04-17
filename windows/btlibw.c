@@ -4,7 +4,7 @@
 #include <string.h>
 #include "btlib.h" 
 
-// #define BTFWINDOWS
+#define BTFWINDOWS
 
 #ifndef BTFWINDOWS                       
 #include <time.h>
