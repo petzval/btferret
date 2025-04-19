@@ -8,6 +8,8 @@
 #undef ERROR_TIMEOUT
 #include "btlib.h"
 
+// Version 21.1
+
 #define VERSION 21
 
 int btfdespatch(char c);  // btferretw.c
@@ -72,6 +74,7 @@ int setkeymode(int setflag);
 int readkey(void);
 unsigned long long time_ms();
 int checkfilename(char* funs, char* s);
+int getdatfile(char *s);
 void serverexit(int flag);
 // in btlib.h
 // void scroll_back(void);
@@ -2113,3 +2116,18 @@ int checkfilename(char* funs, char* s)
 
   return(0);
 }
+
+int getdatfile(char *dfile)
+  {
+  char *s;
+
+  s = getenv("USERPROFILE");
+  if(s == NULL)
+    {
+    dfile[0] = 0;
+    return(0);
+    }
+  strcpy(dfile,s);
+  strcat(dfile,"\\Documents\\btferret.dat");
+  return(1);
+  }

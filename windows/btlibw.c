@@ -1,4 +1,4 @@
-/********* Version 21 *********/
+/********* Version 21.1 *********/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -290,6 +290,7 @@ struct globpar
   int leintervalmax;
   int leclientwait;    // delay when connect as LE client
                        // to see any requests from server
+  char datfile[256];
   unsigned long long lastsend;
   int (*lecallback)();
               // screen print buffer 
@@ -462,6 +463,7 @@ void serverexit(int flag);
 int setkeymode(int setflag);
 int readkey(void);
 int checkfilename(char *funs,char *s);
+int getdatfile(char *s);
 // in btlib.h
 // void scroll_back(void);
 // void scroll_forward(void);
@@ -1377,6 +1379,8 @@ int init_blue_ex(char *filename,int hcin)
   gpar.exitchar = 'x';
   gpar.notifynode = 0;
   gpar.lecallback = NULL;
+  getdatfile(gpar.datfile);
+    
   gpar.hci = -1;
  
   if(initflag == 0)
@@ -9380,7 +9384,6 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   unsigned char *badd,*key;
   struct devdata *dp;
   FILE *stream;
-  static char *fname = "/etc/btferret.dat";
   static int count = -1;
   static int delflag = 0;
   static int writeflag = 0;
@@ -9398,7 +9401,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     if(count < 0)
       {
       count = 0;  // in file
-      stream = fopen(fname,"rb");
+      stream = fopen(gpar.datfile,"rb");
       if(stream == NULL)
         return;
  
@@ -9460,7 +9463,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     if(ndevice == 0 && eflag != 0)
       {
       NPRINT "***** ERROR *****\n");
-      NPRINT "  Corrupted /etc/btferret.dat file. Delete it and re-pair devices\n");
+      NPRINT "  Corrupted %s file. Delete it and re-pair devices\n",gpar.datfile);
       }
     }
   else if(rwflag == 1 || rwflag == 4)
@@ -9522,13 +9525,13 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         
     if(count + addcount > 100)
       {
-      NPRINT "/etc/btferret.dat file of paired devices is large\n");  
+      NPRINT "%s file of paired devices is large\n",gpar.datfile);  
       NPRINT "Recommendation: delete it and re-pair devices\n");
       }
       
     if(count + addcount > 254)
       {
-      NPRINT "Too many paired devices - delete /etc/btferret.dat\n");
+      NPRINT "Too many paired devices - delete %s\n",gpar.datfile);
       NPRINT "file to reset and then re-pair devices\n");
       return;
       }
@@ -9592,7 +9595,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       free(table);
     table = newtable;
     count += addcount;      
-    stream = fopen(fname,"wb");  
+    stream = fopen(gpar.datfile,"wb");  
     if(stream == NULL)
       return;
       
@@ -15121,7 +15124,12 @@ int readkey()
   return(cret);
   }
 
- 
+int getdatfile(char *s)
+  {
+  strcpy(s,"/etc/btferret.dat");
+  return(1);
+  }
+   
 // end ifndef BTFWINDOWS 
 #endif
 
