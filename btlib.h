@@ -96,6 +96,11 @@
 #define PACKET_ENDCHAR 254
 
 
+void set_pairing_callback(int node, void (*callback)(int));
+
+int btle_devtimer(int node,int tods);
+void btle_notifynode(int node);
+
 void classic_scan(void);
 int classic_server(int clientnode,int(*callback)(int,unsigned char*,int),char endchar,int keyflag);
 void close_all(void);
