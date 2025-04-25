@@ -1,5 +1,7 @@
 /************** BTFDONGLE ********
 
+Version 21.1
+
 For Pi Zero 2W or Pi4 set up as a serial USB device
 and connected to a PC so it looks like a COM port.
 
@@ -172,6 +174,9 @@ int readn(unsigned char *buf,int len)
   {
   int nr,nread,ntogo;
 
+  if(len == 0)
+    return(0);
+    
   nread = 0;
   ntogo = len;
   do
@@ -332,12 +337,11 @@ int sendreply(int opcode,int id,int *ndat,int ndatlen,unsigned char *dat,int dat
     } 
   else
     {
-    nsend = dn+5;  // header only from loccmd
+    nsend = dn+5;  // header + ints only from loccmd
     dn += datlen;  // data sent 2nd from dat
     flag = 1;
     }
   
-  nsend = dn + 5;    
   cmd[0] = 0xF8;
   cmd[1] = opcode;
   cmd[2] = id;
@@ -355,7 +359,10 @@ int sendreply(int opcode,int id,int *ndat,int ndatlen,unsigned char *dat,int dat
 int writen(unsigned char *dat,int datlen)
   {
   int wn,ntogo,nwrit;
-  
+ 
+  if(datlen == 0)
+    return(0);
+     
   ntogo = datlen;
   nwrit = 0;
   do

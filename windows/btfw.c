@@ -8,7 +8,7 @@
 #undef ERROR_TIMEOUT
 #include "btlib.h"
 
-// Version 21.1
+// Version 21.2
 
 #define VERSION 21
 
@@ -1033,6 +1033,9 @@ int readn(unsigned char *buf,int len)
   {
   int ntogo,nr,nread;
 
+  if(len == 0)
+    return(0);
+
   nread = 0;
   ntogo = len;
   do
@@ -1115,6 +1118,9 @@ int sendcmd(int opcode,int *ndat,int ndatlen,
 int writen(unsigned char *dat,int datlen)
   {
   int wn,ntogo,nwrit;
+
+  if(datlen == 0)
+    return(0);
 
   ntogo = datlen;
   nwrit = 0;
