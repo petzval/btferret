@@ -8,7 +8,7 @@
 #undef ERROR_TIMEOUT
 #include "btlib.h"
 
-// Version 21.2
+// Version 21.3
 
 #define VERSION 21
 
@@ -1150,10 +1150,10 @@ int ping()
   "Bluetooth OK\n",
   "Dongle failed to open BTROTO socket\n",
   "Dongle failed to bind socket\n",
-  "Dongle failed to start Bluetooth\n"
+  "Dongle failed to start Bluetooth\n",
   "No reply from dongle - try re-starting it\n",
   "Unknown dongle type - Use latest Windows version\n",
-  "Windows version > Dongle version - Use latest versions\n" };
+  "Version mismatch - Use same version for Windows and dongle\n" };
 
   ret = 0;
   print("Ping dongle\n");
@@ -1165,9 +1165,12 @@ int ping()
     print(buf);
 
     // If new Windows needs new dongle
-    //if (dongver < VERSION)
-    //  ret = 6;
-    
+    if(dongver != VERSION)
+      {
+      ret = 6;
+      print(errs[ret]);
+      return(ret);
+      }
     dongtype = (dat[0] >> 16) & 0xFFFF;
     if(dongtype < 0 || dongtype > 0)
       {  // valid dongtype = 0
