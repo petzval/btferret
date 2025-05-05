@@ -1094,7 +1094,6 @@ int clientconnect()
     strcat(prompt,"Enable security options");
     lesecurity = input_radio(prompt,selectlist);
 #else
-    strcat(prompt,selectlist);
     strcat(prompt,"Enable security options 0=No 1=Yes");
     lesecurity = inputint(prompt);
 #endif   
