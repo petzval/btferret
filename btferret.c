@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 21 
+  btlib.c/h  Version 22 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -65,6 +65,7 @@ int input_filename(char *prompt,char *buf,int len,int rwflag,char *curval);
 int input_integer(char *prompt,int *curval);
 int input_select(char *prompt,char *select);
 int input_radio(char *prompt,char *select);
+int dongtype(void);
 char pathsep = '\\';
 #else
 int inputint(char *ps);
@@ -1644,9 +1645,14 @@ int sendgetfile()
     sprintf(prompt,"BLOCK SIZE = %d bytes\n",nblock);
     strcat(prompt,"  Data is transmitted in blocks of this size\n");
 #ifdef BTFWINDOWS
-    sprintf(temps,"  Retain or enter new value 64-%d",maxblock);
-    strcat(prompt,temps);
-    xblock = input_integer(prompt,&nblock);   
+    if(dongtype() != 0)
+      xblock = 200;
+    else
+      {
+      sprintf(temps,"  Retain or enter new value 64-%d",maxblock);
+      strcat(prompt,temps);
+      xblock = input_integer(prompt,&nblock);
+      }   
 #else    
     sprintf(temps,"  Enter x to keep, or enter new value 64-%d",maxblock);
     strcat(prompt,temps);

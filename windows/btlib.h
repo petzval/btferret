@@ -1,4 +1,4 @@
-  // for btlib.c Version 21
+  // for btlib.c Version 22
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -121,7 +121,6 @@ int hid_key_code(int key);
 
 int init_blue(char *filename);
 int init_blue_ex(char *filename,int hcin);
-int init_btle(char *name,int hcin);
 
 int keys_to_callback(int flag,int keyboard);
 

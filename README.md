@@ -1,7 +1,7 @@
 Python and C Bluetooth Library
 ==============================
 
-*Version 21*
+*Version 22*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -164,8 +164,8 @@ Python and C Bluetooth Library
 This is a C and Python Bluetooth interface that has been developed for Raspberry Pis (but has also had some
 testing on Ubuntu, and should work on other Linux systems).
 
-It will also run on Windows if a Raspberry Pi Zero 2W is used as a Bluetooth dongle on a PC.
-Code written for Linux can be pasted into a Windows source file and no
+It will also run on Windows if a Raspberry Pi Zero 2W or Pico 2W is used as a Bluetooth dongle on a PC.
+Code described here and written for Linux can be pasted into a Windows source file and no
 knowledge of Windows programming is needed. Instructions for this are in the
 [README](windows/README.md) file in the windows folder.
 
@@ -312,13 +312,30 @@ sudo ./mycode
 
 ### 2-1-2 Windows Instructions
 
-C code can be run from Windows by setting up a Pi Zero 2W as a Bluetooth dongle for a PC.
-There is source code for a Windows program that interfaces with the dongle in the windows folder.
+C code can be run from Windows by setting up a Pi Zero 2W or Pico 2W as a Bluetooth dongle for a PC.
+There is source code for a Windows program that interfaces with the dongle.
 It includes the btferret.c code, and empty "mycode" functions where you can put your own programs.
 Instructions for
 setting up the dongle, and for compiling the Windows program using Visual Studio are in the
 [README](windows/README.md) file in the windows folder. No knowledge of Windows programming is needed.
-The code described in this document will run from the Windows program. The following are Windows-only
+The code described in this document will run from the Windows program.
+This is sample starting code to go in the Windows mycode.c. Note that double backslash is needed for
+Windows file names.
+
+```
+int mycode2()
+  {
+  if(init_blue("C:\\Users\\xxxx\\Documents\\devices.txt") == 0)
+    return(0);
+  
+  // your code here  
+  
+  close_all();
+  }
+```
+
+
+The following are Windows-only
 input/output functions that can be used to replace Linux functions that do not work with Windows.
 
 ```
@@ -5617,7 +5634,7 @@ for(dn = 1000 ; device_type(dn) != 0 ; ++dn)
 ## 4-2-25 le\_handles
 
 ```c
-int le_handles(int node,int lasthandle)
+void le_handles(int node,int lasthandle)
 btfpy.Le_handles(node,lasthandle)
 ```
 

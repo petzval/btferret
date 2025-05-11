@@ -23,14 +23,22 @@ int mycode1()
   {
   int n,defval;
   char inputstr[32],txt[256],filename[128];
+  
+  // Edit location of devices file - must use double backslash in Windows file names
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
 
+  /*********** INPUT/OUTPUT DEMO CODE ************/
+  
   print("My code 1 - demonstrates input/output functions\n");
 
   n = 56;
   sprintf(txt,"Print with variable = %d\n",n);
   print(txt);
 
-  n = input_integer("Mycode1 illustrates Windows input/output\nInput integer with no default value",NULL);  
+  n = input_integer("Mycode1 illustrates Windows input/output\n\
+Full documentation for Mycode Bluetooth programming:\n\
+    https://github.com/petzval/btferret\n\nInput integer with no default value",NULL);  
   sprintf(txt, "input_integer returned %d\n",n);
   print(txt);
 
@@ -63,6 +71,10 @@ int mycode1()
   sprintf(txt,"input_filename returned %d name = %s\n",n,filename);
   print(txt);
 
+  /********* END INPUT/OUTPUT DEMO **************/
+    
+  // close_all();
+
   return(0);
   }
 
@@ -70,24 +82,28 @@ int mycode2()
   {
   print("My code 2\n");  
 
-  /***** Code example template ******
-  
+
   // Edit location of devices file - must use double backslash in Windows file names
-  if (init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
-    return(0);
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
 
   // your code here
 
-  close_all();
+  // close_all();
   
-  *******************************/
-
   return(0);
   }
   
 int mycode3()
   {
   print("My code 3\n");
+   
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all();
 
   return(0);   
   }  
@@ -95,20 +111,41 @@ int mycode3()
 int mycode4()
   {
   print("My code 4\n");
+  
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
 
+  // your code here
+
+  // close_all();
+  
   return(0);
   }
 
 int mycode5()
   {
   print("My code 5\n");
+  
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
 
+  // your code here
+
+  // close_all();
+  
   return(0);
   }
 
 int mycode6()
   {
   print("My code 6\n");
+  
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all(); 
 
   return(0);
   }
@@ -116,6 +153,13 @@ int mycode6()
 int mycode7()
   {
   print("My code 7\n");
+  
+  // if (init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all();
 
   return(0);
   }
@@ -123,6 +167,13 @@ int mycode7()
 int mycode8()
   {
   print("My code 8\n");
+  
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all();
 
   return(0);   
   }  
@@ -130,6 +181,13 @@ int mycode8()
 int mycode9()
   {
   print("My code 9\n");
+  
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all();
 
   return(0);
   }
@@ -137,6 +195,13 @@ int mycode9()
 int mycode10()
   {
   print("My code 10\n");
+
+  // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
+  //   return(0);
+
+  // your code here
+
+  // close_all();  
 
   return(0);
   }

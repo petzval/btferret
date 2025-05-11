@@ -1,6 +1,6 @@
 /************** BTFDONGLE ********
 
-Version 21.1
+Version 22
 
 For Pi Zero 2W or Pi4 set up as a serial USB device
 and connected to a PC so it looks like a COM port.
@@ -28,7 +28,7 @@ https://github.com/petzval/btferret/windows
 #include <sys/poll.h>
 #include <fcntl.h>
 
-#define VERSION 21
+#define VERSION 22
 
 #define BTPROTO_HCI 1
 //#define HCIDEVUP _IOW('H',201,int)
@@ -229,8 +229,9 @@ int cmdhandle(int opcode,int id,unsigned char *dat,int datlen)
       break;
  
     case 5:  // send packet dat = len[4],packet[len]
-      getints(dat,ndat,1);
-      retval = sendpack(dat+4,ndat[0]);  // return retval[4]
+      //#########getints(dat,ndat,1);
+      // retval = sendpack(dat+4,ndat[0]);  // return retval[4]
+      retval = sendpack(dat,datlen);  // return retval[4]
       break;
     case 6:  // read packet dat = timeout[4]
       getints(dat,ndat,1);  // timeout

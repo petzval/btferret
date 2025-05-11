@@ -42,7 +42,7 @@ BTFWMenu MENU
   POPUP "Run",GRAYED
     {
     MENUITEM "BT_ferret",50
-    MENUITEM "My code 1",51
+    MENUITEM "My demo 1",51
     MENUITEM "My code 2",52
     MENUITEM "My code 3",53
     MENUITEM "My code 4",54
@@ -54,31 +54,32 @@ BTFWMenu MENU
     MENUITEM "My code 10",60
     }
   POPUP "BT_ferret",GRAYED
-    {
-    MENUITEM "i - Device Info",100
-    MENUITEM "a - Classic scan",101
-    MENUITEM "b - LE scan",102
-    MENUITEM "c - Connect",103
-    MENUITEM "s - Server",104
-    MENUITEM "p - Ping server",105
-    MENUITEM "d - Disconnect",106
-    MENUITEM "D - Tell server to disconnect",107
-    MENUITEM "v - Read server services",108
-    MENUITEM "t - Send string to server",109
-    MENUITEM "r - Read LE characteristic",110
-    MENUITEM "w - Write LE characteristic",111
-    MENUITEM "j - Enable/disable LE notify",112
-    MENUITEM "R - Read LE notifications",113
-    MENUITEM "T - Send string to mesh",114
-    MENUITEM "f - File transfer",115
-    MENUITEM "k - Settings",116
-    MENUITEM "u - Clear input buffer",117
-    MENUITEM "l - Read LE handles",118
-    MENUITEM "m - Mesh transmit on",119
-    MENUITEM "n - Mesh transmit off",120
-    MENUITEM "q - Quit",121
+    {  // valid ASCII codes = '0' 48 to '}' 125
+    MENUITEM "Device Info",52+105  //'i'
+    MENUITEM "Classic scan",52+97  //'a'
+    MENUITEM "LE scan",52+98 //'b'
+    MENUITEM "Connect",52+99 //'c'
+    MENUITEM "Server",52+115 //'s'
+    MENUITEM "Ping server",52+112 //'p'
+    MENUITEM "Disconnect",52+100 //'d'
+    MENUITEM "Tell server to disconnect",52+68 //'D'
+    MENUITEM "Read server services",52+118 //'v'
+    MENUITEM "Send string to server",52+116 //'t'
+    MENUITEM "Read LE characteristic",52+114 //'r'
+    MENUITEM "Write LE characteristic",52+119 //'w'
+    MENUITEM "Enable/disable LE notify",52+106 //'j'
+    MENUITEM "Read LE notifications",52+82 //'R'
+    MENUITEM "Send string to mesh",52+84 //'T'
+    MENUITEM "File transfer",52+102 //'f'
+    MENUITEM "Settings",52+107 //'k'
+    MENUITEM "Clear input buffer",52+117 //'u'
+    MENUITEM "Read LE handles",52+108 //'l'
+    MENUITEM "Mesh transmit on",52+109 //'m'
+    MENUITEM "Mesh transmit off",52+110 //'n'
+    MENUITEM "Quit",52+113 //'q'
     }
   MENUITEM "EXIT_SERVER",90,GRAYED
+  MENUITEM "STOP",91,GRAYED
   }
 
 AboutBox DIALOG 0,0,300,250

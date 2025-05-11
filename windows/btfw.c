@@ -5,13 +5,14 @@
 #include <string.h>
 #include <process.h>
 #include <time.h>
-#undef ERROR_TIMEOUT
-#include "btlib.h"
 
-// Version 21.3
+// Version 22
 
-#define VERSION 21
+#define VERSION 22
 
+int init_blue(char *fname);  // btlibw.c
+int check_init(int flag);
+int exitchar(void);
 int btfdespatch(char c);  // btferretw.c
 int mycode1(void);  // mycode.c
 int mycode2(void);
@@ -39,13 +40,12 @@ int readn(unsigned char *buf,int len);
 int writen(unsigned char *dat,int datlen);
 void autoconnect(PVOID pvoid);
 int autoconnectx(int flag);
-void manconnect(void);
 int ping(void);
 int sendkeyx(int key);
 void haltdongle(void);
 void exitlib(void);
 int readfromreg(int flag);
-int readcomreg(int *comlist);
+int readcomreg(int *comlist,char *s);
 int saveinreg(int flag);
 void print(char *txt);
 void printn(char* txt, int len);
@@ -65,9 +65,6 @@ int readpack(unsigned char* buf, int toms);
 void printn(char* buf, int len);
 int inithci(void);
 int closehci(void);
-void closecrypt(void);
-int calce(unsigned char* key, unsigned char* in, unsigned char* out);
-int aes_cmac(unsigned char* key, unsigned char* msg, int msglen, unsigned char* res);
 void getrand(unsigned char* s, int len);
 void inputpin(char* prompt, char* sbuf);
 int setkeymode(int setflag);
@@ -82,7 +79,9 @@ void serverexit(int flag);
 // unsigned long long time_ms(void);
 // void sleep_ms(int ms);
 // end Windows external
-
+// Windows only
+int packet_size(int size);
+int dongtype(void);
 
 BOOL CALLBACK DlgProc(HWND hDlg,UINT iMsg,WPARAM wParam,LPARAM lParam);
 LRESULT CALLBACK editsub(HWND,UINT,WPARAM,LPARAM);
@@ -111,6 +110,7 @@ LRESULT CALLBACK editsub(HWND,UINT,WPARAM,LPARAM);
 #define DLG_RUN 2
 #define DLG_BTF 3
 #define DLG_XSERV 4
+#define DLG_XSTOP 5
 
 struct gdat
   {
@@ -122,6 +122,8 @@ struct gdat
   HMENU hMenu;
 
   int comport;
+  int dongtype;  // 0=Pi4/PiZero  1=Pico
+  int dongver;
   int runflag; // 0=start 1=bluetooth OK 2=btferret started 3=btferret cmd 4=mycode
   int clientx;
   int clienty;
@@ -138,6 +140,7 @@ struct gdat
   char devicesx[256];  // temp store for inputfile
   char docpath[256];
   char findtxt[256];
+  char temps[128];
   unsigned char dongdat[8192];
 
 
@@ -219,6 +222,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   gparw.id = 0;
   gparw.threadstop = 0;
   gparw.comport = 0;
+  gparw.dongtype = 0;
+  gparw.dongver = 0;
   gparw.runflag = 0;
   gparw.hthread = 0;
   gparw.rwflag = 0;
@@ -287,8 +292,6 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
   int cmd,comport;
   char *s;
 
-  char dat[128];  //############
- 
   switch (iMsg)
     {     
     case WM_SIZE:
@@ -314,9 +317,9 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       // subclass edit
       gparw.oldedit = (WNDPROC)SetWindowLong(gparw.hwndOut,GWL_WNDPROC,(LPARAM)editsub);
       
-      sprintf(dat,"BTferret for Windows (Version %d)\n",VERSION);
-      print(dat);
-      print("Requires COM port PiZero dongle running btfdongle\n");
+      sprintf(gparw.temps,"BTferret for Windows (Version %d)\n",VERSION);
+      print(gparw.temps);
+      print("Requires COM port btferret dongle\n");
 
       s = getenv("USERPROFILE");
       if(s != NULL)
@@ -329,8 +332,8 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       
       if(gparw.comport != 0)
         {
-        sprintf(dat,"Auto open will try COM%d first\n",gparw.comport);
-        print(dat);
+        sprintf(gparw.temps,"Auto open will try COM%d first\n",gparw.comport);
+        print(gparw.temps);
         }
       readfromreg(1);  // devices file
       if(gparw.devices[0] == 0)
@@ -382,15 +385,10 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
        
     case WM_COMMAND:
       cmd = LOWORD(wParam);
-      if(cmd >= 100 && cmd <= 121)
+      if(cmd >= 100 && cmd < 178)
         {
-        if (GetMenuString(gparw.hMenu, cmd, dat, 32, MF_BYCOMMAND) > 0)
-          {
-          gparw.btfcmd = (short)dat[0];
-          _beginthread(btfcmdthread,0,&gparw.btfcmd);
-          }
-        else
-          print("Command error\n");
+        gparw.btfcmd = (short)(cmd-52);
+        gparw.hthread =_beginthread(btfcmdthread,0,&gparw.btfcmd);
         }
       else
         {  
@@ -404,7 +402,9 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
             gparw.hthread = _beginthread(autoconnect,0,(void*)&gparw.mycode); 
             break;
           case 31:
-            comport = input_integer("Input COM port number (e.g. 5 for COM5)",NULL);
+            readcomreg(NULL,gparw.temps);
+            strcat(gparw.temps,"Input COM port number (e.g. 5 for COM5)");
+            comport = input_integer(gparw.temps,NULL);
             if(comport > 0)
               {
               // gparw.comport = comport;
@@ -413,7 +413,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
               gparw.hthread = _beginthread(autoconnect,0,(void*)&gparw.mycode);
               }
             else
-              print("Invalid COM port");
+              print("Invalid COM port\n");
             break;
           case 32:
             ping();
@@ -425,6 +425,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
             exitlib();
             break;
           case 35:
+          case 91:
             emergencystop();
             break;
           case 39:
@@ -464,7 +465,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
             break;
           case 50:
             strcpy(gparw.devicesx,gparw.devices);
-            input_filename("Where is the devices file?",gparw.devicesx,256,0,gparw.devicesx);
+            input_filename("Where is the devices.txt file?",gparw.devicesx,256,0,gparw.devicesx);
             if(!(gparw.devicesx[0] == 'x' && gparw.devicesx[1] == 0))
               {  // not Cancel
               if(strcmp(gparw.devices,gparw.devicesx) != 0)
@@ -526,6 +527,8 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
                
 
     case WM_DESTROY :
+      if(gparw.runflag == 2)
+        check_init(4);
       PostQuitMessage (0);
       return(0);
     }
@@ -535,8 +538,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK editsub(HWND hwnd,UINT iMsg,WPARAM wParam,LPARAM lParam)
   {
-  int kc,n,flag;
-  static char btfcode[32] = { "iabcspdDvtrwjRTfkulmnq" };
+  int kc;
 
   kc = LOWORD(wParam);
 
@@ -548,17 +550,7 @@ LRESULT CALLBACK editsub(HWND hwnd,UINT iMsg,WPARAM wParam,LPARAM lParam)
     
 
   if (iMsg == WM_CHAR && gparw.runflag == 2)
-    {  // Btferret running - key calls btfcode
-    flag = 0;
-    for (n = 0; btfcode[n] != 0 && flag == 0; ++n)
-      {
-      if (kc == (int)btfcode[n])
-        flag = 1;
-      }
-    if (flag == 0)
-      return(0);
-    gparw.btfcmd = (short)kc;
-    _beginthread(btfcmdthread, 0, &gparw.btfcmd);
+    {  // Btferret running 
     return(0);
     }
   else if(iMsg == WM_CHAR)
@@ -607,7 +599,7 @@ void emergencystop()
     {
     prom = "**** EMERGENCY STOP ****\nThis will stop the Run code\n\
 WARNING - Use only as a last resort to halt code that has\n\
-hung up. It may produce dangerous results\n\
+hung up. It may produce unpredictable results\n\
 Do you wish to proceed?";
     ret = input_select(prom,"0 - No\n1 - Yes");
     if(ret == 1)
@@ -618,7 +610,9 @@ Do you wish to proceed?";
       EnableMenuItem(gparw.hMenu,DLG_BTF,MF_BYPOSITION | MF_GRAYED);  
       EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED); 
       EnableMenuItem(gparw.hMenu,DLG_STOP,MF_GRAYED); 
+      EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_GRAYED);
       EnableMenuItem(gparw.hMenu,DLG_XSERV,MF_BYPOSITION | MF_GRAYED); 
+
       DrawMenuBar(gparw.hwndMain);
       print("Run code stopped\n");
       }
@@ -658,16 +652,20 @@ void btfcmdthread(PVOID pvoid)
 
   EnableMenuItem(gparw.hMenu,DLG_BTF,MF_BYPOSITION | MF_GRAYED);  
   EnableMenuItem(gparw.hMenu,DLG_STOP,MF_ENABLED);
+  EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_ENABLED);
 
   DrawMenuBar(gparw.hwndMain);
-  btfdespatch(cmd);   // btfcode[index]);
+  btfdespatch(cmd);
   print("> ");
  
   EnableMenuItem(gparw.hMenu,DLG_STOP, MF_GRAYED);
+  EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_GRAYED);
+
   if(cmd == 'q')
       {  // quit
       gparw.runflag = 1; 
       EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED); 
+      check_init(4);
       print("\nBTferret exit\n");
       }
     else
@@ -691,29 +689,6 @@ void serverexit(int flag)
   }
 
 
-int testaes()
-  {
-  int n,ret;
-  static unsigned char key[16] = { 0x03,0xA5,0x40,0x47,0x53,0x49,0x2B,0x39,0xA7,0xFF,0xB9,0xB8,0x90,0x1F,0xC7,0x8E };
-  static unsigned char msg[16] = { 0x41,0x26,0xAD,0x87,0x48,0xC7,0x52,0xBE,0x16,0xB3,0xC7,0xEA,0x82,0x0F,0xD6,0x59 };
-  unsigned char res[16];
-  char txt[128],txt0[32];
-
-  ret = aes_cmac(key,msg,16,res);
-  sprintf(txt,"RET = %d\n",ret);
-  print(txt);
-  txt[0] = 0;
-  for(n = 0 ; n < 16 ; ++n)
-    {
-    sprintf(txt0," %02X",res[n]);
-    strcat(txt,txt0);
-    }
-  strcat(txt,"\n");
-  print(txt);
-  // should return 91 08 44 54 2D 36 4B 86 54 49 24 78 87 8D 19 BB
-  return(1);
-  }
-
 void mycodethread(PVOID pvoid)
   {
   short *mycodep,mycode;
@@ -731,7 +706,9 @@ void mycodethread(PVOID pvoid)
   gparw.runflag = 4;
   EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_GRAYED);
   EnableMenuItem(gparw.hMenu,DLG_STOP,MF_ENABLED);
+  EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_ENABLED);
   DrawMenuBar(gparw.hwndMain);
+  check_init(1);
   if(mycode == 1)
     mycode1();
   else if(mycode == 2)
@@ -753,10 +730,11 @@ void mycodethread(PVOID pvoid)
   else if (mycode == 10)
     mycode10();
 
-
+  check_init(4);
   gparw.runflag = 1;
   EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED);
   EnableMenuItem(gparw.hMenu,DLG_STOP,MF_GRAYED);
+  EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_GRAYED);
   DrawMenuBar(gparw.hwndMain);
   gparw.hthread = 0;
   print("Mycode exit\n");
@@ -1138,12 +1116,13 @@ int writen(unsigned char *dat,int datlen)
 
 int ping()
   {
-  int id,ret,dongtype,dongver;
+  int id,ret;
   unsigned long dat[4];
   char buf[64];
 
-  static char* dtype[2] = {
-  "Pi Zero/Pi4",
+  static char* dtype[3] = {
+  "PiZero/Pi4",
+  "Pico",
   "Unknown" };
 
   static char* errs[7] = {
@@ -1153,33 +1132,38 @@ int ping()
   "Dongle failed to start Bluetooth\n",
   "No reply from dongle - try re-starting it\n",
   "Unknown dongle type - Use latest Windows version\n",
-  "Version mismatch - Use same version for Windows and dongle\n" };
+  "Version mismatch - Use latest versions for Windows and dongle\n" };
 
   ret = 0;
   print("Ping dongle\n");
   id = sendcmd(1,NULL,0,NULL,0);
   if(readreply(1,id,(unsigned char*)dat,12,2000) == 12)
     {
-    dongver = dat[0] & 0xFFFF;
-    sprintf(buf,"Dongle replied OK. Version %d\n",dongver);
+    gparw.dongver = dat[0] & 0xFFFF;
+    sprintf(buf,"Dongle replied OK. Version %d\n",gparw.dongver);
     print(buf);
 
     // If new Windows needs new dongle
-    if(dongver != VERSION)
+    // if(VERSION > gparw.dongver)
+    if(gparw.dongver == 21)  // sendpack changed
       {
       ret = 6;
       print(errs[ret]);
-      return(ret);
+      return(ret); 
       }
-    dongtype = (dat[0] >> 16) & 0xFFFF;
-    if(dongtype < 0 || dongtype > 0)
-      {  // valid dongtype = 0
-      dongtype = 1;
+
+    gparw.dongtype = (dat[0] >> 16) & 0xFFFF;
+    if(gparw.dongtype < 0 || gparw.dongtype > 1)
+      {  // valid dongtype = 0,1
+      gparw.dongtype = 2;
       ret = 5;
       }
-    sprintf(buf, "Dongle type = %s\n", dtype[dongtype]);
+    sprintf(buf, "Dongle type = %s\n", dtype[gparw.dongtype]);
     print(buf);
 
+    if(gparw.dongver != VERSION)
+      print("BTferret and dongle versions different - recommend use same version\n");
+    
     if(ret == 0)
       {
       ret = (int)dat[1];
@@ -1199,15 +1183,9 @@ int ping()
   return(ret);  // 0=OK
   }
 
-void manconnect()
+int dongtype()
   {
-  int comport;
-
-  comport = input_integer("Input COM port number (e.g. 5 for COM5)",NULL);
-  if(comport > 0)
-    tryconn(comport);
-  else
-    print("Invalid COM port");
+  return(gparw.dongtype);
   }
 
 void autoconnect(PVOID pvoid)
@@ -1228,7 +1206,7 @@ void autoconnect(PVOID pvoid)
 
 int autoconnectx(int comport)
   {
-  char buf[16];
+  char buf[64];
   int n,cport,comlist[16];
 
   if(comport == 0)
@@ -1253,10 +1231,8 @@ int autoconnectx(int comport)
     }
   // else no stop auto
 
-  readcomreg(comlist);
-
-  if(comlist[0] == 0)
-    print("No COM ports found\n");
+  readcomreg(comlist,buf);
+  print(buf);
 
   for(n = 0 ; n < 16 && comlist[n] != 0 ; ++n)
     {
@@ -1285,6 +1261,8 @@ int tryconn(int comport)
     pret = ping();
     if(pret == 0)
       {
+      if(gparw.dongtype != 0)
+        packet_size(220);
       gparw.runflag = 1;  // Bluetooth OK
     //  print("Use Shut down to power down dongle before turning PC off\n");
     //  sprintf(txt,"Dongle running btfdongle version %d OK\n",ver);
@@ -1296,8 +1274,11 @@ int tryconn(int comport)
         // calls saveinreg(0); outside thread in case terminate
         }
       EnableMenuItem(gparw.hMenu,32,MF_ENABLED);
-      EnableMenuItem(gparw.hMenu,33,MF_ENABLED);
-      EnableMenuItem(gparw.hMenu,34,MF_ENABLED);
+      if(gparw.dongtype == 0)
+        {
+        EnableMenuItem(gparw.hMenu,33,MF_ENABLED);
+        EnableMenuItem(gparw.hMenu,34,MF_ENABLED);
+        }
       EnableMenuItem(gparw.hMenu,30,MF_GRAYED);
       EnableMenuItem(gparw.hMenu,31,MF_GRAYED);
       EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED);
@@ -1305,7 +1286,10 @@ int tryconn(int comport)
       return(1);
       }
     else
+      {
       print("Dongle setup failed or not running btfdongle\n");
+      print("Try re-starting dongle\n");
+      }
     CloseHandle(gparw.hCom); 
     gparw.hCom = INVALID_HANDLE_VALUE;
     }
@@ -1470,20 +1454,26 @@ int readfromreg(int flag)
   return(retval);
   }
 
-int readcomreg(int *comlist)
+int readcomreg(int *comlist,char *s)
   {
-  int retval,n;
+  int count,n,comn;
   HKEY hkMain;
   HKEY hkClass;
   HKEY hkDev;
   DWORD bs,bs2,index,type;
   long ret;
-  char buf[128],buf2[128];
+  char buf[128],buf2[128],sbuf[8];
 
-  for(n = 0 ; n < 16 ; ++n)
-    comlist[n] = 0;
-    
-  retval = 0;
+  if(comlist != NULL)
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      comlist[n] = 0;
+    }
+
+  if(s != NULL)
+    strcpy(s, "Active COM ports = ");
+  
+  count = 0;
   bs = 4;
   ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE,"HARDWARE",0,
            KEY_READ,&hkMain);
@@ -1504,24 +1494,39 @@ int readcomreg(int *comlist)
           if(ret == ERROR_SUCCESS)
             {
             // buf=name of key  buf2 = "COMXX"
-            comlist[index] = 0;
             if(buf2[0] == 'C' && buf2[1] == 'O' && buf2[2] == 'M')
               {
-              comlist[index] = buf2[3] - '0';
+              comn = buf2[3] - '0';
               if(buf2[4] >= '0' && buf2[4] <= '9')
-                comlist[index] = 10*comlist[index] + buf2[4] - '0';
+                comn = 10*comn + buf2[4] - '0';
+              if(comlist != NULL)
+                comlist[count] = comn;
+              if(s != NULL)
+                {
+                sprintf(sbuf, "%d ", comn);
+                strcat(s,sbuf);
+                }
+              ++count;
               }
             }
           ++index;
           }
-        while(ret == ERROR_SUCCESS && index < 15);
+        while(ret == ERROR_SUCCESS && count < 15);
         RegCloseKey(hkClass);
         }
       RegCloseKey(hkDev);
       }
     RegCloseKey(hkMain);
     }
-  return(retval);
+
+  if(s != NULL)
+    {
+    if(count == 0)
+      strcat(s,"None");
+    strcat(s,"\n");
+    }
+ 
+  return(count);
   }
 
 int input_radio(char *prom,char *select)
@@ -1957,8 +1962,14 @@ int sendpack(unsigned char* buf, int len)
   int ndat[1];
   unsigned char rdat[4];
 
-  ndat[0] = len;
-  id = sendcmd(5, ndat, 1, buf, len);
+  if(gparw.dongtype == 0 && gparw.dongver == 21)
+    {
+    ndat[0] = len;
+    id = sendcmd(5, ndat, 1, buf, len);
+    }
+  else
+    id = sendcmd(5,NULL,0, buf, len);
+
   readreply(5, id, rdat, 4, 0);
   
   return(rdat[0]);
@@ -1986,61 +1997,6 @@ int inithci(void)
 int closehci(void)
   {
   return(1);
-  }
-void closecrypt(void)
-  {
-  return;
-  }
-int calce(unsigned char* key, unsigned char* in, unsigned char* out)
-  {
-  int n,id,ret;
-  unsigned char buf[32],rdat[32];
-
-  for(n = 0 ; n < 16 ; ++n)
-    {
-    buf[n] = key[n];
-    buf[n+16] = in[n];
-    }
-
-  id = sendcmd(7, NULL,0, buf, 32);
-  readreply(7, id, rdat, 20, 2000);
-  ret = *((long*)rdat);
-  for(n = 0 ; n < 16 ; ++n)
-    out[n] = rdat[n+4];
-
-  return(ret);
-  }
-
-int aes_cmac(unsigned char* key, unsigned char* msg, int msglen, unsigned char* res)
-  {
-  int n, id, ret,ndat[1];
-  unsigned char rdat[32];
-  static unsigned char *buf = NULL;
-  static int buflen = 0;
-
-  if(buf == NULL || buflen < msglen + 32)
-    {
-    if(buf != NULL)
-      free(buf);
-    buflen = msglen + 32;
-    if(buflen < 128)
-      buflen = 128;
-    buf = malloc(buflen);
-    }
-
-  for (n = 0; n < 16; ++n)
-    buf[n] = key[n];
-  for(n = 0 ; n < msglen ; ++n)
-    buf[n+16] = msg[n];
-  
-  ndat[0] = msglen;
-  id = sendcmd(8, ndat, 1, buf, msglen+16);
-  readreply(8, id, rdat, 20, 2000);
-  ret = *((long*)rdat);
-  for (n = 0 ; n < 16; ++n)
-    res[n] = rdat[n + 4];
-
-  return(ret);
   }
 
 void getrand(unsigned char* s, int len)
@@ -2128,7 +2084,8 @@ int checkfilename(char* funs, char* s)
 
 int getdatfile(char *dfile)
   {
-  char *s;
+  char *s,dirname[256];
+  FILE *stream;
 
   s = getenv("USERPROFILE");
   if(s == NULL)
@@ -2137,6 +2094,24 @@ int getdatfile(char *dfile)
     return(0);
     }
   strcpy(dfile,s);
-  strcat(dfile,"\\Documents\\btferret.dat");
+  strcat(dfile,"\\AppData\\Local\\BTferret\\btferret.dat");
+
+  stream = fopen(dfile, "rb");
+  if (stream == NULL)
+    {
+    strcpy(dirname,s);
+    strcat(dirname,"\\AppData\\Local\\BTferret");
+    if(CreateDirectory(dirname,NULL) != 0)
+      {
+      stream = fopen(dfile,"wb");
+      if(stream != NULL)
+        {
+        fputc(0,stream);
+        fclose(stream);
+        }
+      }
+    }
+  else
+    fclose(stream);
   return(1);
   }

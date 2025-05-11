@@ -1,20 +1,25 @@
-Pi Zero Dongle for Windows
+Pi Dongle for Windows
 ==========================
 
-*Version 21*
+*Version 22*
 
 ## Contents
 - [1 Introduction](#1-introduction)
 - [2 Setup](#2-setup)
     - [2.1 File list](#2-1-file-list) 
-    - [2.2 Pi Zero Instructions](#2-2-pi-zero-instructions)
+    - [2.2 Pi Pico Instructions](#2-2-pi-pico-instructions)
         - [2.2.1 Hardware](#2-2-1-hardware)      
-        - [2.2.2 Connections](#2-2-2-connections)
-        - [2.2.3 Procedure](#2-2-3-procedure)
-    - [2.3 Windows Instructions](#2-3-windows-instructions)
-        - [2.3.1 File list](#2-3-1-file-list)
-        - [2.3.2 Procedure](#2-3-2-procedure)
-        - [2.3.3 Manual procedure](#2-3-3-manual-procedure)        
+        - [2.2.2 Visual Studio Code Procedure](#2-2-2-visual-studio-code-procedure) 
+        - [2.2.3 Pi SDK Procedure](#2-2-2-pi-sdk-procedure)         
+        - [2.2.4 Compile problems](#2-2-3-compile-problems)             
+    - [2.3 Pi Zero Instructions](#2-3-pi-zero-instructions)
+        - [2.3.1 Hardware](#2-3-1-hardware)      
+        - [2.3.2 Connections](#2-3-2-connections)
+        - [2.3.3 Procedure](#2-3-3-procedure)
+    - [2.4 Windows Instructions](#2-4-windows-instructions)
+        - [2.4.1 File list](#2-4-1-file-list)
+        - [2.4.2 Procedure](#2-4-2-procedure)
+        - [2.4.3 Manual procedure](#2-4-3-manual-procedure)        
 - [3 Windows Code](#3-windows-code)
     - [3.1 Where to put your code](#3-1-where-to-put-your-code)    
     - [3.2 Screen prints](#3-2-screen-prints)
@@ -24,12 +29,11 @@ Pi Zero Dongle for Windows
 ## 1 Introduction
 
 The btlib library, btferret and any C code written for Linux can be run from a Windows PC by using a
-Raspberry PiZero 2W as a Bluetooth dongle for the PC. The PC then has direct access to Bluetooth at
-the HCI level. Microsoft puts so many obstacles in the way of access
-to the onboard Bluetooth that the dongle approach is easier in the end.
+Raspberry Pi Pico 2W or Zero 2W as a Bluetooth dongle for the PC. (The Pico is easier to set up and
+makes more sense as a dongle). The PC then has direct access to Bluetooth at the HCI level.
 
-There are instructions for setting up the PiZero with a btfdongle.c program that communicates with
-the PC. There is also a Windows program (shown below) that is compiled on a PC with Visual Studio. 
+There are instructions for setting up the dongle, and also a Windows program (shown below)
+that is compiled on a PC with Visual Studio, and which communicates with the dongle. 
 The Windows code includes the Linux btferret.c and has empty functions (in mycode.c) into
 which you can insert your own code. Linux code can be simply pasted into
 mycode.c, with minor changes for input and output described in section 3,
@@ -46,6 +50,11 @@ functions that pop up a dialog window.
 ```
 In the github/windows folder
 
+For the Pi Pico dongle
+  btfpico.c
+  CMakeLists.txt
+  btstack_config.h (but we hope we don't need this file)
+
 For the PiZero dongle
   btfdongle.c
 
@@ -61,19 +70,167 @@ For Windows
   btfw.rc
   devices.txt
 
-
 NOTE in case you modify btferret/btlib for Linux and Windows
   btlibw.c is the Linux btlib.c with #define BTFWINDOWS uncommented
   btferretw.c is the Linux btferret.c with #define BTFWINDOWS uncommented
 ```
 
+## 2-2 Pi Pico Instructions
 
-## 2-2 Pi Zero Instructions
+These instructions are for a Pico 2W, but a Pico W will also work. The code can be
+compiled with Visual Studio Code, or the Pi SDK. The btlib functions
+running on the Windows PC replace the Pico's btstack.
+
+### 2-2-1 Hardware
+
+The follwing items are needed:
+
+```
+1. Raspberry Pi Pico 2W
+2. Micro USB to Male USB A cable or adapter
+```
+
+### 2-2-2 Visual Studio Code Procedure
+
+This procedure uses Visual Studio Code on a PC to compile and download code to the Pico 2W. Here are full
+instructions if using VSC for the first time. There may be long delays at various stages as stuff is
+downloaded.
+
+```
+1. Create a folder called "btfpico" in a location that you choose.
+2. Copy two files to the btfpico folder:
+       btfpico.c
+       CMakeLists.txt
+3. If the board is not a Pico 2W, edit the CMakeLists.txt line:
+        set(PICO_BOARD pico2_w)
+4. Download Visual Studio Code.
+5. Start Visual Studio Code. 
+6. Select View/Extensions. Search for Raspberry Pi Pico. Install extension.
+7. Click the Pico icon (probably in the vertical section on the
+   left of the screen). It looks like a chip and reports
+   "Raspberry Pi Pico Project" when the mouse is hovered over it.
+8. Select "Import project" and set:
+       Location = Your btfpico folder 
+9. At the bottom right of the screen, check that the board is
+   correct. If not, it can be changed by clicking on Board:
+       Board = pico 2w
+       Use RISC V = no
+10. From the bottom of the screen, click Compile. If it fails, see
+    Compile problems.
+11. Plug the Pico into the PC while pressing the BOOTSEL button. A new
+    disk drive called something like "RP2350" should appear on the PC.          
+12. From the bottom of the screen, click Run. If Run does not work,
+    you can do it yourself with Explorer. Just copy the executable
+    file (btfpico/build/btfpico.uf2) to the disk.       
+13. The LED on the Pico should flash briefly which shows that the code
+    is running.
+14. The dongle is waiting to be connected by the PC Windows program
+    and appears to the PC as a COM port. Check on the PC via:
+    right click Start/Device manager/Ports (COM & LPT) which should
+    list the dongle as a USB Serial Device (COM port).
+    Note the COM number, but it may change every time the PC is started.
+15. When the PC is restarted, the dongle will run the code.
+16. Run the BTferret Windows program to connect and control the dongle.
+``` 
+
+### 2-2-3 Pi SDK Procedure
+
+This procedure uses the Pico SDK on a Pi. It includes instructions to install the SDK from scratch.
+If the SDK is already installed, start at step 8.
+
+Install Pico SDK. Download pico_setup.sh from one of the following:
+
+[Setup1](https://raw.githubusercontent.com/raspberrypi/pico-setup/master/pico_setup.sh)
+or
+[Setup2](https://github.com/raspberrypi/pico-setup/blob/master/pico_setup.sh)
+
+```
+1. Make a pico directory
+      cd /home
+      mkdir pico
+      cd pico
+2. Copy pico_setup.sh to /home/pico/
+3. Edit pico_setup.sh to set the directory
+      Change OUTDIR="$(pwd)/pico"
+      To     OUTDIR="/home/pico"
+4. Make pico_setup.sh executable
+      sudo chmod 777 pico_setup.sh
+5. Run to install SDK (takes a long time)
+      cd /home/pico
+      ./pico_setup.sh
+6. Set environment variable
+      export PICO_SDK_PATH=/home/pico/pico-sdk
+7. Reboot
+      sudo reboot      
+8. Make a btfpico directory
+      cd /home/pico
+      mkdir btfpico
+9. Copy the following files to /home/pico/btfpico/
+      btfpico.c              (from GITHUB btferret/windows)
+      CMakeLists.txt         (from GITHUB btferret/windows)
+      pico_sdk_import.cmake  (from /home/pico/pico-examples/)
+10. If the board is not a Pico 2W, edit the CMakeLists.txt line:
+       set(PICO_BOARD pico2_w)      
+11. Make a build directory in the btfpico directory.
+      cd /home/pico/btfpico
+      mkdir build
+12. Go to build directory
+      cd /home/pico/btfpico/build
+13. Run cmake (NOTE space between cmake and dots)
+      cmake ..
+14. Compile
+      make
+15. This should create the executable file in the build directory:
+      btfpico.uf2
+16. Plug Pico into Pi while pressing BOOTSEL button.
+17. Check Pico is present as a disk
+       picotool info
+18. Load btfpico.uf2 to Pico (just copies the file to the Pico "disk")
+       picotool load btfpico.uf2
+19. If btfpico.c is modified, re-compile with make
+       cd /home/pico/btfpico/build
+       make
+20. Plug the Pico into a PC and run the BTferret Windows code.
+```
+
+### 2-2-4 Compile problems
+
+If the board type is not correct, compile can fail with missing include files.
+
+```
+In CMakeLists.txt:
+
+set(PICO_BOARD pico2_w)
+```
+
+The btfpico.c and CMakeLists.txt files are set up to compile without btstack.
+If some future version of the Pico libraries causes this to fail, 
+then modifications can be made to include btstack as follows:
+
+```
+1. In btfpico.c, uncomment USE_BTSTACK:
+
+   #define USE_BTSTACK
+
+2. In CMakeLists.txt, uncomment the following instructions:
+
+   add_compile_definitions(CYW43_DISABLE_BT_INIT=1)
+   target_link_libraries(blink pico_btstack_cyw43)
+   target_link_libraries(blink pico_btstack_ble)
+   target_include_directories(blink PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+
+3. Add btstack_config.h to the btfpico folder
+```
+
+Now btstack is linked but not initialized. So it isn't used, but the compiler can see it,
+
+
+## 2-3 Pi Zero Instructions
 
 These instructions also work for a Pi4, but you must be sure that the PC can supply enough
 current via its USB port.
 
-### 2-2-1 Hardware
+### 2-3-1 Hardware
 
 The follwing items are needed:
 
@@ -86,7 +243,7 @@ The follwing items are needed:
 6. Power supply with Micro USB plug
 ```
 
-### 2-2-2 Connections
+### 2-3-2 Connections
 
 
 A Pi Zero needs one set of connections to set up the dongle, and then a different arrangement for
@@ -96,7 +253,7 @@ and power down on a first press, and reboot on a second.
 ![picture](wind1.png)
 
 
-### 2-2-3 Procedure
+### 2-3-3 Procedure
 
 This procedure uses a PC to download the Pi operating system and btfdongle.c to
 an SD card for the PiZero2W, and then modify the PiZero2W configuration to operate as a Bluetooth dongle.
@@ -260,7 +417,7 @@ Reconfigure the connections to the dongle configuration. The monitor can be left
 connected to the PiZero to check what happens. Plug into PC. It should boot up, start btfdongle,
 and report "COM open/Bluetooth OK". It is now waiting for commands from BTferret
 running on the PC. Check on the PC via: right click Start/Device manager/Ports (COM & LPT) which should list
-the dongle as a USB Serial Device (COM port). Note the number, but it may change every time the PC is started.
+the dongle as a USB Serial Device (COM port). Note the COM number, but it may change every time the PC is started.
 
  
 ## 2-3 Windows Instructions

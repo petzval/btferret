@@ -1,4 +1,4 @@
-/********* Version 21.1 *********/
+/********* Version 22 *********/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +44,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 21
+#define VERSION 22
    // max possible NUMDEVS = 1024 
 #define NUMDEVS 1024
 #define NAMELEN 34
@@ -309,8 +309,6 @@ struct globpar
   unsigned char randbadd[6];
   int dhkeydev;
 
-  int cryptfd;
-  int cryptfd1;
   int randomfd;
   int hidflag; // 01=HID 10=User add 
   int settings;
@@ -404,7 +402,6 @@ int statusok(int flag,unsigned char *md);
 int readline(FILE *stream,char *s);
 int newnode(void);
 int classicserverx(int clientnode);
-int psmcheck(int n,long long lookflag);
 void immediate(long long lookflag);
 int bincmp(unsigned char *s,unsigned char *t,int count,int dirn);
 void waitdis(int ndevice,unsigned int timout);
@@ -415,12 +412,11 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr);
 int localctics();
 int leserver(int ndevice,int count,unsigned char *dat,int insn);
 int nextctichandle(int start,int end,int *handle,int flag);
-int findcticuuid(int start,int end,unsigned char *uuidrev,int size);
 char *cticerrs(struct cticdata * cp);
 void addname(int flag);
 int setlelen(int ndevice,int len,int flag);
 void checkpairflags(int *flags);
-
+int check_init(int flag);
 int sendhci(unsigned char *cmd,int ndevice);
 int findhci(long long int type,int devicen,int popflag);
 void printins(void);
@@ -447,6 +443,10 @@ int calcf6(unsigned char* w, unsigned char* n1,
            unsigned char* a1, unsigned char* a2, unsigned char* res);
 int calcg2(unsigned char* u, unsigned char* v,
            unsigned char* x, unsigned char* y);
+int calce(unsigned char *key,unsigned char *in,unsigned char *out,int flipflag);
+int aes_cmac(unsigned char *key,unsigned char *msg,int msglen,unsigned char *res);
+void bxor(unsigned char *a,unsigned char *b,unsigned char *c);
+void bleft(unsigned char *a,unsigned char *b);
 
 // Windows replaced
 int sendpack(unsigned char *buf,int len);
@@ -454,9 +454,6 @@ int readpack(unsigned char *buf,int toms);
 void printn(char *buf,int len);
 int inithci(void);
 int closehci(void);
-void closecrypt(void);
-int calce(unsigned char *key,unsigned char *in,unsigned char *out);
-int aes_cmac(unsigned char *key,unsigned char *msg,int msglen,unsigned char *res);
 void getrand(unsigned char *s,int len);
 void inputpin(char *prompt,char *sbuf);
 void serverexit(int flag);
@@ -473,7 +470,8 @@ int getdatfile(char *s);
 int readbytes(unsigned char *dat,int *len,int wantlen,int toms);
 int bluezdown(void);
 int hcisock(void);
-int setupcrypt(int flag);
+// Windows from btfw
+int packet_size(int size);
 
 
 /***************** Received PACKET TYPES for readhci() and findhci() *****************/
@@ -1327,7 +1325,8 @@ int init_blue_ex(char *filename,int hcin)
   static char errs[16] = {"   ERROR **** "};
   static int initflag = 0;    
 
-
+  check_init(1);
+  
   if(checkfilename("init_blue",filename) == 0)
     return(0);
     
@@ -1347,7 +1346,6 @@ int init_blue_ex(char *filename,int hcin)
   time_ms();
 
    // global 
-  gpar.screenoff = 0;
   gpar.debug = 0;
   gpar.serveractive = 0; 
   gpar.timout = 1000;   // reply wait ms time out
@@ -1368,8 +1366,10 @@ int init_blue_ex(char *filename,int hcin)
   gpar.prtw = 0;   // wrap index
   gpar.prts = 0;   // start of circular buffer
   gpar.prte = 0;   // end of print for scroll
-  gpar.cryptfd = 0;
-  gpar.cryptfd1 = 0;
+  gpar.screenoff = 0;
+  gpar.printflag = PRINT_NORMAL;
+  gpar.prtv = &gpar.dump;
+  gpar.prtvn = &gpar.dumpn;
   gpar.dhkeydev = 0;
   gpar.randomfd = -1;
   gpar.hidflag = 0;
@@ -1426,9 +1426,6 @@ int init_blue_ex(char *filename,int hcin)
 
   insdat = instack + INSHEADSIZE;     
   
-  set_print_flag(PRINT_NORMAL);  
-  // set_print_flag(PRINT_VERBOSE);
-
   gpar.maxpage = 0;
   gpar.devid = hcin;  
   gpar.blockflag = 0;
@@ -2022,7 +2019,9 @@ int init_blue_ex(char *filename,int hcin)
       statusok(0,hidadvert);
       }
     if(gpar.sccap == 0)
-      VPRINT "LE Secure Connect not supported\n");
+      {
+      NPRINT "Legacy LE pair only\n");
+      }
     else
       {
       VPRINT "Get public keys\n");
@@ -2033,8 +2032,49 @@ int init_blue_ex(char *filename,int hcin)
     }
 
   flushprint();
-
+  check_init(2);
   return(1);     
+  }
+
+int check_init(int flag)
+  {
+  static int initdone = 0;
+  static int printdone = 0;
+  static int closedone = 0;
+  char *prs;
+  
+  if(flag == 0)
+    {
+    if(initdone == 0 && printdone == 0)
+      {
+      prs = "*** ERROR *** init_blue not done\n";
+      printn(prs,strlen(prs));
+      printdone = 1;
+      }
+    return(initdone);
+    }
+  if(flag == 1)
+    {
+    initdone = 0;
+    printdone = 0;
+    closedone = 0;
+    }
+  else if(flag == 2)
+    {
+    initdone = 1;
+    printdone = 0;
+    closedone = 0;
+    }
+  else if(flag == 3)
+    closedone = 1;
+  else if(flag == 4 && initdone != 0 && closedone == 0)
+    {
+    close_all();
+    closedone = 1;
+    }
+  else if(flag == 5)
+    return(closedone);
+  return(0);
   }
 
 char *cticerrs(struct cticdata * cp)
@@ -2055,11 +2095,11 @@ int localctics()
   
   for(j = 0 ; devok(j) != 0 ; ++j)
     {
-    if(dev[j]->matchname != 0 && dev[j]->type == BTYPE_ME)
-      {
-      NPRINT "\n  ERROR *** %s Node %d - MATCH_NAME not allowed for TYPE=MESH\n",dev[j]->name,dev[j]->node);
-      return(0);
-      }
+    //if(dev[j]->matchname != 0 && dev[j]->type == BTYPE_ME)
+    //  {
+    //  NPRINT "\n  ERROR *** %s Node %d - MATCH_NAME not allowed for TYPE=MESH\n",dev[j]->name,dev[j]->node);
+    //  return(0);
+    //  }
     
     
     for(n = 0 ; ctic(j,n)->type == CTIC_ACTIVE ; ++n)
@@ -2348,6 +2388,9 @@ char *baddstr(unsigned char *badd,int dirn)
 char *device_address(int node)
   {
   int ndevice;
+
+  if(check_init(0) == 0)
+    return("");
   
   if(node == 0)
     ndevice = 0;
@@ -2396,6 +2439,8 @@ int devnfromhandle(unsigned char *hand)
  
 void mesh_on()
   {  // turn on LE advertising
+  if(check_init(0) == 0)
+    return;
   sendhci(leadvon,0);
   //statusok(0,leadvon);
   gpar.meshflag |= MESH_W;
@@ -2403,6 +2448,8 @@ void mesh_on()
 
 void mesh_off()
   {  // turn off LE advertising
+  if(check_init(0) == 0)
+    return;
   sendhci(leadvoff,0);
   //statusok(0,leadvoff);
   gpar.meshflag &= ~MESH_W;
@@ -2430,6 +2477,9 @@ void meshreadoff()
 int write_mesh(unsigned char *buf,int count)
   {
   int n;
+
+  if(check_init(0) == 0)
+    return(0);
   
   if((gpar.hidflag & 3) != 0)
     {
@@ -2481,6 +2531,9 @@ void uuid_advert(unsigned char *uuid)
   {
   int n,nuuid;
   unsigned char *adv;
+
+  if(check_init(0) == 0)
+    return;
   
   nuuid = (gpar.hidflag >> 8) & 0xFF;
 
@@ -2705,6 +2758,8 @@ int devalloc()
   
 void le_scan()
   {
+  if(check_init(0) == 0)
+    return;
   lescanx();
   flushprint();
  
@@ -2713,7 +2768,7 @@ void le_scan()
   
 int lescanx()
   {    
-  int n,j,k,i,tn,ndevice,count,repn,type,newcount,flag,meshflag;
+  int n,j,k,i,tn,ndevice,count,repn,type,newcount,flag,nflag,meshflag;
   unsigned char *rp;
   struct devdata *dp;
   char buf[64];
@@ -2894,13 +2949,13 @@ int lescanx()
         }
       ******/   
         
-    
-        if(ndevice < 0 && buf[0] != 0)
-          {  // no board address match and have name in buf
-           // look for name match or random address change   
-          for(k = 1 ; ndevice < 0 && devok(k) != 0 ; ++k)
+        if((ndevice < 0 || (ndevice > 0 && dev[ndevice]->node >= 1000)) && buf[0] != 0)
+          {  // no board address match or 1000+ from remote connect and have name in buf
+             // look for name match or random address change
+          nflag = 0;
+          for(k = 1 ; nflag == 0 && devok(k) != 0 ; ++k)
             {
-            if(dev[k]->type == BTYPE_LE)
+            if((dev[k]->type == BTYPE_LE || dev[k]->type == BTYPE_ME) && k != ndevice && dev[k]->node < 1000)
               {
               if((dev[k]->matchname & 1) != 0)
                 {  // MATCH_NAME
@@ -2917,6 +2972,7 @@ int lescanx()
                   dev[k]->leaddtype = rp[1] & 1;  // type public/random
                   dev[k]->leaddtype |= 2;         // found by scan
                   ndevice = k;
+                  nflag = 1;
                   for(i = 0 ; i < 6 ; ++i)
                     dev[k]->baddr[i] = rp[7-i];          
                   }
@@ -2932,11 +2988,10 @@ int lescanx()
               }
             }
           }
-      
-            
+                  
         if(ndevice >= 0)
           {
-          NPRINT "    Known device NODE = %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+          NPRINT "    Node=%d   Known device %s\n",dev[ndevice]->node,dev[ndevice]->name);
           if((dev[ndevice]->leaddtype & 1) != (rp[1] & 1))
             {
             NPRINT "    Changing fixed/random address type\n");
@@ -2996,7 +3051,7 @@ int lescanx()
           
           strcpy(dev[ndevice]->name,buf);
                       
-          NPRINT "    New device NODE = %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+          NPRINT "    Node=%d   New device %s\n",dev[ndevice]->node,dev[ndevice]->name);
           }
         if(ndevice >= 0)
           {
@@ -3023,6 +3078,9 @@ unsigned char* le_advert(int node)
   {
   int ndevice;
   static unsigned char none[4] = { 0,0,0,0 };
+
+  if(check_init(0) == 0)
+    return(none);
 
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -3099,6 +3157,9 @@ int devn(int node)
 int ctic_ok(int node,int cticn)
   {   
   int ndevice;
+ 
+  if(check_init(0) == 0)
+    return(0);
   
   ndevice = devn(node);
   
@@ -3117,6 +3178,8 @@ char *device_name(int node)
   {
   int ndevice;
   
+  if(check_init(0) == 0)
+    return("");
    
   ndevice = devn(node);
     
@@ -3140,6 +3203,9 @@ char *ctic_name(int node,int cticn)
   {
   int ndevice;
   struct cticdata *cp;
+
+  if(check_init(0) == 0)
+    return("");
   
   ndevice = devn(node);
   if(ndevice < 0)
@@ -3161,6 +3227,9 @@ int device_connected(int node)
   {
   int ndevice;
   struct devdata *dp;
+  
+  if(check_init(0) == 0)
+    return(0);
    
   ndevice = devnp(node);
   if(ndevice > 0)
@@ -3191,6 +3260,9 @@ return device type
 int device_type(int node)
   {
   int ndevice;
+
+  if(check_init(0) == 0)
+    return(0);
   
   ndevice = devnp(node);
   
@@ -3202,11 +3274,15 @@ int device_type(int node)
 
 int exitchar()
   {
+  if(check_init(0) == 0)
+    return((int)'x');
   return(gpar.exitchar);
   }
     
 int localnode()
   {
+  if(check_init(0) == 0)
+    return(0);  
   return(dev[0]->node); 
   }
  
@@ -3234,6 +3310,8 @@ int device_info(int mask)
   struct devdata *dp;
   char *s;
   
+  if(check_init(0) == 0)
+    return(0);
 
   if( (mask & BTYPE_SHORT) != 0)
     return(devlist(NULL,0,mask));
@@ -3338,6 +3416,8 @@ int device_info(int mask)
 
 int device_info_ex(int mask,char *buf,int len)
   {
+  if(check_init(0) == 0)
+    return(0);  
   return(devlist(buf,len,mask));
   }
   
@@ -3506,6 +3586,9 @@ int le_interval(int node)
   {
   int n;
   struct devdata *dp;
+
+  if(check_init(0) == 0)
+    return(0);
   
   n = devnp(node);
   if(n < 0)
@@ -3521,11 +3604,14 @@ int le_interval(int node)
   
 void mesh_server(int(*callback)())
   {
-  int nread,retval,clientnode;
+  int nread,retval,clientnode,locdev;
   unsigned char buf[32];
 #ifdef BTFPYTHON
   PyObject *pycallback;
 #endif
+
+  if(check_init(0) == 0)
+    return;
 
   if(gpar.serveractive != 0)
     {
@@ -3544,10 +3630,17 @@ void mesh_server(int(*callback)())
   NPRINT "Mesh server listening (x = stop server)\n");
   flushprint();
   serverexit(1);
+  meshreadon();
   retval = SERVER_CONTINUE;
   do
     {
-    nread = read_mesh(&clientnode,buf,32,EXIT_KEY,0);
+    locdev = FROM_MESH;
+    nread = readserial(&locdev,buf,32,0,EXIT_KEY,0);
+    if(locdev == 0)
+      clientnode = 0;
+    else
+      clientnode = dev[locdev]->node;  // known sender
+
     if(nread > 0)
       {
 #ifdef BTFPYTHON
@@ -3566,7 +3659,7 @@ void mesh_server(int(*callback)())
   while((retval & SERVER_CONTINUE) != 0 && read_error() != ERROR_KEY);
   serverexit(0);
   gpar.serveractive = 0;
-  
+  meshreadoff();
   if(read_error() == ERROR_KEY)
     NPRINT "Key press stop server\n");
   else if(read_error() == ERROR_FATAL)
@@ -3588,6 +3681,9 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
 #ifdef BTFPYTHON
   PyObject *pycallback;
 #endif
+
+  if(check_init(0) == 0)
+    return(0);
 
   if(gpar.serveractive != 0)
     {
@@ -3791,6 +3887,9 @@ int le_server(int(*callback)(int clientnode,int operation,int cticn),int timerds
 
 int keys_to_callback(int flag,int keyboard)
   {
+  if(check_init(0) == 0)
+    return(0);
+  
   if(flag == KEY_OFF)
     gpar.keytocb = 0;
   else if(flag == KEY_ON)
@@ -3816,6 +3915,9 @@ int node_server(int clientnode,int (*callback)(int clientnode,unsigned char *buf
 #ifdef BTFPYTHON
   PyObject *pycallback;
 #endif
+  
+  if(check_init(0) == 0)
+    return(0);
     
   if(gpar.serveractive != 0)
     {
@@ -3924,6 +4026,9 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
 #ifdef BTFPYTHON
   PyObject *pycallback;
 #endif  
+
+  if(check_init(0) == 0)
+    return(0);
     
   if(gpar.serveractive != 0)
     {
@@ -4145,6 +4250,9 @@ int classic_server(int clientnode,int (*callback)(int clientnode,unsigned char *
 #ifdef BTFPYTHON
   PyObject *pycallback;
 #endif  
+
+  if(check_init(0) == 0)
+    return(0);
     
   if(gpar.serveractive != 0)
     {
@@ -4982,6 +5090,9 @@ int le_pair(int node,int flags,int passkey)
   {  
   int n,ndevice,scflag,sreqflag;
   struct devdata *dp;
+
+  if(check_init(0) == 0)
+    return(0);
    
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -5165,6 +5276,8 @@ void checkpairflags(int *flags)
 
 int set_le_interval(int min,int max)
   {
+  if(check_init(0) == 0)
+    return(0); 
   if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
     {
     NPRINT "Invalid intervals\n");
@@ -5180,6 +5293,9 @@ int set_le_interval(int min,int max)
 int set_le_interval_update(int node,int min,int max)
   {
   int ndevice,cflag;
+
+  if(check_init(0) == 0)
+    return(0);
  
   if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
     {
@@ -5210,6 +5326,9 @@ int set_le_interval_update(int node,int min,int max)
 int set_le_interval_server(int node,int min,int max)
   {
   int ndevice,cflag;
+
+  if(check_init(0) == 0)
+    return(0);
  
   if(min < 0x0006 || min > 0x0C80 || max < 0x0006 || max > 0x0C80 || min > max)
     {
@@ -5249,6 +5368,9 @@ int wait_for_disconnect(int node,int timout)
   {
   int ndevice;
   unsigned long long timstart;
+
+  if(check_init(0) == 0)
+    return(0);
  
   flushprint();
     
@@ -5279,6 +5401,9 @@ int wait_for_disconnect(int node,int timout)
 int disconnect_node(int node)
   {
   int ndevice;
+
+  if(check_init(0) == 0)
+    return(0);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -5397,17 +5522,16 @@ void waitdis(int ndevice,unsigned int timout)
 void close_all()
   {
   int n;
-  static int flag = 0;
+
+  if(check_init(0) == 0)
+    return;
   
-  if(flag != 0)
+  if(check_init(5) != 0)
     return;
      
   if(gpar.hidflag != 0)
     sendhci(leadparam,0);  // nix random
-        
-
-  closecrypt();
-      
+    
   meshreadoff();   
   mesh_off();
          
@@ -5418,8 +5542,7 @@ void close_all()
   rwlinkey(4,0,NULL);
   
   flushprint();
-  flag = 1;  // disable atexit call
-  
+  check_init(3);
   // printins();            
   }  
 
@@ -5433,6 +5556,8 @@ count=0 use stored size
 
 int write_ctic(int node,int cticn,unsigned char *data,int count)
   {
+  if(check_init(0) == 0)
+    return(0);  
   return(writecticx(node,cticn,data,count,0,NULL));
   }
 
@@ -5440,6 +5565,9 @@ int write_ctic(int node,int cticn,unsigned char *data,int count)
 int notify_ctic(int node,int cticn,int notifyflag,int (*callback)())
   {
   unsigned char data[2];
+
+  if(check_init(0) == 0)
+    return(0);
    
   if(!(notifyflag == NOTIFY_ENABLE || notifyflag == NOTIFY_DISABLE))
     {
@@ -5781,6 +5909,9 @@ int read_ctic(int node,int cticn,unsigned char *data,int datlen)
   int n,k,k0,chandle,flag,retval,ndevice;
   unsigned char *cmd,*pack;
  
+  if(check_init(0) == 0)
+    return(0);
+
   for(n = 0 ; n < datlen ; ++n)
     data[n] = 0;
 
@@ -6174,7 +6305,14 @@ int sendhci(unsigned char *s,int ndevice)
     hexdump(cmd,len);
     }  // end printflag
     
-  if(gpar.ledatlenflag == 0 && (s == lereadreply || s == lewrite || s == lenotify || s == le09replyv))
+  if(packet_size(0) != 0 && (s == lereadreply || s == lewrite || s == lenotify ||
+              s == le09replyv || s == attdata || s == blusend))
+    {  // dongles
+    if(splitcmd(s+PAKHEADSIZE,packet_size(0),ndevice) != 0)
+      return(1);
+    }
+  
+  else if(gpar.ledatlenflag == 0 && (s == lereadreply || s == lewrite || s == lenotify || s == le09replyv))
     {
     if(splitcmd(s+PAKHEADSIZE,32,ndevice) != 0)
       return(1);
@@ -6224,24 +6362,34 @@ int sendhci(unsigned char *s,int ndevice)
   return(n);
   }
 
-
+int packet_size(int size)
+  {
+  static int psize = 0;
+  
+  if(size >= 20)
+    {
+    if(size > 500)
+      psize = 500;
+    else
+      psize = size;
+    }
+  return(psize);
+  }     
 
 int splitcmd(unsigned char *s,int plen,int ndevice)
   {
-  int n,k,sn,tn,t20,len,numx,remx,kx,flag;
+  int n,k,sn,tn,t20,len,numx,remx,kx;
   unsigned char t[512];
   
   len = s[5] + (s[6] << 8);
   if(len <= plen-9)
     return(0);  
- 
-  flag = 1;   // 0 = send all packets as one write
-              // 1 = send each packet as a separate write
-  
+
   for(n = 0 ; n < plen ; ++n)
     t[n] = s[n];
     
-  t20 = t[2];
+  t20 = t[2] & 0x0F;
+  t[2] = t20;  // | 0x20;
   t[3] = plen-5;
   t[4] = 0;
   n = len-plen+9;
@@ -6250,40 +6398,34 @@ int splitcmd(unsigned char *s,int plen,int ndevice)
   if(remx > 0)
     ++numx;
   sn = plen;
-  tn = plen;
   VPRINT "Split into %d packets\n",numx+1);
-  if(flag != 0)  
-    splitwrite(t,plen,ndevice);
+  splitwrite(t,plen,ndevice);
   for(n = 0 ; n < numx ; ++n)
     {
     ++gpar.cmdcount;
-    t[tn] = 0x02;
-    t[tn+1] = t[1];
-    t[tn+2] = t20 | 0x10;
+    t[0] = 0x02;
+    t[1] = t[1];
+    t[2] = t20 | 0x10;
     if(n == numx-1 && remx > 0)
       {
-      t[tn+3] = remx;
+      t[3] = remx;
       kx = remx;
       }
     else
       {
-      t[tn+3] = plen-5;
+      t[3] = plen-5;
       kx = plen-5;
       }
-    t[tn+4] = 0;
-    tn += 5;
-
+    t[4] = 0;
+    tn = 5;
     for(k = 0 ; k < kx ; ++k)
       {
       t[tn] = s[sn];
       ++tn;
       ++sn;
       }
-    if(flag != 0)   
-      splitwrite(t+plen*(n+1),kx+5,ndevice);
+    splitwrite(t,kx+5,ndevice);
     }
-  if(flag == 0)
-    splitwrite(t,tn,ndevice);
   ++gpar.cmdcount;
   return(1);
   }
@@ -6305,35 +6447,6 @@ int splitwrite(unsigned char *cmd,int len,int ndevice)
   n = sendpack(cmd,len);
   gpar.lastsend = time_ms();
   return(n);
-  
-  /*******
-   
-  ntogo = len;
-  cmdx = cmd;  
-  timstart = timems();
-  do
-    {
-    nwrit = write(gpar.hci,cmdx,ntogo);
- 
-    if(nwrit > 0)
-      {
-      ntogo -= nwrit;
-      cmdx += nwrit;
-      }
-    else
-      usleep(500);
-         
-    if(ntogo != 0 && timems() - timstart > (unsigned long long)2000)   // 2 sec timeout
-      {
-      NPRINT "Send CMD timeout\n");
-      return(0);
-      }
-    }
-  while(ntogo != 0);
-  gpar.lastsend = timems();
-  return(1);
-  ***********/
-  
   }
 
 
@@ -6350,6 +6463,8 @@ See Vol 4 Pt E  7.7.19
 
 int cmd_stack_ptr()
   {
+  if(check_init(0) == 0)
+    return(0);
   readhci(0,0,0,0,0);
   return(gpar.cmdcount);
   }
@@ -8219,7 +8334,7 @@ void immediate(long long lookflag)
              
              sp->linkflag |= PAIR_NEW;
              }     
-           sp->linkflag |= KEY_NEW;  // bond req saves LEkey 
+           sp->linkflag |= KEY_NEW;  // bond req saves LEkey
            }                           
           
               
@@ -8603,7 +8718,7 @@ void immediate(long long lookflag)
        for(j = 0 ; j < 16 ; ++j)
          sp->linkey[j] = insdat[n+j+1];
        if((sp->lepairflags & BOND_NEW) != 0)
-         sp->linkflag |= KEY_NEW;  // saves LEkey 
+         sp->linkflag |= KEY_NEW;  // saves LEkey
        }
      if(insdat[n] == 0x0B)
        NPRINT "Server is asking to pair - call le_pair\n");
@@ -9372,6 +9487,8 @@ int stuuid(unsigned char *s)
   
 void save_pair_info()
   {
+  if(check_init(0) == 0)
+    return; 
   readhci(0,0,0,250,0);  // codes 6/7
   rwlinkey(1,0,NULL);
   NPRINT "Pair info saved\n");
@@ -9380,13 +9497,12 @@ void save_pair_info()
   
 void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   {
-  int n,k,i,j,ntn,addcount,flag,eflag;
+  int n,k,i,j,ntn,addcount,eflag,doneflag;
   unsigned char *badd,*key;
   struct devdata *dp;
   FILE *stream;
   static int count = -1;
-  static int delflag = 0;
-  static int writeflag = 0;
+  static int changeflag = 0;
   unsigned char *newtable;
   static unsigned char zero[6] = {0,0,0,0,0,0};
   static unsigned char *table = NULL; 
@@ -9408,7 +9524,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       n = 0;
       count = fgetc(stream);
       
-      if(count != 0 && count != 0xFF)
+      if(count != 0 && count != 0xFF && count != EOF)
         {
         k = count*22;
         table = (unsigned char *)malloc(k);
@@ -9416,14 +9532,15 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         if(table != NULL && fread(table,1,k,stream) == (unsigned int)k)
           n = 1;
         }
-             
+ 
       fclose(stream);
       if(n == 0)
         {
         count = 0;
-        NPRINT "Read key data failed\n");
+        VPRINT "Read btferret.dat failed\n");
         return;
         }
+      changeflag = 0;
       }
     
     eflag = 0; 
@@ -9469,15 +9586,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
   else if(rwflag == 1 || rwflag == 4)
     {  // write  4=close    
     // update table
-    if(writeflag != 0)
-      {
-      NPRINT "WARNING 2nd close\n");
-      return;
-      }
-    if(rwflag == 4)
-      writeflag = 1;
-    flag = 0;  // no changes to table
-    if(count > 0 && table != NULL && delflag == 0) 
+    if(count > 0 && table != NULL) 
       {
       for(k = 0 ; k < count ; ++k)
         {
@@ -9495,8 +9604,8 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
                 key[n] = dp->divrand[n];
               dp->linkflag &= ~PAIR_NEW;
               dp->linkflag |= PAIR_FILE;
+              changeflag = 1;
               }
-            flag = 1;
             }
           else if((dp->linkflag & KEY_NEW) != 0)
             {   // must be KEY_FILE also
@@ -9504,7 +9613,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
               key[n] = dp->linkey[n];
             dp->linkflag &= ~KEY_NEW;
             dp->linkflag |= KEY_FILE;
-            flag = 1;
+            changeflag = 1;
             }
           }
         }
@@ -9520,7 +9629,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
         ++addcount;
       }
  
-    if(flag == 0 && delflag == 0 && addcount == 0)   
+    if(changeflag == 0 && addcount == 0)   
       return;   // no changes
         
     if(count + addcount > 100)
@@ -9529,7 +9638,7 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
       NPRINT "Recommendation: delete it and re-pair devices\n");
       }
       
-    if(count + addcount > 254)
+    if(count + addcount > 250)
       {
       NPRINT "Too many paired devices - delete %s\n",gpar.datfile);
       NPRINT "file to reset and then re-pair devices\n");
@@ -9602,19 +9711,19 @@ void rwlinkey(int rwflag,int ndevice,unsigned char *addr)
     fputc(count,stream);
     fwrite(table,1,count*22,stream);  
     fclose(stream);
-    delflag = 0;
+    changeflag = 0;
     }
   else if(rwflag == 2 && count > 0 && table != NULL && ndevice > 0)
     {  // delete
-    flag = 0;
-    for(k = 0 ; k < count && flag == 0 ; ++k)
+    doneflag = 0;
+    for(k = 0 ; k < count && doneflag == 0 ; ++k)
       {
       badd = table + k*22;
       n = devnfrombadd(badd,BTYPE_CL | BTYPE_LE | BTYPE_ME,DIRN_FOR);
       if(n == ndevice)
         {    // found - remove
-        flag = 1;
-        delflag = 1;
+        changeflag = 1;
+        doneflag = 1;
         dev[n]->linkflag &= ~(KEY_FILE | PAIR_FILE);
         for(j = k ; j < count ; ++j)
           {
@@ -10168,6 +10277,8 @@ int hid_key_code(int key)
          }; 
   // last 516
   // use gpar.keyboard for non-GB table
+  if(check_init(0) == 0)
+    return(0);
   
   if(key < 1 || key > 516)
     retval = 0;
@@ -10342,6 +10453,9 @@ int clconnectxx(int ndevice)
 int find_channel(int node,int flag,unsigned char *uuid)
   {
   int flags,retval,ndevice;
+
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10372,6 +10486,9 @@ int find_channel(int node,int flag,unsigned char *uuid)
 int list_channels(int node,int flag)
   {
   int flags,retval,ndevice;
+
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10399,6 +10516,9 @@ int list_channels(int node,int flag)
 int list_channels_ex(int node,char *buf,int len)
   {
   int ndevice,retval;
+ 
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10414,6 +10534,9 @@ int list_channels_ex(int node,char *buf,int len)
 int list_uuid(int node,unsigned char *uuid)
   {
   int retval,ndevice;
+
+  if(check_init(0) == 0)
+    return(0);
     
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10821,6 +10944,9 @@ int printchannels(int ndevice,int flags,struct servicedata *serv,int servlen,cha
 int find_ctics(int node)
   {
   int retval,ndevice;
+
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10835,6 +10961,9 @@ int find_ctics(int node)
 int list_ctics(int node,int flag)
   {
   int retval,ndevice;
+
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -10862,6 +10991,9 @@ int list_ctics(int node,int flag)
 int list_ctics_ex(int node,int flag,char *buf,int len)
   {
   int retval,ndevice,locflag;
+ 
+  if(check_init(0) == 0)
+    return(-1);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -11164,6 +11296,8 @@ int find_ctic_index(int node,int flag,unsigned char *uuid)
   int n,k,getout,ndevice;
   struct cticdata *cp;
   
+  if(check_init(0) == 0)
+    return(-1);
       
   for(n = 0 ; ctic_ok(node,n) != 0 ; ++n)
     {
@@ -11781,6 +11915,8 @@ int disconnectl2(int ndevice,int psm)
 
 void classic_scan()
   {
+  if(check_init(0) == 0)
+    return;
   clscanx();
   flushprint();
   } 
@@ -11826,7 +11962,7 @@ void clscanx()
       if(ndevice >= 0 && dev[ndevice]->foundflag == 0)
         {
         NPRINT "FOUND %s\n",baddstr(rp,1));      
-        NPRINT "   Known device NODE = %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+        NPRINT "   Node=%d   Known device %s\n",dev[ndevice]->node,dev[ndevice]->name);
         if(dev[ndevice]->type != BTYPE_CL && dev[ndevice]->type != BTYPE_ME)
           NPRINT "   But not listed as Classic or Mesh\n"); 
         dev[ndevice]->foundflag = 1;
@@ -11881,7 +12017,7 @@ void clscanx()
           // MATCH_NAME?
           for(k = 1 ; flag == 0 && devok(k) != 0 ; ++k)
             {
-            if(k != ndevice && dev[k]->type == BTYPE_CL)
+            if(k != ndevice && (dev[k]->type == BTYPE_CL || dev[k]->type == BTYPE_ME))
               {
               if((dev[k]->matchname & 1) != 0)
                 {  // MATCH_NAME
@@ -11897,7 +12033,7 @@ void clscanx()
                   dp->foundflag = 0;
                   ndevice = k;       // swap to known device k
                   NPRINT "   Found via MATCH_NAME\n");
-                  NPRINT "   Known device NODE = %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+                  NPRINT "   Node=%d   Known device %s\n",dev[ndevice]->node,dev[ndevice]->name);
                   dev[k]->matchname |= 2;  // found address flag
                   dev[k]->foundflag = 1;
                   ndevice = k;
@@ -11920,7 +12056,7 @@ void clscanx()
         if(flag == 0)
           {
           strcpy(dev[ndevice]->name,buf);                
-          NPRINT "   New device NODE = %d %s\n",dev[ndevice]->node,dev[ndevice]->name);
+          NPRINT "   Node=%d   New device %s\n",dev[ndevice]->node,dev[ndevice]->name);
           rwlinkey(0,ndevice,NULL);  // link key in file?
           }
         ++count;
@@ -12175,6 +12311,9 @@ int decodedes(unsigned char *sin,int len,struct sdpdata *sdpp)  //  int level,in
 int connect_node(int node,int channelflag,int channel)
   {
   int ndevice,type,retval;
+
+  if(check_init(0) == 0)
+    return(0);
   
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -12406,6 +12545,9 @@ int write_node(int node,unsigned char *outbuff,int count)
   unsigned char *bs,*dat;
   char buf[128],xbuf[8];
 
+  if(check_init(0) == 0)
+    return(0);
+
   if(count == 0)
     return(1);
       
@@ -12551,6 +12693,9 @@ int write_node(int node,unsigned char *outbuff,int count)
 int read_node_count(int node,unsigned char *buf,int count,int exitflag,int timeoutms)
   {
   int locnode;
+
+  if(check_init(0) == 0)
+    return(0);
   
   locnode = node;
   return(readserial(&locnode,buf,count,0,(exitflag & 3) | EXIT_COUNT,timeoutms));
@@ -12559,6 +12704,9 @@ int read_node_count(int node,unsigned char *buf,int count,int exitflag,int timeo
 int read_node_endchar(int node,unsigned char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
   {
   int locnode;
+
+  if(check_init(0) == 0)
+    return(0);
       
   locnode = node;    
   return(readserial(&locnode,buf,bufsize,endchar,(exitflag & 3) | EXIT_CHAR,timeoutms));
@@ -12567,6 +12715,9 @@ int read_node_endchar(int node,unsigned char *buf,int bufsize,char endchar,int e
 int read_all_endchar(int *node,unsigned char *buf,int bufsize,char endchar,int exitflag,int timeoutms)
   {
   int locnode,retval;
+
+  if(check_init(0) == 0)
+    return(0);
   
   locnode = FROM_ALLCON;
   retval = readserial(&locnode,buf,bufsize,endchar,(exitflag & 3) | EXIT_CHAR,timeoutms);
@@ -12582,10 +12733,15 @@ int read_all_endchar(int *node,unsigned char *buf,int bufsize,char endchar,int e
 int read_mesh(int *node,unsigned char *buf,int bufsize,int exitflag,int timeoutms)
   {
   int locnode,retval;
+
+  if(check_init(0) == 0)
+    return(0);
  
+  meshreadon();
   locnode = FROM_MESH;
   retval = readserial(&locnode,buf,bufsize,0,(exitflag & 3),timeoutms);
-
+  meshreadoff();
+    
   if(locnode == 0)
     *node = 0;
   else
@@ -12596,6 +12752,8 @@ int read_mesh(int *node,unsigned char *buf,int bufsize,int exitflag,int timeoutm
 
 int read_error()
   {
+  if(check_init(0) == 0)
+    return(0); 
   return(gpar.readerror);
   }
 
@@ -12604,6 +12762,8 @@ void read_node_clear(int node)
   {
   int n,ndevice;
        
+  if(check_init(0) == 0)
+    return;
     
   ndevice = devnp(node);
   if(ndevice < 0)
@@ -12623,6 +12783,8 @@ void read_node_clear(int node)
    
 void read_all_clear()
   {
+  if(check_init(0) == 0)
+    return;
   readhci(0,0,0,100,10);
   clearins(0);
   } 
@@ -12633,6 +12795,9 @@ void read_notify(int timeoutms)
   unsigned long long to,tim0;
   int kmsav,key,tox;
  
+  if(check_init(0) == 0)
+    return;
+
   if(gpar.serveractive != 0)
     return;  // not when server
     
@@ -12643,7 +12808,7 @@ void read_notify(int timeoutms)
 
   if(to <= 1000)
     {
-    tox = to;
+    tox = (int)to;
     to = 0;
     }
   else
@@ -12729,8 +12894,7 @@ int readserial(int *node,unsigned char *inbuff,int count,char endchar,int flag,i
       ndevice = onedevn;  // is only one possible connected device
     }
   else if((ndevice & FROM_MESH) != 0)
-    meshreadon();   // start scan - sets MESH_R
-              
+    n = 0;  //  meshreadon();   // start scan - sets MESH_R              
   else if((dev[ndevice]->conflag & (CON_RF | CON_MESH)) == 0)
     {   // specified device
     NPRINT "%s not classic/node connected for read\n",dev[ndevice]->name);
@@ -12751,7 +12915,7 @@ int readserial(int *node,unsigned char *inbuff,int count,char endchar,int flag,i
   else
     *node = 0;  // failed
   
-  meshreadoff();
+  // meshreadoff();
   
   if(oldkm != 2)  // key mode has changed 
     setkeymode(oldkm);  // restore
@@ -12939,6 +13103,9 @@ void set_le_random_address(unsigned char *add)
   {  
   int n,flag,zflag;
 
+  if(check_init(0) == 0)
+    return;
+
   if((gpar.meshflag & MESH_W) != 0)
     flag = 1;
   else
@@ -12996,6 +13163,8 @@ void set_le_random_address(unsigned char *add)
   
 void set_flags(int flags,int onoff)
   {
+  if(check_init(0) == 0)
+    return; 
   if(onoff == FLAG_OFF)
     gpar.settings &= ~flags;
   else
@@ -13004,11 +13173,15 @@ void set_flags(int flags,int onoff)
   
 void set_notify_node(int node)
   {
+  if(check_init(0) == 0)
+    return;  
   gpar.notifynode = node;
   }   
   
 int set_le_wait(int waitms)
   {
+  if(check_init(0) == 0)
+    return(0); 
   if(waitms >= 0)
     gpar.leclientwait = waitms;
   return(gpar.leclientwait); 
@@ -13044,6 +13217,9 @@ int set_print_flag(int flag)
 int output_file(char *filename)
   {
   FILE *prstream;
+
+  if(check_init(0) == 0)
+    return(0);
 
   if(checkfilename("output_file",filename) == 0)
     return(0);
@@ -13450,6 +13626,8 @@ int readline(FILE *stream,char *s)
 
 void le_handles(int node,int lasthandle)
   {
+  if(check_init(0) == 0)
+    return;
   readleatt(node,lasthandle | 0x40000);
   }
 
@@ -13951,7 +14129,7 @@ int calcs1(unsigned char *key,unsigned char *r1,unsigned char *r2,unsigned char 
   for(n = 0 ; n < 8 ; ++n)
     res[n+8] = r1[n];
     
-  if(calce(key,res,out) == 0)
+  if(calce(key,res,out,1) == 0)
     return(0);
     
   return(1);
@@ -13982,13 +14160,13 @@ int calcc1(unsigned char *key,unsigned char *r,unsigned char *preq,unsigned char
   for(n = 0 ; n < 16 ; ++n)
     resa[n] = r[n] ^ p1[n];
  
-  if(calce(key,resa,resb) == 0)
+  if(calce(key,resa,resb,1) == 0)
     return(0);  
   
   for(n = 0 ; n < 16 ; ++n)
     resa[n] = resb[n] ^ p2[n];
   
-  if(calce(key,resa,res) == 0)
+  if(calce(key,resa,res,1) == 0)
     return(0);
   
   return(1);
@@ -14084,6 +14262,265 @@ int calcg2(unsigned char* u, unsigned char* v,
   }
 
 
+
+int calce(unsigned char *key,unsigned char *in,unsigned char *out,int flipflag)
+  {
+static unsigned char sbox[256] = {
+0x63,0x7C,0x77,0x7B,0xF2,0x6B,0x6F,0xC5,0x30,0x01,0x67,0x2B,0xFE,0xD7,0xAB,0x76,
+0xCA,0x82,0xC9,0x7D,0xFA,0x59,0x47,0xF0,0xAD,0xD4,0xA2,0xAF,0x9C,0xA4,0x72,0xC0,
+0xB7,0xFD,0x93,0x26,0x36,0x3F,0xF7,0xCC,0x34,0xA5,0xE5,0xF1,0x71,0xD8,0x31,0x15,
+0x04,0xC7,0x23,0xC3,0x18,0x96,0x05,0x9A,0x07,0x12,0x80,0xE2,0xEB,0x27,0xB2,0x75,
+0x09,0x83,0x2C,0x1A,0x1B,0x6E,0x5A,0xA0,0x52,0x3B,0xD6,0xB3,0x29,0xE3,0x2F,0x84,
+0x53,0xD1,0x00,0xED,0x20,0xFC,0xB1,0x5B,0x6A,0xCB,0xBE,0x39,0x4A,0x4C,0x58,0xCF,
+0xD0,0xEF,0xAA,0xFB,0x43,0x4D,0x33,0x85,0x45,0xF9,0x02,0x7F,0x50,0x3C,0x9F,0xA8,
+0x51,0xA3,0x40,0x8F,0x92,0x9D,0x38,0xF5,0xBC,0xB6,0xDA,0x21,0x10,0xFF,0xF3,0xD2,
+0xCD,0x0C,0x13,0xEC,0x5F,0x97,0x44,0x17,0xC4,0xA7,0x7E,0x3D,0x64,0x5D,0x19,0x73,
+0x60,0x81,0x4F,0xDC,0x22,0x2A,0x90,0x88,0x46,0xEE,0xB8,0x14,0xDE,0x5E,0x0B,0xDB,
+0xE0,0x32,0x3A,0x0A,0x49,0x06,0x24,0x5C,0xC2,0xD3,0xAC,0x62,0x91,0x95,0xE4,0x79,
+0xE7,0xC8,0x37,0x6D,0x8D,0xD5,0x4E,0xA9,0x6C,0x56,0xF4,0xEA,0x65,0x7A,0xAE,0x08,
+0xBA,0x78,0x25,0x2E,0x1C,0xA6,0xB4,0xC6,0xE8,0xDD,0x74,0x1F,0x4B,0xBD,0x8B,0x8A,
+0x70,0x3E,0xB5,0x66,0x48,0x03,0xF6,0x0E,0x61,0x35,0x57,0xB9,0x86,0xC1,0x1D,0x9E,
+0xE1,0xF8,0x98,0x11,0x69,0xD9,0x8E,0x94,0x9B,0x1E,0x87,0xE9,0xCE,0x55,0x28,0xDF,
+0x8C,0xA1,0x89,0x0D,0xBF,0xE6,0x42,0x68,0x41,0x99,0x2D,0x0F,0xB0,0x54,0xBB,0x16 };
+static unsigned char gfp2[256] = {
+0x00,0x02,0x04,0x06,0x08,0x0A,0x0C,0x0E,0x10,0x12,0x14,0x16,0x18,0x1A,0x1C,0x1E,
+0x20,0x22,0x24,0x26,0x28,0x2A,0x2C,0x2E,0x30,0x32,0x34,0x36,0x38,0x3A,0x3C,0x3E,
+0x40,0x42,0x44,0x46,0x48,0x4A,0x4C,0x4E,0x50,0x52,0x54,0x56,0x58,0x5A,0x5C,0x5E,
+0x60,0x62,0x64,0x66,0x68,0x6A,0x6C,0x6E,0x70,0x72,0x74,0x76,0x78,0x7A,0x7C,0x7E,
+0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x8E,0x90,0x92,0x94,0x96,0x98,0x9A,0x9C,0x9E,
+0xA0,0xA2,0xA4,0xA6,0xA8,0xAA,0xAC,0xAE,0xB0,0xB2,0xB4,0xB6,0xB8,0xBA,0xBC,0xBE,
+0xC0,0xC2,0xC4,0xC6,0xC8,0xCA,0xCC,0xCE,0xD0,0xD2,0xD4,0xD6,0xD8,0xDA,0xDC,0xDE,
+0xE0,0xE2,0xE4,0xE6,0xE8,0xEA,0xEC,0xEE,0xF0,0xF2,0xF4,0xF6,0xF8,0xFA,0xFC,0xFE,
+0x1B,0x19,0x1F,0x1D,0x13,0x11,0x17,0x15,0x0B,0x09,0x0F,0x0D,0x03,0x01,0x07,0x05,
+0x3B,0x39,0x3F,0x3D,0x33,0x31,0x37,0x35,0x2B,0x29,0x2F,0x2D,0x23,0x21,0x27,0x25,
+0x5B,0x59,0x5F,0x5D,0x53,0x51,0x57,0x55,0x4B,0x49,0x4F,0x4D,0x43,0x41,0x47,0x45,
+0x7B,0x79,0x7F,0x7D,0x73,0x71,0x77,0x75,0x6B,0x69,0x6F,0x6D,0x63,0x61,0x67,0x65,
+0x9B,0x99,0x9F,0x9D,0x93,0x91,0x97,0x95,0x8B,0x89,0x8F,0x8D,0x83,0x81,0x87,0x85,
+0xBB,0xB9,0xBF,0xBD,0xB3,0xB1,0xB7,0xB5,0xAB,0xA9,0xAF,0xAD,0xA3,0xA1,0xA7,0xA5,
+0xDB,0xD9,0xDF,0xDD,0xD3,0xD1,0xD7,0xD5,0xCB,0xC9,0xCF,0xCD,0xC3,0xC1,0xC7,0xC5,
+0xFB,0xF9,0xFF,0xFD,0xF3,0xF1,0xF7,0xF5,0xEB,0xE9,0xEF,0xED,0xE3,0xE1,0xE7,0xE5 };
+static unsigned char gfp3[256] = {
+0x00,0x03,0x06,0x05,0x0C,0x0F,0x0A,0x09,0x18,0x1B,0x1E,0x1D,0x14,0x17,0x12,0x11,
+0x30,0x33,0x36,0x35,0x3C,0x3F,0x3A,0x39,0x28,0x2B,0x2E,0x2D,0x24,0x27,0x22,0x21,
+0x60,0x63,0x66,0x65,0x6C,0x6F,0x6A,0x69,0x78,0x7B,0x7E,0x7D,0x74,0x77,0x72,0x71,
+0x50,0x53,0x56,0x55,0x5C,0x5F,0x5A,0x59,0x48,0x4B,0x4E,0x4D,0x44,0x47,0x42,0x41,
+0xC0,0xC3,0xC6,0xC5,0xCC,0xCF,0xCA,0xC9,0xD8,0xDB,0xDE,0xDD,0xD4,0xD7,0xD2,0xD1,
+0xF0,0xF3,0xF6,0xF5,0xFC,0xFF,0xFA,0xF9,0xE8,0xEB,0xEE,0xED,0xE4,0xE7,0xE2,0xE1,
+0xA0,0xA3,0xA6,0xA5,0xAC,0xAF,0xAA,0xA9,0xB8,0xBB,0xBE,0xBD,0xB4,0xB7,0xB2,0xB1,
+0x90,0x93,0x96,0x95,0x9C,0x9F,0x9A,0x99,0x88,0x8B,0x8E,0x8D,0x84,0x87,0x82,0x81,
+0x9B,0x98,0x9D,0x9E,0x97,0x94,0x91,0x92,0x83,0x80,0x85,0x86,0x8F,0x8C,0x89,0x8A,
+0xAB,0xA8,0xAD,0xAE,0xA7,0xA4,0xA1,0xA2,0xB3,0xB0,0xB5,0xB6,0xBF,0xBC,0xB9,0xBA,
+0xFB,0xF8,0xFD,0xFE,0xF7,0xF4,0xF1,0xF2,0xE3,0xE0,0xE5,0xE6,0xEF,0xEC,0xE9,0xEA,
+0xCB,0xC8,0xCD,0xCE,0xC7,0xC4,0xC1,0xC2,0xD3,0xD0,0xD5,0xD6,0xDF,0xDC,0xD9,0xDA,
+0x5B,0x58,0x5D,0x5E,0x57,0x54,0x51,0x52,0x43,0x40,0x45,0x46,0x4F,0x4C,0x49,0x4A,
+0x6B,0x68,0x6D,0x6E,0x67,0x64,0x61,0x62,0x73,0x70,0x75,0x76,0x7F,0x7C,0x79,0x7A,
+0x3B,0x38,0x3D,0x3E,0x37,0x34,0x31,0x32,0x23,0x20,0x25,0x26,0x2F,0x2C,0x29,0x2A,
+0x0B,0x08,0x0D,0x0E,0x07,0x04,0x01,0x02,0x13,0x10,0x15,0x16,0x1F,0x1C,0x19,0x1A };
+static unsigned char rcon[256] = {
+0x00,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36,0x6C,0xD8,0xAB,0x4D,0x9A,
+0x2F,0x5E,0xBC,0x63,0xC6,0x97,0x35,0x6A,0xD4,0xB3,0x7D,0xFA,0xEF,0xC5,0x91,0x39,
+0x72,0xE4,0xD3,0xBD,0x61,0xC2,0x9F,0x25,0x4A,0x94,0x33,0x66,0xCC,0x83,0x1D,0x3A,
+0x74,0xE8,0xCB,0x8D,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36,0x6C,0xD8,
+0xAB,0x4D,0x9A,0x2F,0x5E,0xBC,0x63,0xC6,0x97,0x35,0x6A,0xD4,0xB3,0x7D,0xFA,0xEF,
+0xC5,0x91,0x39,0x72,0xE4,0xD3,0xBD,0x61,0xC2,0x9F,0x25,0x4A,0x94,0x33,0x66,0xCC,
+0x83,0x1D,0x3A,0x74,0xE8,0xCB,0x8D,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,
+0x36,0x6C,0xD8,0xAB,0x4D,0x9A,0x2F,0x5E,0xBC,0x63,0xC6,0x97,0x35,0x6A,0xD4,0xB3,
+0x7D,0xFA,0xEF,0xC5,0x91,0x39,0x72,0xE4,0xD3,0xBD,0x61,0xC2,0x9F,0x25,0x4A,0x94,
+0x33,0x66,0xCC,0x83,0x1D,0x3A,0x74,0xE8,0xCB,0x8D,0x01,0x02,0x04,0x08,0x10,0x20,
+0x40,0x80,0x1B,0x36,0x6C,0xD8,0xAB,0x4D,0x9A,0x2F,0x5E,0xBC,0x63,0xC6,0x97,0x35,
+0x6A,0xD4,0xB3,0x7D,0xFA,0xEF,0xC5,0x91,0x39,0x72,0xE4,0xD3,0xBD,0x61,0xC2,0x9F,
+0x25,0x4A,0x94,0x33,0x66,0xCC,0x83,0x1D,0x3A,0x74,0xE8,0xCB,0x8D,0x01,0x02,0x04,
+0x08,0x10,0x20,0x40,0x80,0x1B,0x36,0x6C,0xD8,0xAB,0x4D,0x9A,0x2F,0x5E,0xBC,0x63,
+0xC6,0x97,0x35,0x6A,0xD4,0xB3,0x7D,0xFA,0xEF,0xC5,0x91,0x39,0x72,0xE4,0xD3,0xBD,
+0x61,0xC2,0x9F,0x25,0x4A,0x94,0x33,0x66,0xCC,0x83,0x1D,0x3A,0x74,0xE8,0xCB,0x8D };
+
+  int n,i,j,k;
+  unsigned char cp[16],w[176],temp[4],dp[16],temp0;
+  unsigned char *wp;
+
+  if(flipflag == 0)
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      {
+      cp[n] = in[n];
+      w[n] = key[n];
+      }
+    }
+  else
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      {
+      cp[n] = in[15-n];
+      w[n] = key[15-n];
+      }
+    }
+
+  i = 4;
+  while(i < 44)
+    {
+    k = (i-1) << 2;
+    for(n = 0 ; n < 4 ; ++n)
+      temp[n] = w[k+n]; 
+     
+    if((i % 4) == 0)
+      {
+      temp0 = temp[0];
+      temp[0] = temp[1];
+      temp[1] = temp[2];
+      temp[2] = temp[3];
+      temp[3] = temp0;
+
+      for(j = 0 ; j < 4 ; ++j)
+        temp[j] = sbox[temp[j]];
+      temp[0] ^= rcon[i/4];
+      }
+     
+    k = (i-4) << 2;
+    for(j = 0 ; j < 4 ; ++j)
+      temp[j] ^= w[k+j];
+
+    k = (i << 2);
+    for(j = 0 ; j < 4 ; ++j)
+      w[k+j] = temp[j];
+
+    ++i;
+    }
+
+  for(n = 0 ; n < 16 ; ++n)
+    cp[n] ^= w[n];   
+
+  for(k = 1 ; k < 11 ; ++k)
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      cp[n] = sbox[cp[n]];
+
+    for(i = 0 ; i < 4 ; ++i)
+      {
+      for(j = 0 ; j < 4 ; ++j)
+        {
+        n = (i << 2) + j;
+        dp[n] = cp[(((i+j) % 4) << 2) + j];
+        }
+      }
+
+    if(k == 10)
+      {
+      for(n = 0 ; n < 16 ; ++n)
+        cp[n] = dp[n];
+      }
+    else
+      {
+      for(i = 0 ; i < 4 ; ++i)
+        {
+        n = i << 2; 
+        cp[n] = (gfp2[dp[n]] ^ gfp3[dp[n+1]] ^ dp[n+2] ^ dp[n+3]);
+        cp[n+1] = (dp[n] ^ gfp2[dp[n+1]] ^ gfp3[dp[n+2]] ^ dp[n+3]);
+        cp[n+2] = (dp[n] ^ dp[n+1] ^ gfp2[dp[n+2]] ^ gfp3[dp[n+3]]);
+        cp[n+3] = (gfp3[dp[n]] ^ dp[n+1] ^ dp[n+2] ^ gfp2[dp[n+3]]);
+        }
+      } 
+
+    wp = w + 16*k;
+    for(n = 0 ; n < 16 ; ++n)
+      cp[n] ^= wp[n];
+    }   
+   
+  if(flipflag == 0)
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      out[n] = cp[n];
+    }
+  else
+    {
+    for(n = 0 ; n < 16 ; ++n)
+      out[n] = cp[15-n];
+    }
+
+  return(1);
+  }
+
+int aes_cmac( unsigned char* keyx,unsigned char* in,int len, unsigned char* outx)
+  {
+  int n,i,flag;
+  unsigned char x[16],y[16],rb[16],m[80]; 
+  unsigned char out[16],key[16],k1[16],k2[16];
+
+  if(len > 80)
+    return(0);
+
+  for(n = 0 ; n < 16 ; ++n)
+    {
+    x[n] = 0;
+    rb[n] = 0;
+    key[n] = keyx[15-n];
+    }
+  rb[15] = 0x87;
+
+  for(n = 0 ; n < 80 ; ++n)
+    m[n] = 0;
+   
+  calce(key,x,y,0);
+  bleft(k1,y);
+  if(y[0] & 0x80)
+    bxor(k1,k1,rb);
+ 
+  bleft(k2,k1);
+  if(k1[0] & 0x80)
+    bxor(k2, k2,rb);
+
+  n = (len/16);
+  flag = 0;
+  if(len % 16 != 0)
+    ++n;
+  if(n == 0)
+    n = 1;
+  else if((len % 16) == 0)
+    flag = 1;
+
+  for(i = 0 ; i < len ; ++i)
+    m[i] = in[len-1-i];
+
+  if(flag == 0)
+    {
+    m[len] = 0x80;
+    bxor(m+(n-1)*16, m+(n-1)*16, k2);
+    }
+  else
+    bxor(m+(n-1)*16, m+(n-1)*16, k1);
+  
+  for(i = 0; i < n - 1; ++i)
+    {
+    bxor(y, m+16*i, x);
+    calce(key,y,x,0);
+    }
+  bxor(y,m+(n-1)*16,x);
+  calce(key,y,out,0);
+  for(n = 0 ; n < 16 ; ++n)
+    outx[n] = out[15-n];
+  return(1);
+  }
+
+void bxor(unsigned char *c,unsigned char *a,unsigned char *b)
+  {
+  int n;
+
+  for (n = 0; n < 16; ++n)
+    c[n] = a[n] ^ b[n];
+  }
+
+void bleft(unsigned char *b,unsigned char *a)
+  {
+  int n;
+  unsigned char oflow;
+    
+  oflow = 0;
+  for (n = 15; n >= 0; --n)
+    {
+    b[n] = a[n] << 1;
+    b[n] |= oflow;
+    oflow = (a[n] & 0x80) ? 1 : 0;
+    }
+  }
 
 #ifndef BTFWINDOWS
 
@@ -14232,14 +14669,6 @@ int closehci()
   flushprint();
   return(1);
   }
-
-void closecrypt()
-  {
-  if(gpar.cryptfd != 0)
-    close(gpar.cryptfd);
-  if(gpar.randomfd != 0)
-    close(gpar.randomfd);  
-  }  
 
 int sendpack(unsigned char *buf,int len)
   {
@@ -14491,6 +14920,9 @@ void printn(char *buf,int len)
 void scroll_back()
   {
   int n,incn,count,startn,startnx,endn,dum;
+
+  if(check_init(0) == 0)
+    return;
  
   if(gpar.prte == gpar.prts)
     {
@@ -14554,6 +14986,8 @@ void scroll_forward()
   {
   int n,incn,count,startn,endn,dum;
 
+  if(check_init(0) == 0)
+    return;
   
   if(gpar.prte == gpar.prtp)
     {
@@ -14638,176 +15072,6 @@ void sleep_ms(int ms)
   {
   usleep(ms * 1000);
   }
-
-
-
-int calce(unsigned char *key,unsigned char *in,unsigned char *out)
-  {
-  struct cmsghdr *cmsg;
-  struct msghdr msg;
-  struct iovec iov; 
-  unsigned long alg_op;
-  char cbuf[CMSG_SPACE(sizeof(alg_op))];
-  unsigned char tmpkey[16],tmpin[16],tmpout[16];
-  int n,fd,len;
-  
-  if(gpar.cryptfd == 0)
-    {
-    if(setupcrypt(0) == 0)
-      return(0);
-    }
-  
-  for(n = 0 ; n < 16 ; ++n)
-    tmpkey[15-n] = key[n];
-
-  if(setsockopt(gpar.cryptfd,279,1,tmpkey,16) < 0)
-    {   // SOL_ALG,ALG_SET_KEY
-    VPRINT "Sock opt fail\n");
-    return(0);
-    }
-  fd = accept(gpar.cryptfd,NULL,0);
-  if(fd < 0)
-    {
-    VPRINT "Accept error\n");
-    return(0);
-    }
-
-  for(n = 0 ; n < 16 ; ++n)
-    tmpin[15-n] = in[n];
- 
-  alg_op = 1; // ALG_OP_ENCRYT
-  memset(cbuf,0,sizeof(cbuf));
-  memset(&msg,0,sizeof(msg));
-  msg.msg_control = cbuf;
-  msg.msg_controllen = sizeof(cbuf);
-  
-  cmsg = CMSG_FIRSTHDR(&msg);
-  cmsg->cmsg_level = 279;  // SOL_ALG
-  cmsg->cmsg_type = 3;     // ALG_SET_OP
-  cmsg->cmsg_len = CMSG_LEN(sizeof(alg_op));
-  memcpy(CMSG_DATA(cmsg), &alg_op, sizeof(alg_op));
-  iov.iov_base = (void *)tmpin;
-  iov.iov_len = 16;
-  msg.msg_iov = &iov;
-  msg.msg_iovlen = 1;
-  len = sendmsg(fd, &msg, 0);
-  if (len < 0)
-    {
-    VPRINT "Send fail\n");
-    close(fd);
-    return(0);
-    }
-  len = read(fd, tmpout, 16);
-  if (len < 0)
-    {
-    VPRINT "Read fail\n");
-    close(fd);
-    return(0);
-    }
-
-  for(n = 0 ; n < 16 ; ++n)
-    out[15-n] = tmpout[n];
-
-  close(fd);
-  return(1);    
-  }  
-
-
-int aes_cmac(unsigned char *key,unsigned char *msg,int msglen,unsigned char *res)
-  {
-  int n,len,fd;
-  unsigned char tmpkey[16],msg_msb[80],out[80];
- 
-  if(gpar.cryptfd1 == 0)
-    {
-    if(setupcrypt(1) == 0)
-      return(0);
-    }
-    
-  if(msglen > 80)
-    return(0);
-
-  for(n = 0 ; n < 16 ; ++n)
-    tmpkey[15-n] = key[n];  
-
-  if(setsockopt(gpar.cryptfd1,279,1,tmpkey,16) < 0)
-    {   // SOL_ALG,ALG_SET_KEY
-    VPRINT "Sock opt fail\n");
-    return(0);
-    }
-  fd = accept(gpar.cryptfd1,NULL,0);
-  if(fd < 0)
-    {
-    VPRINT "Accept error\n");
-    return(0);
-    }
-  
-  for(n = 0 ; n < msglen ; ++n)
-    msg_msb[msglen-1-n] = msg[n];
-
-  len = send(fd,msg_msb,msglen,0);
-  if (len < 0)
-    {
-    close(fd);
-    return(0);
-    }
-
-  len = read(fd, out, 16);
-  if (len < 0)
-    {
-    close(fd);
-    return(0);
-    }
-
-  for(n = 0 ; n < 16 ; ++n)
-    res[15-n] = out[n];  
-  close(fd);
-  return(1);
-  }
-
-
-int setupcrypt(int flag)
-  {
-  //struct sockaddr_alg sa;
-  int n,fd;
-  unsigned char sa[88];
-  
-  fd = socket(38,SOCK_SEQPACKET | SOCK_CLOEXEC,0);
-  if(fd < 0)
-    {
-    VPRINT "Sock error\n");
-    return(0);
-    }
-    
-  for(n = 0 ; n < 88 ; ++n)
-    sa[n] = 0;  
-  
-  if(flag == 0)
-    {
-    strcpy((char*)(sa+2),"skcipher");
-    strcpy((char*)(sa+24),"ecb(aes)");
-    }
-  else
-    {
-    strcpy((char*)(sa+2),"hash");
-    strcpy((char*)(sa+24),"cmac(aes)");
-    }
-    
-  if(bind(fd,(struct sockaddr*)sa,88) < 0)
-    {
-    VPRINT "Bind error\n");
-    close(fd);
-    return(0);
-    }  
-   
-  if(flag == 0)
-    gpar.cryptfd = fd;
-  else
-    gpar.cryptfd1 = fd;
-  return(1);  
-  }
-
-
 
 void getrand(unsigned char *s,int len)
   {
@@ -15134,13 +15398,10 @@ int getdatfile(char *s)
 #endif
 
 
-
-
 int user_function(int n0,int n1,int n2,int n3,unsigned char *dat0,unsigned char *dat1)
   {  
   // your code here
   // For Python - recompile the module via 
-  //     python3 btfpymake.py build   
-   
+  //     python3 btfpymake.py build
   return(0);
   }

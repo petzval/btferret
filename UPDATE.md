@@ -284,6 +284,9 @@ to make a serial connection. The sample code scans for LE devices to find an act
 device, connects and sends "Hello" then waits for a reply which can be sent from
 a PC running a serial terminal connected to the HM10.
 
+### Version 22
+
+1. A Pico 2W can be programmed as a Bluetooth dongle for a Windows PC. Documentation in windows/README.
  
 
 
