@@ -1,6 +1,6 @@
 /************** BTFDONGLE ********
 
-Version 22
+Version 22.1
 
 For Pi Zero 2W or Pi4 set up as a serial USB device
 and connected to a PC so it looks like a COM port.
@@ -624,7 +624,7 @@ int readpack(unsigned char *buf,int toms)
       return(0);  // fatal
       }
    
-    if(readbytes(buf,&blen,nread,1000) == 0)
+    if(readbytes(buf,&blen,nread,toms) == 0)
       {
       printf("Timed out waiting\n");
       blen = 0;
@@ -662,7 +662,7 @@ int readpack(unsigned char *buf,int toms)
     }
   while(packlen == 0);
      
-  if(readbytes(buf,&blen,packlen,1000) == 0)
+  if(readbytes(buf,&blen,packlen,toms) == 0)
     {
     printf("Timed out waiting\n");
     blen = 0;
@@ -681,7 +681,7 @@ int readpack(unsigned char *buf,int toms)
       {
       errflag = 1;
       // need 1+ sn
-      if(readbytes(buf,&blen,sn+1,1000) != 0)
+      if(readbytes(buf,&blen,sn+1,toms) != 0)
         {  
         xb0 = buf[sn];
         if(xb0 == 1)
@@ -693,7 +693,7 @@ int readpack(unsigned char *buf,int toms)
         else
           xnread = 0;  // missing
   
-        if(xnread != 0 && readbytes(buf,&blen,sn+xnread,1000) != 0)
+        if(xnread != 0 && readbytes(buf,&blen,sn+xnread,toms) != 0)
           {
           // packet size dn        
           if(xb0 == 1)
@@ -703,7 +703,7 @@ int readpack(unsigned char *buf,int toms)
           else if(xb0 == 2)
             dn = buf[sn+3] + (buf[sn+4] << 8) + 5;
 
-          if(readbytes(buf,&blen,sn+dn,1000) != 0)
+          if(readbytes(buf,&blen,sn+dn,toms) != 0)
             {
             if(xb0 == 2 && ((buf[sn+1] + (buf[sn+2] << 8)) & 0xFFF) == handle && (buf[sn+2] & 0x30) == 0x10)
               {

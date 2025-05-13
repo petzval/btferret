@@ -5,6 +5,8 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
+// version 22.1
+
 #define VERSION 22
 
 // btstack is not used, but if this causes compile to fail
@@ -206,18 +208,13 @@ int writen(unsigned char *dat,int datlen)
     else 
       nsend = avail;
     if(nsend > 0)
-        wn = (int)tud_cdc_write(dat,nsend);
+        wn = (int)tud_cdc_write(dat+nwrit,nsend);
     
     tud_task();
     tud_cdc_write_flush();
        
     if(wn > 0)
       {
-      if(ntogo - wn > 0)
-        {
-        for(n = wn ; n < ntogo ; ++n)
-          dat[n-wn] = dat[n];
-        }
       ntogo -= wn;
       nwrit += wn;
       }
@@ -323,7 +320,7 @@ int writen(unsigned char *dat,int datlen)
         return(0);  // fatal
         }
      
-      if(readbytes(&blen,nread,1000) == 0)
+      if(readbytes(&blen,nread,toms) == 0)
         {
         //  Timed out waiting
         blen = 0;
@@ -361,7 +358,7 @@ int writen(unsigned char *dat,int datlen)
       }
     while(packlen == 0);
        
-    if(readbytes(&blen,packlen,1000) == 0)
+    if(readbytes(&blen,packlen,toms) == 0)
       {
       // Timed out waiting
       blen = 0;
@@ -380,7 +377,7 @@ int writen(unsigned char *dat,int datlen)
         {
         errflag = 1;
         // need 1+ sn
-        if(readbytes(&blen,sn+1,1000) != 0)
+        if(readbytes(&blen,sn+1,toms) != 0)
           {  
           xb0 = buf[sn];
           if(xb0 == 1)
@@ -392,7 +389,7 @@ int writen(unsigned char *dat,int datlen)
           else
             xnread = 0;  // missing
     
-          if(xnread != 0 && readbytes(&blen,sn+xnread,1000) != 0)
+          if(xnread != 0 && readbytes(&blen,sn+xnread,toms) != 0)
             {
             // packet size dn        
             if(xb0 == 1)
@@ -402,7 +399,7 @@ int writen(unsigned char *dat,int datlen)
             else if(xb0 == 2)
               dn = buf[sn+3] + (buf[sn+4] << 8) + 5;
   
-            if(readbytes(&blen,sn+dn,1000) != 0)
+            if(readbytes(&blen,sn+dn,toms) != 0)
               {
               if(xb0 == 2 && ((buf[sn+1] + (buf[sn+2] << 8)) & 0xFFF) == handle && (buf[sn+2] & 0x30) == 0x10)
                 {
