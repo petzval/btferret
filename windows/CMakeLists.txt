@@ -23,7 +23,6 @@ target_link_libraries(btfpico pico_cyw43_arch_none)
 # target_link_libraries(btfpico pico_btstack_ble)
 # target_include_directories(btfpico PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
-
 pico_enable_stdio_usb(btfpico 1)
 pico_enable_stdio_uart(btfpico 0)
 pico_add_extra_outputs(btfpico)
