@@ -5,7 +5,7 @@
 #include "btlib.h"
 
 // #define BTFWINDOWS
-// #define PICOSTACK
+#define PICOSTACK
 
 #if (!defined(BTFWINDOWS) && !defined(PICOSTACK))                       
 #include <time.h>

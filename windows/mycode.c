@@ -28,7 +28,7 @@ int mycode1()
   // if(init_blue("C:\\Users\\xxxxx\\Documents\\BTferret\\devices.txt") == 0)
   //   return(0);
 
-  /*********** INPUT/OUTPUT DEMO CODE ************/
+  /*********** INPUT/OUTPUT DEMO CODE *************/
   
   print("My code 1 - demonstrates input/output functions\n");
 

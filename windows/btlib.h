@@ -1,4 +1,5 @@
-  // for btlib.c Version 22
+#include <stdint.h>
+  // for btlib.c Version 23
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -179,7 +180,7 @@ void set_le_random_address(unsigned char *add);
 int set_le_wait(int waitms);
 void set_notify_node(int node);
 int set_print_flag(int flag);
-void sleep_ms(int ms);
+void sleep_ms(uint32_t ms);
 
 unsigned char *strtohex(char *s,int *num);
 

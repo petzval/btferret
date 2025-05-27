@@ -1,7 +1,7 @@
 Python and C Bluetooth Library
 ==============================
 
-*Version 22*
+*Version 23*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -9,6 +9,7 @@ Python and C Bluetooth Library
     - [2.1 C Instructions](#2-1-c-instructions)
         - [2.1.1 C Code](#2-1-1-c-code)
         - [2.1.2 Windows Instructions](#2-1-2-windows-instructions)
+        - [2.1.3 Pico Instructions](#2-1-3-pico-instructions)        
     - [2.2 Python Instructions](#2-2-python-instructions)
         - [2.2.1 Python code](#2-2-1-python-code)
     - [2.3 Hello World](#2-3-hello-world)
@@ -164,10 +165,14 @@ Python and C Bluetooth Library
 This is a C and Python Bluetooth interface that has been developed for Raspberry Pis (but has also had some
 testing on Ubuntu, and should work on other Linux systems).
 
-It will also run on Windows if a Raspberry Pi Zero 2W or Pico 2W is used as a Bluetooth dongle on a PC.
-Code described here and written for Linux can be pasted into a Windows source file and no
+It will also run on Windows if a Raspberry Pi Pico 2W or Zero 2W is used as a Bluetooth dongle on a PC.
+C code described here and written for Linux can be pasted into a Windows source file and no
 knowledge of Windows programming is needed. Instructions for this are in the
-[README](windows/README.md) file in the windows folder.
+[Windows README](windows/README.md) file in the windows folder.
+
+It will also run on a Pico as a replacement for btstack, with your code written in C. Instructions in the
+[Pico README](picostack/README.md) file in the picostack folder. In principle, the btlib.c library can 
+repalce any Bluetooth stack such as bluez or btstack.
 
 A Pi running this interface can connect simultaneously to multiple Classic and LE devices,
 and also to a mesh network of other Pis running the same software.
@@ -182,6 +187,8 @@ then be done via your own C or Python code.The different flavours of Bluetooth a
 [connections](#3-1-bluetooth-connections) section.
 Starting-point code examples for Classic and LE clients
 and servers are available for download, and described in the [Hello World](#2-3-hello-world) section.
+There is a built-in monitor which prints Bluetooth HCI traffic in the manner of btmon (see btferret
+settings and set\_print\_flag() verbose mode).
 
 Also included is the code for a simple [mesh network example](#3-10-sample), and
 a [Blue Dot server](#2-3-9-blue-dot-server) that is a way of controlling a Pi from a phone. Another
@@ -199,8 +206,6 @@ of the HCI Bluetooth interface, the packet formats and how they are constructed,
 and the sequence of instructions
 needed to establish connections and exchange data. This information
 is difficult to extract in a coherent form from the Bluetooth specification documents.
-The library functions have a verbose print mode that displays the HCI Bluetooth traffic with details of
-the packets that are exchanged.
 
 There are [server code](#5-4-server-code) and [client code](#5-5-client-code) sections
 that are brief guides to writing code
@@ -279,8 +284,9 @@ such as keyboards and audio will not work.
 
 To write your own code using the [btlib](#4-btlib-library)
 functions, start from scratch or modify btferret.c, or the Hello World client
-and server programs.
-Here is a minimum starting C program, mycode.c.
+and server programs. Your C code and the btlib.c library can run on three platforms:
+Linux, Windows with a Pico dongle, or a stand-alone Pico.
+Here is a minimum starting C program for Linux, mycode.c.
 
 ```c
 #include <stdio.h>
@@ -312,13 +318,13 @@ sudo ./mycode
 
 ### 2-1-2 Windows Instructions
 
-C code can be run from Windows by setting up a Pi Zero 2W or Pico 2W as a Bluetooth dongle for a PC.
+C code can be run from Windows by setting up a Pico 2W or Pi Zero 2W as a Bluetooth dongle for a PC.
+(The code cannot access the on-board Windows machine Bluetooth).
 There is source code for a Windows program that interfaces with the dongle.
 It includes the btferret.c code, and empty "mycode" functions where you can put your own programs.
-Instructions for
-setting up the dongle, and for compiling the Windows program using Visual Studio are in the
-[README](windows/README.md) file in the windows folder. No knowledge of Windows programming is needed.
-The code described in this document will run from the Windows program.
+Instructions for setting up the dongle, and for compiling the Windows program using Visual Studio
+are in the [Windows README](windows/README.md) file in the windows folder. No knowledge of Windows
+programming is needed. The code described in this document will run from the Windows program.
 This is sample starting code to go in the Windows mycode.c. Note that double backslash is needed for
 Windows file names.
 
@@ -345,6 +351,43 @@ input_string
 input_filename
 input_select
 input_radio
+```
+
+
+### 2-1-3 Pico Instructions
+
+Your C code and the btlib library can be run on a Pico 2W, and replaces btstack.
+It can run stand-alone or with a USB serial monitor connection.
+Instructions for setting up the Pico using Visual Studio Code are in the
+[Pico README](picostack/README.md) file in the picostack folder.
+This is an empty template mycodepico.c. Note that init\_blue() is passed a 
+hard-coded string rather than a file name.
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include "btlib.h"
+
+void mycode(void);
+
+/********** DEVICES list ************
+  Each line must end with \n\
+************************************/
+char *devices = {
+"DEVICE = Picostack type=mesh node=1 address=local \n\
+    ; your remote devices here                     \n\
+"};
+ 
+void mycode()
+  { 
+  if(init_blue(devices) == 0)
+    return;
+
+  while(1) 
+    {
+    // your code here
+    }
+  }
 ```
 
 
@@ -1386,7 +1429,7 @@ the address of the Pi.
 ![picture](mit00.png)
 
 
-## 2-3-9 Blue Dot Server
+### 2-3-9 Blue Dot Server
 
 A simple way to control a Pi from an Android device is
 the [Blue Dot app](https://bluedot.readthedocs.io). It connects as a
@@ -1433,7 +1476,7 @@ the Pi will display the commands as the buttons are tapped, and the bdotserver()
 may be customised for the desired application.
 
 
-## 2-3-10 HM10 Client
+### 2-3-10 HM10 Client
 
 An HM10 module uses LE to make a serial connection. Serial data is sent to the HM10 by writing
 to a characteristic, and data is sent from the HM10 as notifications,

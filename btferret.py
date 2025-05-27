@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-###### VERSION 22 ######
-### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 22 or later via:###
+###### VERSION 23 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 23 or later via:###
 ###
 ### apt-get install python3-setuptools
 ### apt-get install python3-dev
@@ -355,8 +355,11 @@ def send_file_by(node,filename,destdir,nblockx):
 
         ackflag = 1 
         packn = packn + 1
-        if(progflag != 0 and (packn % 10) == 0):
-          print(".",end = '',flush=True) 
+        if(progflag != 0):
+          if((packn % 10) == 0):
+            print(".",end = '',flush=True) 
+          if((packn % 500) == 0):
+            print("\n",end = '',flush=True) 
      
         # end getout == 0      
       # end ack

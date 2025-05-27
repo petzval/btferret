@@ -287,6 +287,12 @@ a PC running a serial terminal connected to the HM10.
 ### Version 22
 
 1. A Pico 2W can be programmed as a Bluetooth dongle for a Windows PC. Documentation in windows/README.
+
+### Version 23
+
+1. The btlib library and C code can run on a Pico 2W as a replacement for btstack. Documentation
+in picostack/README. So the same code can now run on Linux, Windows (with a Pico dongle),
+and on a stand-alone Pico.
  
 
 

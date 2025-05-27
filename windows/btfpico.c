@@ -5,9 +5,9 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
-// version 22.1
+// version 23
 
-#define VERSION 22
+#define VERSION 23
 
 // btstack is not used, but if this causes compile to fail
 // uncomment the following define USE_BTSTACK,

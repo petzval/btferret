@@ -1,7 +1,7 @@
 Pi Dongle for Windows
 ==========================
 
-*Version 22*
+*Version 23*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -44,7 +44,7 @@ functions that pop up a dialog window.
 
 ## 2 Setup
 
-### 2-1 File list
+## 2-1 File list
 
 
 ```

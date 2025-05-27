@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 22 
+  btlib.c/h  Version 23 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -1950,9 +1950,12 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
        
         ackflag = 1; 
         ++packn;
-        if(progflag != 0 && packn % 10 == 0)
+        if(progflag != 0 && (packn % 10) == 0)
           {
-          print(".");
+          if((packn % 10) == 0)
+            print(".");
+          if((packn % 500) == 0)
+            print("\n");
           fflush(stdout);
           } 
         }      

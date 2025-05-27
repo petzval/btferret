@@ -1,6 +1,6 @@
 /************** BTFDONGLE ********
 
-Version 22.1
+Version 23
 
 For Pi Zero 2W or Pi4 set up as a serial USB device
 and connected to a PC so it looks like a COM port.
@@ -28,7 +28,7 @@ https://github.com/petzval/btferret/windows
 #include <sys/poll.h>
 #include <fcntl.h>
 
-#define VERSION 22
+#define VERSION 23
 
 #define BTPROTO_HCI 1
 //#define HCIDEVUP _IOW('H',201,int)

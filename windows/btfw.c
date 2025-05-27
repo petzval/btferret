@@ -6,9 +6,9 @@
 #include <process.h>
 #include <time.h>
 
-// Version 22
+// Version 23
 
-#define VERSION 22
+#define VERSION 23
 
 int init_blue(char *fname);  // btlibw.c
 int check_init(int flag);
@@ -65,7 +65,6 @@ int readpack(unsigned char* buf, int toms);
 void printn(char* buf, int len);
 int inithci(void);
 int closehci(void);
-void getrand(unsigned char* s, int len);
 void inputpin(char* prompt, char* sbuf);
 int setkeymode(int setflag);
 int readkey(void);
@@ -1998,30 +1997,6 @@ int closehci(void)
   {
   return(1);
   }
-
-void getrand(unsigned char* s, int len)
-  {
-  int r, k, n;
-
-  n = 8;
-  k = 0;
-  r = 0;
-  while (k < len)
-    {
-    if ((n & 8) != 0)
-      {
-      r = rand();
-      n = 1;
-      }
-    else
-      r >>= 8;
-    s[k] = r & 0xFF;
-    n <<= 1;
-    ++k;
-    }
-  return;
-  }
-
 void inputpin(char* prom, char* sbuf)
   {
   input_string(prom,sbuf,16,NULL);

@@ -54,7 +54,7 @@ BTFWMenu MENU
     MENUITEM "My code 10",60
     }
   POPUP "BT_ferret",GRAYED
-    {  // valid ASCII codes = '0' 48 to '}' 125
+    {  //  valid ASCII codes = '0' 48 to '}' 125
     MENUITEM "Device Info",52+105  //'i'
     MENUITEM "Classic scan",52+97  //'a'
     MENUITEM "LE scan",52+98 //'b'
