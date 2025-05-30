@@ -1,4 +1,4 @@
-/********* Version 23 *********/
+/********* Version 23.1 *********/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1924,11 +1924,8 @@ int init_blue_ex(char *filename,int hcin)
         {
         if(devnfrombadd(dev[dn]->baddr,BTYPE_XALL,DIRN_FOR) == 0)
           {   // is device 0 board address local - move to dn=0
-          if(dev[dn]->type == BTYPE_ME)
-            {
-            dev[0]->node = dev[dn]->node;
-            strcpy(dev[0]->name,dev[dn]->name);
-            }
+          dev[0]->node = dev[dn]->node;
+          strcpy(dev[0]->name,dev[dn]->name);
           dev[dn]->type = 0;    // free dn
           dn = 0;
           }             // but not a fatal error
