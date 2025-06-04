@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 23 
+  btlib.c/h  Version 23.1 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -56,6 +56,7 @@ int clientsecurity(int *passkey);
 int serversecurity(int *passkey);
 void readlehandles();
 void prcancel(void);
+int printhex(unsigned char *s,int len);
 void print(char *s);
 
 
@@ -65,6 +66,7 @@ int input_filename(char *prompt,char *buf,int len,int rwflag,char *curval);
 int input_integer(char *prompt,int *curval);
 int input_select(char *prompt,char *select);
 int input_radio(char *prompt,char *select);
+int print_status(char *s);
 int dongtype(void);
 char pathsep = '\\';
 #else
@@ -674,20 +676,9 @@ int serversecurity(int *passkey)
 
 int mesh_callback(int clientnode,unsigned char *buf,int nread)
   {
-  int n;
-  char byts[8];
-  
   sprintf(temps,"Mesh packet from %s\n",device_name(clientnode));
   print(temps);
-  temps[0] = 0;
-  for(n = 0 ; n < nread ; ++n)
-    {
-    sprintf(byts," %02X",buf[n]);
-    strcat(temps,byts);
-    }
-    
-  strcat(temps,"\n");
-  print(temps);
+  printhex(buf,nread);
   
   if(buf[0] == 'D')
     {
@@ -700,7 +691,7 @@ int mesh_callback(int clientnode,unsigned char *buf,int nread)
     
 int le_callback(int clientnode,int operation,int cticn)
   {
-  int n,nread;
+  int nread;
   unsigned char dat[256]; 
      
   if(operation == LE_CONNECT)
@@ -719,12 +710,7 @@ int le_callback(int clientnode,int operation,int cticn)
     nread = read_ctic(localnode(),cticn,dat,sizeof(dat));
     sprintf(temps,"  %s has written local characteristic %s =",device_name(clientnode),ctic_name(localnode(),cticn));
     print(temps);
-    for(n = 0 ; n < nread ; ++n)
-      {
-      sprintf(temps," %02X",dat[n]);
-      print(temps);
-      }
-    print("\n");
+    printhex(dat,nread);
     }
   else if(operation == LE_DISCONNECT)
     {
@@ -774,12 +760,7 @@ int universal_callback(int clientnode,int operation,int cticn,unsigned char *buf
     nreadle = read_ctic(localnode(),cticn,dat,sizeof(dat));
     sprintf(temps,"  %s has written local characteristic %s =",device_name(clientnode),ctic_name(localnode(),cticn));
     print(temps);
-    for(n = 0 ; n < nreadle ; ++n)
-      {
-      sprintf(temps," %02X",dat[n]);
-      print(temps);
-      }
-    print("\n");
+    printhex(dat,nreadle);
     }
   else if(operation == LE_DISCONNECT)
     {
@@ -1852,10 +1833,14 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
     
   progflag = 0;  // no print progress
   if(flen > 5000)
-    {  // every 10 packets 
+    {  // every 20 packets 
     progflag = 1;
+#ifdef BTFWINDOWS
+    print_status("Progress 0%");
+#else 
     print("Progress");
     fflush(stdout);
+#endif
     }
     
  
@@ -1950,13 +1935,17 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
        
         ackflag = 1; 
         ++packn;
-        if(progflag != 0)
+        if(progflag != 0 && (packn % 20) == 0)
           {
-          if((packn % 10) == 0)
-            print(".");
-          if((packn % 500) == 0)
+#ifdef BTFWINDOWS
+          sprintf(tempbuf,"Progress %d%%",(100*(flen+2-ntogo))/(flen+2));
+          print_status(tempbuf);    
+#else
+          print(".");
+          if((packn % 1000) == 0)
             print("\n");
           fflush(stdout);
+#endif
           } 
         }      
       } // end retval==1
@@ -1965,7 +1954,11 @@ int sendfilex(int node,char *opcode,char *filename,char *destdir,int blocksize,i
   
  
   if(progflag != 0)
-    print("\n");  
+#ifdef BTFWINDOWS
+    print_status("BT_ferret running");
+#else
+    print("\n");
+#endif  
   fclose(stream);
 
   if(getout != 0)
@@ -2587,25 +2580,12 @@ void readle()
   
   sprintf(temps,"%s %s = ",device_name(node),ctic_name(node,cticn));
   print(temps);
-  
-  ascflag = 0;
-  if(datlen > 2)     
-    ascflag = 1;
-        
-  for(n = 0 ; n < datlen ; ++n)
+  ascflag = printhex(dat,datlen);
+          
+  if(ascflag != 0)
     {
-    sprintf(temps,"%02X ",dat[n]);
-    print(temps);
-    if(!(n == datlen-1 && dat[n] == 0) && (dat[n] < 32 || dat[n] > 126))
-      ascflag = 0;  // not an ascii string
-    }
-        
-  if(ascflag == 0)
-    print("\n");
-  else
-    {
-    sprintf(temps,"= \"%s\"\n",dat);  // print ascii - readctic has added term 0
-                                      // at dat[datlen]
+    sprintf(temps,"ASCII = \"%s\"\n",dat);  // print ascii - readctic has added term 0
+                                            // at dat[datlen]
     print(temps);
     } 
   }
@@ -2743,21 +2723,12 @@ void notifyle()
 
 int notify_callback(int lenode,int cticn,unsigned char *buf,int nread)
   {
-  int n;
-   
-  // LE device has sent notification or indication enabled by notify_ctic()
-  
+  // LE device has sent notification or indication enabled by notify_ctic()  
   sprintf(temps,"%s %s notify =",device_name(lenode),ctic_name(lenode,cticn));
   print(temps);
-  for(n = 0 ; n < nread ; ++n)
-    {
-    sprintf(temps," %02X",buf[n]);
-    print(temps);
-    }
-  print("\n");
+  printhex(buf,nread);  
   return(0);
   }
-
 
 void regserial()
   {
@@ -3013,6 +2984,42 @@ unsigned short crccalc(unsigned short crc,unsigned char *buf,int len)
 void prcancel()
   {
   print("Cancelled\n");
+  }
+
+int printhex(unsigned char *s,int len)
+  {
+  int n,ascflag;
+  char buf[8];
+  
+  if(len == 0)
+    {
+    print("\n");
+    return(0);
+    }  
+  
+  ascflag = 1;
+  n = 0;
+  temps[0] = 0;
+  while(n < len)
+    {
+    sprintf(buf," %02X",s[n]);
+    strcat(temps,buf);
+    if(((n+1)%16) == 0)
+      {
+      strcat(temps,"\n");
+      print(temps);
+      temps[0] = 0;
+      }
+    if(s[n] < 32 || s[n] > 126)
+      ascflag = 0;
+    ++n;
+    }
+  if(temps[0] != 0)
+    {
+    strcat(temps,"\n");
+    print(temps);
+    }
+  return(ascflag);
   }
 
 

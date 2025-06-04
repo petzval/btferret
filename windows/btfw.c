@@ -58,6 +58,7 @@ int input_filename(char *prompt,char *s,int len,int rwflag,char *curval);
 int input_integer(char *ps,int *curval);
 short inputfile(char *fname,int rwflag);  
 
+void print_status(char *s);
 
 // Windows external
 int sendpack(unsigned char* buf, int len);
@@ -133,8 +134,10 @@ struct gdat
   int scroll;
   int rwflag;
   int findoffset;
+  int statusy;
   short btfcmd;
   short mycode;
+  char status[64];
   char devices[256];  // devices.txt file for btferret
   char devicesx[256];  // temp store for inputfile
   char docpath[256];
@@ -229,9 +232,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   gparw.findoffset = 0;
   gparw.txt[0] = 0;
   gparw.txtn = 0;
-
-
-
+  gparw.statusy = 30;
+  strcpy(gparw.status,"BTferret - Click Dongle to open");
+  
   gparw.devices[0] = 0;
   gparw.docpath[0] = 0;
   gparw.findtxt[0] = 0;
@@ -250,7 +253,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   wndclass.hInstance     = hInstance;
   wndclass.hIcon         = LoadIcon(hInstance,IDI_APPLICATION);
   wndclass.hCursor       = LoadCursor(NULL, IDC_ARROW);
-  wndclass.hbrBackground = (HBRUSH)GetStockObject (WHITE_BRUSH);
+  wndclass.hbrBackground = CreateSolidBrush(0x00FFFFA0);
   wndclass.lpszMenuName  = "BTFWMenu";
   wndclass.lpszClassName = "BTFW";
   wndclass.hIconSm       = LoadIcon(hInstance,IDI_APPLICATION);
@@ -288,6 +291,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
   HDC hdc ;
   PAINTSTRUCT ps ;
   SYSTEMTIME st;
+  TEXTMETRIC tm;
   int cmd,comport;
   char *s;
 
@@ -297,19 +301,24 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       gparw.clientx = LOWORD(lParam);
       gparw.clienty = HIWORD(lParam);
       if(gparw.hwndOut != NULL)
-        MoveWindow(gparw.hwndOut,0,0,gparw.clientx,gparw.clienty,TRUE);
+        MoveWindow(gparw.hwndOut,0,gparw.statusy,gparw.clientx,gparw.clienty-gparw.statusy,TRUE);
       return(0);
             
     case WM_CREATE :
 
       gparw.hwndMain = hwnd;
       gparw.hMenu = GetMenu(hwnd);
+
+      hdc = GetDC(hwnd);
+      GetTextMetrics(hdc, &tm);
+      gparw.statusy = (int)(2*(tm.tmHeight + tm.tmExternalLeading));
+
      
       gparw.hwndOut = CreateWindow("edit",NULL,
                    WS_CHILD | WS_VISIBLE |
                    WS_VSCROLL | WS_HSCROLL | WS_BORDER | ES_LEFT | ES_MULTILINE |
                    ES_AUTOHSCROLL | ES_AUTOVSCROLL,
-                   0,0,gparw.clientx,gparw.clienty,hwnd,(HMENU)1000,gparw.hInst,NULL);
+                   0,gparw.statusy,gparw.clientx,gparw.clienty-gparw.statusy,hwnd,(HMENU)1000,gparw.hInst,NULL);
       SendMessage(gparw.hwndOut,WM_SETFONT,(WPARAM)GetStockObject(ANSI_FIXED_FONT),
                        MAKELPARAM(FALSE,0));
 
@@ -339,10 +348,7 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
         {
         strcpy(gparw.devices,gparw.docpath);
         strcat(gparw.devices,"devices.txt");
-        }
-
-      GetSystemTime(&st);
-      srand((unsigned int)(st.wMilliseconds + (st.wSecond << 10)));
+        }  
  
       SetFocus(gparw.hwndOut);             
       return(0);
@@ -352,8 +358,10 @@ LRESULT APIENTRY WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       return(0);
 
     case WM_PAINT:
-      hdc = BeginPaint (hwnd, &ps) ;
-      EndPaint (hwnd, &ps) ;
+      hdc = BeginPaint (hwnd, &ps);
+      SetBkColor(hdc,0x00FFFFA0);
+      TextOut(hdc,10,gparw.statusy/4,gparw.status,strlen(gparw.status));
+      EndPaint (hwnd, &ps);
       return(0);
 
     case WM_TIMER:
@@ -585,9 +593,24 @@ LRESULT CALLBACK editsub(HWND hwnd,UINT iMsg,WPARAM wParam,LPARAM lParam)
   return(CallWindowProc(gparw.oldedit,hwnd,iMsg,wParam,lParam));
   }
 
+void print_status(char *s)
+  {
+  int n;
+  RECT rect;
 
-
-
+  rect.top = 0;
+  rect.left = 0;
+  rect.bottom = gparw.statusy;
+  rect.right = gparw.clienty;
+  n = 0;
+  while(s[n] != 0 && n < 63)
+    {
+    gparw.status[n] = s[n];
+    ++n;
+    }
+  gparw.status[n] = 0;
+  InvalidateRect(gparw.hwndMain,&rect,TRUE);
+  }
 
 void emergencystop()
   {
@@ -629,6 +652,7 @@ void btfthread(PVOID pvoid)
     EnableMenuItem(gparw.hMenu,DLG_BTF,MF_BYPOSITION | MF_ENABLED);  
     EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_GRAYED);  
     DrawMenuBar(gparw.hwndMain);
+    print_status("BT_ferret running");
     print("> ");
     }
   gparw.hthread = 0;     
@@ -666,6 +690,7 @@ void btfcmdthread(PVOID pvoid)
       EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED); 
       check_init(4);
       print("\nBTferret exit\n");
+      print_status("Waiting for a Run selection");
       }
     else
       {
@@ -681,9 +706,18 @@ void btfcmdthread(PVOID pvoid)
 void serverexit(int flag)
   {
   if(flag == 0)
+    {
     EnableMenuItem(gparw.hMenu, DLG_XSERV, MF_BYPOSITION | MF_GRAYED);
+    if(gparw.runflag == 4)
+      print_status("Mycode running");
+    else
+      print_status("BT_ferret running");
+    }
   else
+    {
     EnableMenuItem(gparw.hMenu, DLG_XSERV, MF_BYPOSITION | MF_ENABLED);
+    print_status("Server running - click EXIT_SERVER to stop");
+    }
   DrawMenuBar(gparw.hwndMain);
   }
 
@@ -691,6 +725,7 @@ void serverexit(int flag)
 void mycodethread(PVOID pvoid)
   {
   short *mycodep,mycode;
+  char buf[32];
 
   mycodep = (short*)(pvoid);
   mycode = *mycodep;
@@ -707,6 +742,8 @@ void mycodethread(PVOID pvoid)
   EnableMenuItem(gparw.hMenu,DLG_STOP,MF_ENABLED);
   EnableMenuItem(gparw.hMenu, DLG_XSTOP, MF_BYPOSITION | MF_ENABLED);
   DrawMenuBar(gparw.hwndMain);
+  sprintf(buf,"Mycode %d running",mycode);
+  print_status(buf);
   check_init(1);
   if(mycode == 1)
     mycode1();
@@ -737,6 +774,7 @@ void mycodethread(PVOID pvoid)
   DrawMenuBar(gparw.hwndMain);
   gparw.hthread = 0;
   print("Mycode exit\n");
+  print_status("Waiting for Run selection");
   _endthread();
   }
 
@@ -1161,7 +1199,7 @@ int ping()
     print(buf);
 
     if(gparw.dongver != VERSION)
-      print("BTferret and dongle versions different - recommend use same version\n");
+      print("BTferret and dongle versions different\nRecommend use same version\n");
     
     if(ret == 0)
       {
@@ -1282,6 +1320,7 @@ int tryconn(int comport)
       EnableMenuItem(gparw.hMenu,31,MF_GRAYED);
       EnableMenuItem(gparw.hMenu,DLG_RUN,MF_BYPOSITION | MF_ENABLED);
       DrawMenuBar(gparw.hwndMain);
+      print_status("Waiting for a Run selection");
       return(1);
       }
     else
