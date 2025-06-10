@@ -1,4 +1,4 @@
-/********* Version 23.1 *********/
+/********* Version 23.2 *********/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3015,6 +3015,7 @@ int lescanx()
                   nflag = 1;
                   for(i = 0 ; i < 6 ; ++i)
                     dev[k]->baddr[i] = rp[7-i];          
+                  rwlinkey(0,k,NULL);
                   }
                 }            
               else if((dev[k]->leaddtype & 1) != 0 && (rp[1] & 1) != 0 && strcmp(buf,dev[k]->name) == 0)
@@ -8281,7 +8282,7 @@ void immediate(long long lookflag)
          for(j = 0 ; j < 10 && scflag == 0 ; ++j)
            scflag |= insdat[n+j+3];            
 
-         if(scflag != 0 && (sp->linkflag & KEY_FILE) != 0)
+         if(scflag != 0 && (sp->linkflag & (KEY_NEW | KEY_FILE)) == 0)
            {  // legacy only - addr in CI
            // address may have changed - index at [n+3] = old address
            rwlinkey(0,devicen,insdat+n+3);
