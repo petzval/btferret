@@ -138,6 +138,8 @@ struct devdata
   int lepairflags;
    
   struct cticdata *ctic;      // first ctic in chain
+
+  void (*pairing_callback)(int node);
   };
 
  
@@ -1324,9 +1326,22 @@ char *adlist[48] = {
 
 
 int init_blue(char *filename)
-  {
+{
   return(init_blue_ex(filename,0));  // hci0
+}
+
+void set_pairing_callback(int node, void (*callback)(int))
+{
+  printf("Setting pairing callback...\n");
+  int dev_index = devn(node);
+  if (dev_index != -1) {
+    dev[dev_index]->pairing_callback = callback;
+    printf("Pairing callback set sucessfully\n");
+  } else {
+    printf("Invalid node %d\n", node);
+    return;
   }
+}
 
 int init_blue_ex(char *filename,int hcin)
   {
@@ -4179,8 +4194,12 @@ int universal_server(int(*callback)(int,int,int,unsigned char*,int),char endchar
             n = findhci(IN_AUTOEND,ndevice,INS_POP);
             if(n >= 0)
               {
-              if(insdat[n] == AUTO_PAIROK)
+              if(insdat[n] == AUTO_PAIROK) {
                 NPRINT "PAIR OK\n");
+                if (dev[devicen]->pairing_callback != NULL) {
+                 dev[devicen]->pairing_callback(dev[devicen]->node);
+                }
+              }
               }
             else
               NPRINT "PAIR time out\n");
@@ -5266,6 +5285,9 @@ int le_pair(int node,int flags,int passkey)
   if(n >= 0 && insdat[n] == AUTO_PAIROK)
     {
     NPRINT "PAIR OK\n");
+    if (dev[devicen]->pairing_callback != NULL) {
+     dev[devicen]->pairing_callback(dev[devicen]->node);
+    }
     flushprint();
     readhci(0,0,0,100,0);  // read codes 6/7
     return(1);
@@ -8407,8 +8429,12 @@ void immediate(long long lookflag)
              NPRINT "Must bond AUTHENTICATION_ON server with passkey\n");
            }
          }
-       if((gpar.hidflag & 1) == 0)
+       if((gpar.hidflag & 1) == 0) {
          NPRINT "PAIR OK\n");
+         if (dev[devicen]->pairing_callback != NULL) {
+          dev[devicen]->pairing_callback(dev[devicen]->node);
+         }
+       }
        // AUTO_PAIROK    
        }
      else if(insdat[n] == 0xFD || insdat[n] == 5)
@@ -8749,6 +8775,9 @@ void immediate(long long lookflag)
          save_pico_info();
          }    
        VPRINT "PAIR OK\n");
+      if (dev[devicen]->pairing_callback != NULL) {
+       dev[devicen]->pairing_callback(dev[devicen]->node);
+      }
        buf[0] = AUTO_PAIROK;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag |= CRY_DONE;
