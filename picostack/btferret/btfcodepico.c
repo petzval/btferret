@@ -3,7 +3,7 @@
 #include <string.h>
 #include "btlib.h"
 
-// VERSION 23
+// VERSION 24
 
 /***** functions in picostack.c for USB serial monitor control ****/
 /***** for inputpin() and readkey() **/

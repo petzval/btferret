@@ -6,9 +6,9 @@
 #include <process.h>
 #include <time.h>
 
-// Version 23
+// Version 24
 
-#define VERSION 23
+#define VERSION 24
 
 int init_blue(char *fname);  // btlibw.c
 int check_init(int flag);
@@ -1199,7 +1199,7 @@ int ping()
     print(buf);
 
     if(gparw.dongver != VERSION)
-      print("BTferret and dongle versions different\nRecommend use same version\n");
+      print("BTferret and dongle versions different\n");
     
     if(ret == 0)
       {

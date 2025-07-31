@@ -1,5 +1,5 @@
 #include <stdint.h>
-  // for btlib.c Version 23
+  // for btlib.c Version 24
   // devdata type values
 #define BTYPE_LO 1
 #define BTYPE_CL 2
@@ -79,6 +79,7 @@
 #define BOND_REPAIR (1 << 7)
 #define AUTHENTICATION_ON (1 << 8)
 #define SECURE_CONNECT (1 << 9)
+#define IRKEY_ON (1 << 10)
   // connect type
 #define NO_CONN       0
 #define NODE_CONN     1 
@@ -110,6 +111,7 @@ int device_connected(int node);
 int device_info(int mask);
 int device_info_ex(int mask,char *buf,int len);
 char *device_name(int node);
+int device_paired(int node);
 int device_type(int node);
 int disconnect_node(int node);
 int exitchar();

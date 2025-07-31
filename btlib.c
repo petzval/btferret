@@ -1,4 +1,4 @@
-/********* Version 23.2 *********/
+/********* Version 24 *********/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,8 +16,6 @@
 #include <sys/poll.h>
 #include <fcntl.h>
 #endif
-
-
 
 #ifdef BTFPYTHON
   #include "btfpython.c"          
@@ -42,7 +40,7 @@
 /************** END BLUETOOTH DEFINES ********/
 
 
-#define VERSION 23
+#define VERSION 24
    // max possible NUMDEVS = 1024 
 #define NUMDEVS 1024
 #define NAMELEN 34
@@ -822,6 +820,9 @@ unsigned char ltkcrypt[40] = { 32,0,S2_HAND,0,1,0x19,0x20,0x1C,0x40,0x00,0,0,0,0
                      1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 unsigned char sendltk[32] =  {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x06,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 unsigned char sendci[32] =  {20,0,S2_HAND,0,2,0x40,0,0x0F,0,0x0B,0,6,0,0x07,1,2,3,4,5,6,7,8,9,10 };
+unsigned char ltkid[32] =   {17,0,S2_HAND,0,2,0x40,0,0x0C,0,0x08,0,6,0,0x09,0,1,2,3,4,5,6 };
+unsigned char sendirk[32] =   {26,0,S2_HAND,0,2,0x40,0,0x15,0,0x11,0,6,0,0x08,0x25,0x7E,0xB4,0x55,0x26,
+                                0x2F,0xEC,0x1F,0x74,0xF0,0xD0,0xEA,0xDA,0x1F,0x9B,0x9C };
 unsigned char confail[16] =  {11,0,S2_HAND,0,2,0x40,0,0x06,0,0x02,0,6,0,0x05,4 };
 unsigned char conup[32] = { 18,0,S2_HAND,0,1,0x13,0x20,14,0x40,0,0x30,0x00,0x30,0x00,0x02,0x00,0xC0,0x03,0x00,0x00,0x00,0x00 };
 unsigned char keypair[16] = {4,0,0,0,1,0x25,0x20,0x00}; 
@@ -3302,13 +3303,29 @@ int device_type(int node)
   if(check_init(0) == 0)
     return(0);
   
-  ndevice = devnp(node);
+  ndevice = devn(node);
   
   if(ndevice < 0)
     return(0);
     
   return(dev[ndevice]->type);
   }
+
+int device_paired(int node)
+  {
+  int ndevice;
+  
+  if(check_init(0) == 0)
+    return(0);
+  
+  ndevice = devn(node);
+  
+  if(ndevice < 0)
+    return(0);
+  if((dev[ndevice]->linkflag & (PAIR_NEW | PAIR_FILE)) == 0)
+    return(0);
+  return(1);
+  }    
 
 int exitchar()
   {
@@ -5253,6 +5270,9 @@ int le_pair(int node,int flags,int passkey)
     if((dp->lepairflags & (BOND_NEW | BOND_REPAIR)) != 0)
       preq[PAKHEADSIZE+12] |= 1; // bond 
       
+    if((dp->lepairflags & IRKEY_ON) != 0)
+      preq[PAKHEADSIZE+14] |= 2;  // not 15   
+
     for(n = 0 ; n < 7 ; ++n)
       dp->preq[n] = preq[n+PAKHEADSIZE+9];          
 
@@ -5290,7 +5310,7 @@ void checkpairflags(int *flags)
       
   if((*flags & JUST_WORKS) != 0)
     {
-    *flags &= (JUST_WORKS | BOND_NEW | BOND_REPAIR | SECURE_CONNECT);
+    *flags &= (JUST_WORKS | BOND_NEW | BOND_REPAIR | SECURE_CONNECT | IRKEY_ON);
     return;
     }
          
@@ -8752,6 +8772,17 @@ void immediate(long long lookflag)
        buf[0] = AUTO_PAIROK;
        pushins(IN_AUTOEND,devicen,1,buf);
        sp->cryptoflag |= CRY_DONE;
+ 
+       if((sp->lepairflags & IRKEY_ON) != 0)
+         {
+         for(j = 0 ; j < 6 ; ++j)
+           {
+           ltkid[PAKHEADSIZE+11+j] = dev[0]->baddr[5-j];
+           sendirk[PAKHEADSIZE+10+(3*j)] = dev[0]->baddr[j];
+           }
+         sendhci(sendirk,devicen);    
+         sendhci(ltkid,devicen);
+         }
        }
      else if((sp->cryptoflag & CRY_DONE) == 0 && (insdat[n] == 5 || insdat[n] == 0xFD))
        {

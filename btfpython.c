@@ -1,4 +1,4 @@
-//############ VERSION 23 #################
+//############ VERSION 24 #################
 
 #include <Python.h>
 
@@ -11,6 +11,7 @@ static PyObject* Ctic_ok(PyObject* self,PyObject* args);
 static PyObject* Device_address(PyObject* self,PyObject* args);
 static PyObject* Device_info(PyObject* self,PyObject* args);
 static PyObject* Device_name(PyObject* self,PyObject* args);
+static PyObject* Device_paired(PyObject* self,PyObject* args);
 static PyObject* Device_type(PyObject* self,PyObject* args);
 static PyObject* Device_connected(PyObject* self,PyObject* args);
 static PyObject* Disconnect_node(PyObject* self,PyObject* args);
@@ -85,6 +86,7 @@ static PyMethodDef BtfpyMethods[] =
   {"Device_connected",Device_connected,METH_VARARGS,"Device connected"},
   {"Device_info",Device_info,METH_VARARGS,"Device info"},
   {"Device_name",Device_name,METH_VARARGS,"Device name"},
+  {"Device_paired",Device_paired,METH_VARARGS,"Device paired"},
   {"Device_type",Device_type,METH_VARARGS,"Device type"},
   {"Disconnect_node",Disconnect_node,METH_VARARGS,"Disconnect node"},
   {"Find_channel",Find_channel,METH_VARARGS,"Find channel"},
@@ -225,6 +227,7 @@ PyMODINIT_FUNC PyInit_btfpy()
   PyModule_AddIntConstant(module,"BOND_REPAIR",BOND_REPAIR);
   PyModule_AddIntConstant(module,"AUTHENTICATION_ON",AUTHENTICATION_ON);
   PyModule_AddIntConstant(module,"SECURE_CONNECT",SECURE_CONNECT);
+  PyModule_AddIntConstant(module,"IRKEY_ON",IRKEY_ON);
 
   PyModule_AddIntConstant(module,"NO_CONN",NO_CONN);
   PyModule_AddIntConstant(module,"NODE_CONN",NODE_CONN);
@@ -751,7 +754,22 @@ static PyObject* Device_name(PyObject* self,PyObject* args)
     buf = device_name(node);  
   return Py_BuildValue("s",buf);  
   }
-  
+
+//int device_paired(int node);
+static PyObject* Device_paired(PyObject* self,PyObject* args)
+  {
+  int n,node;
+
+  if(PyObject_Size(args) != 1 || !PyArg_ParseTuple(args,"i",&node))
+    {
+    printerror((PyObject*)Device_type);
+    n = 0;
+    }
+  else
+    n = device_paired(node);  
+  return Py_BuildValue("i",n); 
+  }
+
 //int device_type(int node);
 static PyObject* Device_type(PyObject* self,PyObject* args)
   {

@@ -1,6 +1,6 @@
 /******* BLUETOOTH INTERFACE **********
 REQUIRES
-  btlib.c/h  Version 23.1 
+  btlib.c/h  Version 24 
   devices.txt
 COMPILE
   gcc btferret.c btlib.c -o btferret
@@ -1139,7 +1139,7 @@ int clientconnect()
 
 int clientsecurity(int *passkey)
   {
-  int flags,pair,keydev,bond,scflag;
+  int flags,pair,keydev,bond,scflag,idflag;
   int bondlook[3] = { 0,BOND_NEW,BOND_REPAIR }; 
   int flaglook[4] = { 0,JUST_WORKS,PASSKEY_FIXED,PASSKEY_RANDOM };
   int devlook[2] = { PASSKEY_LOCAL,PASSKEY_REMOTE };
@@ -1148,6 +1148,7 @@ int clientsecurity(int *passkey)
   pair = 0;
   keydev = 0;
   scflag = 0;
+  idflag = 0;
   *passkey = 0;
   
   strcpy(prompt,"BONDING  (save pairing info)\n");
@@ -1253,7 +1254,7 @@ int clientsecurity(int *passkey)
 
   flags |= flaglook[pair] | devlook[keydev]; 
 
-  /******* uncomment for secure connect option 
+  /******* uncomment for secure connect/IR key
   strcpy(prompt,"SECURE CONNECTION\n");
   strcpy(selectlist,"  0 = No - Legacy pairing\n");
   strcat(selectlist,"  1 = Yes - Secure Connection pairing\n");
@@ -1264,12 +1265,14 @@ int clientsecurity(int *passkey)
   strcat(prompt,selectlist);
   strcat(prompt,"Accept secure connection if the client asks");   
   scflag = inputint(prompt);
+  idflag = inputint("Send Identity Resolving Key 0=No 1=Yes");
 #endif
   *******/
  
   if(scflag != 0)
     flags |= SECURE_CONNECT;
- 
+  if(idflag != 0)
+    flags |= IRKEY_ON;
     
   return(flags);
   }  
@@ -1394,8 +1397,8 @@ void readuuid()
    
   strcpy(prompt,"Find services that contain a specified UUID\n");
   strcpy(selectlist,"  0 = List services\n");
-  strcpy(selectlist,"  1 = Find LE characteristic index\n");
-  strcpy(selectlist,"  2 = Find Classic RFCOMM channel\n");
+  strcat(selectlist,"  1 = Find LE characteristic index\n");
+  strcat(selectlist,"  2 = Find Classic RFCOMM channel\n");
 #ifdef BTFWINDOWS
   strcat(prompt,"Select option");
   op = input_radio(prompt,selectlist);

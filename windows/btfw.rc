@@ -76,6 +76,7 @@ BTFWMenu MENU
     MENUITEM "Read LE handles",52+108 //'l'
     MENUITEM "Mesh transmit on",52+109 //'m'
     MENUITEM "Mesh transmit off",52+110 //'n'
+    MENUITEM "Find UUID",52+121  //'y'
     MENUITEM "Quit",52+113 //'q'
     }
   MENUITEM "EXIT_SERVER",90,GRAYED

@@ -294,7 +294,17 @@ a PC running a serial terminal connected to the HM10.
 in picostack/README. So the same code can now run on Linux, Windows (with a Pico dongle),
 and on a stand-alone Pico.
  
+### Version 24
 
-
-
+1. New function device\_paired() returns 1 if a remote device has been previously paired and
+   bonded and can be re-paired via le\_pair(node,BOND\_REPAIR,0).
+   
+2. New flag option for a client calling le\_pair: IRKEY\_ON. Enables an Identity Resolving Key
+   send.
+   
+3. New example code for Xbox wireless controllers. The xbox.c/py/txt code connects to
+   an Xbox controller (an LE HID device). Operating the Xbox controls
+   sends messages that can be displayed by a monitor option. An empty function can be re-programmed
+   for your own application that uses an Xbox controller as an input device. There is also a Pico
+   version in the picostack folder. See section 2.3.11 in the documentation.
    

@@ -1,7 +1,7 @@
 Pico Bluetooth Stack
 ==========================
 
-*Version 23*
+*Version 24*
 
 ## Contents
 - [1 Introduction](#1-introduction)
@@ -9,8 +9,9 @@ Pico Bluetooth Stack
     - [2.1 File list](#2-1-file-list) 
     - [2.2 Examples](#2-2-examples)
     - [2.3 Visual Studio Code Procedure](#2-3-visual-studio-code-procedure)
-        - [2.3.1 Simple LE server example](#2-3-1-simple-le-server-example)      
-        - [2.3.2 Full feature btferret example](#2-3-2-full-feature-btferret-example)
+        - [2.3.1 Simple LE server](#2-3-1-simple-le-server)      
+        - [2.3.2 Full feature btferret](#2-3-2-full-feature-btferret)
+        - [2.3.3 Xbox client](#2-3-3-xbox-client)        
 - [3 Pico code](#3-pico-code)
     - [3.1 Where to put your code](#3-1-where-to-put-your-code)    
     - [3.2 Screen prints](#3-2-screen-prints)
@@ -35,23 +36,24 @@ and debugged on a Pi and then copied over to a Pico source file.
 
 
 ```
-There are two sample codes:
-
-In the github/picostack folder
-
-  mycodepico.c
-  CMakeLists.txt
+Three required common files are in the github/picostack folder
   picostack.c
   btlibp.c
   btlib.h
+
+There are three sample codes:
+
+In the github/picostack folder
+  mycodepico.c
+  CMakeLists.txt
    
 In the github/picostack/btferret folder
-
   btfcodepico.c
   CMakeLists.txt
-    (you will also need picostack.c,
-     btlibp.c and btlib.h from the picostack folder
-     to compile this example)
+  
+In the github/picostack/xbox folder
+  xboxpico.c
+  CMakeLists.txt
 
 NOTE in case you modify btlib for Linux and Pico
   btlibp.c is the Linux btlib.c with #define PICOSTACK uncommented
@@ -59,9 +61,11 @@ NOTE in case you modify btlib for Linux and Pico
 
 ### 2-2 Examples
 
-There are two sample codes as a starting point:
+There are three sample codes as a starting point:
 
 ```
+All these examples need the common files picostack.c, btlibp.c and btlib.h.
+
 1. mycodepico.c and its CMakeLists.txt
       A simple LE server example with three characteristics:
         1. Device name (UUID:2A00) = "Picostack"
@@ -85,7 +89,20 @@ There are two sample codes as a starting point:
       with the basic functions and may provide suitable starting code for your
       own application.  
 
-Both codes need picostack.c, btlibp.c and btlib.h.
+3. xboxpico.c and its CMakeLists.txt
+      An Xbox client that runs stand-alone and connects to a wireless Xbox
+      controller as an input device. It repeatedly tries to connect to an
+      Xbox wireless controller, continuously scanning for available devices if
+      the devices infomation for the Xbox device (node 2) address is left
+      as 00:00:00:00:00:00. If the address is changed to that of an Xbox,
+      scanning is not necessary and the code will repeatedly attempt to connect
+      to that address. Your code to respond to Xbox inputs goes in the
+      mycode_handler function.
+      Only two operations are programmed in mycode_handler:
+        1. Pressing the A button flashes the LED
+        2. Pressing the Xbox button rumbles the controller and disconnects.
+           The code cycles back to attempt another connection.
+      See section 2.3.11 in the main documentation.          
 ``` 
 
 ## 2-3 Visual Studio Code Procedure
@@ -94,7 +111,7 @@ This procedure uses Visual Studio Code on a PC to compile and download code to t
 instructions if using VSC for the first time. There may be long delays at various stages as stuff is
 downloaded. These instructions are for a Pico 2W, but a Pico W will also work.
 
-### 2-3-1 Simple LE server example
+### 2-3-1 Simple LE server
 
 This runs as an LE server that does not need a serial monitor connection from the PC, but
 a serial monitor will display printed information.
@@ -151,7 +168,7 @@ a serial monitor will display printed information.
       be connected by multiple clients simultaneously).             
 ``` 
 
-### 2-3-2 Full-feature btferret example
+### 2-3-2 Full-feature btferret
 
 This requires a serial monitor connection from the PC to run.
 
@@ -161,7 +178,7 @@ This requires a serial monitor connection from the PC to run.
    btfcodepico folder:
        btfcodepico.c
        CMakeLists.txt
-3. Copy three files from the github/picostack folder to the
+3. Copy three common files from the github/picostack folder to the
    btfcodepico folder:
        picostack.c
        btlibp.c
@@ -190,6 +207,20 @@ This requires a serial monitor connection from the PC to run.
     when you click SERIAL MONITOR immediately after Run, the initial prints
     will appear.
 ```
+
+### 2-3-3 Xbox client
+
+Same procedure as [Simple LE server](#2-3-1-simple-le-server) with
+the following files:
+
+```
+picostack/xbox/xboxpico.c
+picostack/xbox/CMakeLists.txt
+```
+
+On the Xbox, press the pairing button for rapid flash. The Pico scans for 10 seconds
+at a time, so might take this long to find the Xbox. Alternatively, set the Xbox 
+address in the devices data.
 
      
 ## 3 Pico code

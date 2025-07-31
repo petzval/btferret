@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-###### VERSION 23 ######
-### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 23 or later via:###
+###### VERSION 24 ######
+### btfpy.so must be built with btlib.c/btlib.h/btfpython.c version 24 or later via:###
 ###
 ### apt-get install python3-setuptools
 ### apt-get install python3-dev

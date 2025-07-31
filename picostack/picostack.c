@@ -6,7 +6,7 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
-// VERSION 23
+// VERSION 24
 
     // KEYSECTORS
     // FLASH memory size in sectors used for key/pair storage

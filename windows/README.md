@@ -1,7 +1,7 @@
 Pi Dongle for Windows
 ==========================
 
-*Version 23*
+*Version 24*
 
 ## Contents
 - [1 Introduction](#1-introduction)

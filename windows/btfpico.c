@@ -7,7 +7,7 @@
 
 // version 23
 
-#define VERSION 23
+#define VERSION 24
 
 // btstack is not used, but if this causes compile to fail
 // uncomment the following define USE_BTSTACK,
