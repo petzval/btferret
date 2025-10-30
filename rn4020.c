@@ -67,8 +67,8 @@ int motorcontrol(int node,int dirn,int speed)
 
     // construct 8 byte ascii string for Control data = PWMhi,PWMlo,ctl
   sprintf(dat,"%02X,%02X,%02X",speed,64-speed,ctl);
-    // write to Control charcteristic index 0 calls ?FUNC1
-    // last parameter can be 0 because rn4020.txt has specified size=1
+    // write to Control characteristic index 0 calls ?FUNC1
+    // last parameter can be 0 because rn4020.txt has specified size=8
   write_ctic(node,0,dat,0);
        
   return(1);    
